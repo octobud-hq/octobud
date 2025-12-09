@@ -112,3 +112,8 @@ type UpdateCheckResponse struct {
 	AssetSize       int64  `json:"assetSize,omitempty"`
 	IsPrerelease    bool   `json:"isPrerelease,omitempty"`
 }
+
+// VersionResponse represents the current version of the application
+type VersionResponse struct {
+	Version string `json:"version"`
+}

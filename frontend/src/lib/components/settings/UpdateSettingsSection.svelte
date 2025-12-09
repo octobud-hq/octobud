@@ -18,12 +18,14 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>. -->
 	import { browser } from "$app/environment";
 	import { getUpdateStore } from "$lib/stores/updateStore";
 	import { toastStore } from "$lib/stores/toastStore";
+	import { getVersion } from "$lib/api/user";
 
 	const updateStore = getUpdateStore();
 
 	const { settings, isChecking, updateInfo, lastCheckedAt, error } = updateStore;
 
 	let isLoading = true;
+	let currentVersion: string | null = null;
 
 	// Form state
 	let enabled = false;
@@ -45,6 +47,16 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>. -->
 			checkFrequency = currentSettings.checkFrequency;
 			includePrereleases = currentSettings.includePrereleases;
 		}
+
+		// Fetch current version
+		try {
+			const versionResponse = await getVersion();
+			currentVersion = versionResponse.version;
+		} catch (err) {
+			console.error("Failed to get version:", err);
+			// Don't show error to user, just leave version as null
+		}
+
 		isLoading = false;
 	});
 
@@ -151,6 +163,20 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>. -->
 	</div>
 {:else}
 	<div class="space-y-6">
+		<!-- Current Version -->
+		{#if currentVersion}
+			<div class="rounded-md bg-gray-50 p-4 dark:bg-gray-900/50">
+				<div class="flex items-center justify-between">
+					<div>
+						<p class="text-sm font-medium text-gray-900 dark:text-gray-100">Current Version</p>
+						<p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+							You're running Octobud {currentVersion}
+						</p>
+					</div>
+				</div>
+			</div>
+		{/if}
+
 		<!-- Enable/Disable Auto-Updates -->
 		<div class="flex items-center justify-between">
 			<div class="flex-1">

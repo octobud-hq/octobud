@@ -14,6 +14,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 ### Security
 
+## [0.1.1] - 2025-12-09
+
+- Bug fixes and in-app doc improvements around OAuth/PAT
+- Improved handling of certain action-related events
+- In-app handling of situations where a PAT gives access to notifications but can't access repos (due to org policy or weird SSO situations)
+- Remove VERSION file and checks on it
+- Always show current version in the frontend
+
 ## [0.1.0] - 2025-12-08
 
 ### Added

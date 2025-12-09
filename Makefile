@@ -135,10 +135,7 @@ clean:
 # Build self-contained Octobud binary with embedded frontend
 build: frontend-install
 	@echo "Building Octobud..."
-	@VERSION=$$(cat VERSION 2>/dev/null || echo ""); \
-	if [ -z "$$VERSION" ]; then \
-		VERSION=$$(git describe --tags --dirty --always 2>/dev/null | sed 's/^v//' || echo "dev"); \
-	fi; \
+	@VERSION=$$(git describe --tags --dirty --always 2>/dev/null | sed 's/^v//' || echo "dev"); \
 	echo "  Version: $$VERSION"
 	@echo "  Step 1: Building frontend..."
 	@cd frontend && npm run build
@@ -147,10 +144,7 @@ build: frontend-install
 	@cp -r frontend/build/* backend/web/dist/
 	@echo "  Step 3: Building Go binary..."
 	@mkdir -p bin
-	@VERSION=$$(cat VERSION 2>/dev/null || echo ""); \
-	if [ -z "$$VERSION" ]; then \
-		VERSION=$$(git describe --tags --dirty --always 2>/dev/null | sed 's/^v//' || echo "dev"); \
-	fi; \
+	@VERSION=$$(git describe --tags --dirty --always 2>/dev/null | sed 's/^v//' || echo "dev"); \
 	cd backend && CGO_ENABLED=1 go build -ldflags="-s -w -X github.com/octobud-hq/octobud/backend/internal/version.Version=$$VERSION" -o ../bin/octobud ./cmd/octobud
 	@echo ""
 	@echo "✓ Build complete!"

@@ -521,3 +521,24 @@ export async function checkForUpdates(fetchImpl?: typeof fetch): Promise<UpdateC
 
 	return response.json();
 }
+
+export interface VersionResponse {
+	version: string;
+}
+
+export async function getVersion(fetchImpl?: typeof fetch): Promise<VersionResponse> {
+	const response = await fetchAPI(
+		"/api/user/version",
+		{
+			method: "GET",
+		},
+		fetchImpl
+	);
+
+	if (!response.ok) {
+		const error = await response.json().catch(() => ({ error: "Failed to get version" }));
+		throw new Error(error.error || "Failed to get version");
+	}
+
+	return response.json();
+}

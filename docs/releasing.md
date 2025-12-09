@@ -233,7 +233,6 @@ Each release includes:
 
 Before creating a release:
 
-- [ ] Update version in `VERSION` file (e.g., `1.0.0`)
 - [ ] Update `CHANGELOG.md` with release notes
 - [ ] Verify all tests pass (`make test`)
 - [ ] Review breaking changes and document them

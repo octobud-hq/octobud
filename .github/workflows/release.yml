@@ -57,15 +57,6 @@ jobs:
             exit 1
           fi
           
-          # Validate that VERSION file matches tag (if it exists)
-          if [ -f VERSION ]; then
-            VERSION_FILE=$(cat VERSION | tr -d '[:space:]')
-            if [ "$VERSION_FILE" != "$VERSION" ]; then
-              echo "Warning: VERSION file ($VERSION_FILE) doesn't match tag ($VERSION)"
-              echo "   Using tag version for release: $VERSION"
-            fi
-          fi
-          
           echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
           echo "VERSION_TAG=${VERSION_TAG}" >> $GITHUB_OUTPUT
           echo "Release version: ${VERSION} (tag: ${VERSION_TAG})"

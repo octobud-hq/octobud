@@ -23,6 +23,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/octobud-hq/octobud/backend/internal/api/helpers"
+	"github.com/octobud-hq/octobud/backend/internal/version"
 )
 
 // HandleGetUpdateSettings handles GET /api/user/update-settings
@@ -186,6 +187,16 @@ func (h *Handler) HandleCheckForUpdates(w http.ResponseWriter, r *http.Request) 
 		AssetName:       info.AssetName,
 		AssetSize:       info.AssetSize,
 		IsPrerelease:    info.IsPrerelease,
+	}
+
+	helpers.WriteJSON(w, http.StatusOK, response)
+}
+
+// HandleGetVersion handles GET /api/user/version
+// Returns the current version of the application
+func (h *Handler) HandleGetVersion(w http.ResponseWriter, r *http.Request) {
+	response := VersionResponse{
+		Version: version.Get(),
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, response)

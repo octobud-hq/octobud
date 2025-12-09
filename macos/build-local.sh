@@ -6,8 +6,8 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-# Use VERSION env var if set, otherwise read from VERSION file, otherwise default to "dev"
-VERSION="${VERSION:-$(cat "$ROOT_DIR/VERSION" 2>/dev/null || echo "dev")}"
+# Use VERSION env var if set, otherwise use git tag, otherwise default to "dev"
+VERSION="${VERSION:-$(cd "$ROOT_DIR" && git describe --tags --dirty --always 2>/dev/null | sed 's/^v//' || echo "dev")}"
 SKIP_SIGN=false
 SKIP_NOTARIZE=true  # Default to skip notarization for local testing
 

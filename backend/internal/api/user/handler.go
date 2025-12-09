@@ -135,6 +135,7 @@ func (h *Handler) Register(r chi.Router) {
 		r.Get("/update-settings", h.HandleGetUpdateSettings)
 		r.Put("/update-settings", h.HandleUpdateUpdateSettings)
 		r.Get("/update-check", h.HandleCheckForUpdates)
+		r.Get("/version", h.HandleGetVersion)
 	})
 }
 
