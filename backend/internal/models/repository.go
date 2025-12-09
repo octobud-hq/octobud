@@ -34,7 +34,7 @@ type Repository struct {
 	Private     *bool   `json:"private,omitempty"`
 	Description *string `json:"description,omitempty"`
 
-	HTMLURL        *string         `json:"htmlURL,omitempty"`
+	HTMLURL        *string         `json:"htmlUrl,omitempty"`
 	Fork           *bool           `json:"fork,omitempty"`
 	Visibility     *string         `json:"visibility,omitempty"`
 	DefaultBranch  *string         `json:"defaultBranch,omitempty"`
@@ -44,9 +44,9 @@ type Repository struct {
 	CreatedAt      *time.Time      `json:"createdAt,omitempty"`
 	UpdatedAt      *time.Time      `json:"updatedAt,omitempty"`
 	Raw            json.RawMessage `json:"raw,omitempty"`
-	OwnerAvatarURL *string         `json:"ownerAvatarURL,omitempty"`
+	OwnerAvatarURL *string         `json:"ownerAvatarUrl,omitempty"`
 
-	OwnerHTMLURL *string `json:"ownerHTMLURL,omitempty"`
+	OwnerHTMLURL *string `json:"ownerHtmlUrl,omitempty"`
 }
 
 // RepositoryFromDB converts a db.Repository to a Repository

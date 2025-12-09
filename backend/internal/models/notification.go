@@ -30,8 +30,8 @@ type Notification struct {
 	PullRequestID           *int64          `json:"pullRequestId,omitempty"`
 	SubjectType             string          `json:"subjectType"`
 	SubjectTitle            string          `json:"subjectTitle"`
-	SubjectURL              *string         `json:"subjectURL,omitempty"`
-	SubjectLatestCommentURL *string         `json:"subjectLatestCommentURL,omitempty"`
+	SubjectURL              *string         `json:"subjectUrl,omitempty"`
+	SubjectLatestCommentURL *string         `json:"subjectLatestCommentUrl,omitempty"`
 	Reason                  *string         `json:"reason,omitempty"`
 	Archived                bool            `json:"archived"`
 	IsRead                  bool            `json:"isRead"`
@@ -44,8 +44,8 @@ type Notification struct {
 	GithubUnread            *bool           `json:"githubUnread,omitempty"`
 	GithubUpdatedAt         *time.Time      `json:"githubUpdatedAt,omitempty"`
 	GithubLastReadAt        *time.Time      `json:"githubLastReadAt,omitempty"`
-	GithubURL               *string         `json:"githubURL,omitempty"`
-	GithubSubscriptionURL   *string         `json:"githubSubscriptionURL,omitempty"`
+	GithubURL               *string         `json:"githubUrl,omitempty"`
+	GithubSubscriptionURL   *string         `json:"githubSubscriptionUrl,omitempty"`
 	ImportedAt              time.Time       `json:"importedAt"`
 	Payload                 json.RawMessage `json:"payload,omitempty"`
 	SubjectRaw              json.RawMessage `json:"subjectRaw,omitempty"`

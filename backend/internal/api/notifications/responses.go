@@ -45,14 +45,14 @@ type ThreadItem struct {
 	State       *string      `json:"state,omitempty"`       // For reviews
 	Message     *string      `json:"message,omitempty"`     // For commits
 	SHA         *string      `json:"sha,omitempty"`         // For commits
-	HTMLURL     string       `json:"htmlURL"`
+	HTMLURL     string       `json:"htmlUrl"`
 	Timestamp   time.Time    `json:"-"` // Internal field for sorting
 }
 
 // ThreadAuthor represents the author of a comment, review, or event.
 type ThreadAuthor struct {
 	Login     string `json:"login"`
-	AvatarURL string `json:"avatarURL"`
+	AvatarURL string `json:"avatarUrl"`
 }
 
 // TimelineResponse is the response structure for the timeline endpoint.
