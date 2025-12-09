@@ -32,7 +32,7 @@
         "autoprefixer": "^10.4.22",
         "eslint": "^9.14.0",
         "eslint-config-prettier": "^10.1.8",
-        "eslint-plugin-svelte": "^3.13.0",
+        "eslint-plugin-svelte": "^3.13.1",
         "jsdom": "^27.2.0",
         "patch-package": "^8.0.1",
         "postcss": "^8.4.41",
