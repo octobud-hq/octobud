@@ -67,12 +67,12 @@ jobs:
         run: go test -tags=test,integration -v ./integration/...
 
       - name: Install golangci-lint
-        uses: golangci/golangci-lint-action@v4
+        uses: golangci/golangci-lint-action@v9
         with:
           version: v2.6.2
 
       - name: Run linter
-        uses: golangci/golangci-lint-action@v4
+        uses: golangci/golangci-lint-action@v9
         with:
           working-directory: ./backend
           args: --timeout=5m
