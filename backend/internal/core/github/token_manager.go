@@ -245,8 +245,27 @@ func (m *TokenManager) SetToken(ctx context.Context, token string) (string, erro
 		return "", fmt.Errorf("token validation failed: %w", err)
 	}
 
+	// Get old username before updating, so we can delete old keychain item if username changed
+	var oldUsername string
+	user, err := m.store.GetUser(ctx)
+	if err == nil && user.GithubUsername.Valid {
+		oldUsername = user.GithubUsername.String
+	}
+
 	// Store token based on platform
 	if m.keychain != nil && runtime.GOOS == darwinOS {
+		// Delete old keychain item if username changed (graceful failure - log but don't fail)
+		if oldUsername != "" && oldUsername != username {
+			oldAccount := xcrypto.GetKeychainAccount(oldUsername)
+			if deleteErr := m.keychain.DeleteToken("io.octobud", oldAccount); deleteErr != nil {
+				m.logger.Warn("failed to delete old keychain item when changing username",
+					zap.String("old_username", oldUsername),
+					zap.Error(deleteErr),
+				)
+				// Continue - don't fail the operation
+			}
+		}
+
 		// Store in keychain on macOS
 		account := xcrypto.GetKeychainAccount(username)
 		if storeErr := m.keychain.StoreToken("io.octobud", account, token); storeErr != nil {
@@ -312,8 +331,27 @@ func (m *TokenManager) SetTokenFromOAuth(ctx context.Context, token string) (str
 		return "", fmt.Errorf("token validation failed: %w", err)
 	}
 
+	// Get old username before updating, so we can delete old keychain item if username changed
+	var oldUsername string
+	user, err := m.store.GetUser(ctx)
+	if err == nil && user.GithubUsername.Valid {
+		oldUsername = user.GithubUsername.String
+	}
+
 	// Store token based on platform
 	if m.keychain != nil && runtime.GOOS == darwinOS {
+		// Delete old keychain item if username changed (graceful failure - log but don't fail)
+		if oldUsername != "" && oldUsername != username {
+			oldAccount := xcrypto.GetKeychainAccount(oldUsername)
+			if deleteErr := m.keychain.DeleteToken("io.octobud", oldAccount); deleteErr != nil {
+				m.logger.Warn("failed to delete old keychain item when changing username via OAuth",
+					zap.String("old_username", oldUsername),
+					zap.Error(deleteErr),
+				)
+				// Continue - don't fail the operation
+			}
+		}
+
 		// Store in keychain on macOS
 		account := xcrypto.GetKeychainAccount(username)
 		if storeErr := m.keychain.StoreToken("io.octobud", account, token); storeErr != nil {
@@ -370,18 +408,36 @@ func (m *TokenManager) ClearToken(ctx context.Context) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// Get username before clearing
+	// Get username before clearing (for keychain deletion)
 	user, err := m.store.GetUser(ctx)
 	username := ""
 	if err == nil && user.GithubUsername.Valid {
 		username = user.GithubUsername.String
 	}
 
-	// Clear from keychain on macOS
-	if m.keychain != nil && runtime.GOOS == darwinOS && username != "" {
-		account := xcrypto.GetKeychainAccount(username)
-		if deleteErr := m.keychain.DeleteToken("io.octobud", account); deleteErr != nil {
-			m.logger.Warn("failed to delete token from keychain", zap.Error(deleteErr))
+	// Also check current state for username (in case database is out of sync)
+	if username == "" && m.githubUsername != "" {
+		username = m.githubUsername
+	}
+
+	// Clear from keychain on macOS (with graceful failure handling)
+	if m.keychain != nil && runtime.GOOS == darwinOS {
+		if username != "" {
+			// Delete keychain item for known username
+			account := xcrypto.GetKeychainAccount(username)
+			if deleteErr := m.keychain.DeleteToken("io.octobud", account); deleteErr != nil {
+				// Log warning but don't fail - keychain deletion failures shouldn't block disconnection
+				m.logger.Warn("failed to delete token from keychain during disconnect",
+					zap.String("username", username),
+					zap.Error(deleteErr),
+				)
+			}
+		} else {
+			// If we don't have a username, log a warning but continue
+			// This could happen in edge cases where the database is in an inconsistent state
+			m.logger.Debug("skipping keychain deletion: no username available",
+				zap.String("current_username", m.githubUsername),
+			)
 		}
 	}
 

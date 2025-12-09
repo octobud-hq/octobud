@@ -75,6 +75,7 @@ export function getNotificationTypeConfig(subjectType: string): NotificationType
 
 		case "checkrun":
 		case "checksuite":
+		case "workflowrun":
 			return {
 				showCommentThread: false,
 				contentLabel: "Check Details",

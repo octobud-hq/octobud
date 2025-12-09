@@ -981,6 +981,14 @@ export async function refreshNotificationSubject(
 	);
 
 	if (!response.ok) {
+		// Preserve 403 status for permission errors - throw immediately without reading body
+		if (response.status === 403) {
+			const error = new Error(`Failed to refresh subject (403)`) as Error & {
+				status: number;
+			};
+			error.status = 403;
+			throw error;
+		}
 		throw new Error(`Failed to refresh subject (${response.status})`);
 	}
 
@@ -998,7 +1006,20 @@ export async function fetchNotificationTimeline(
 	const response = await fetchWithAuth(url, {}, fetchImpl);
 
 	if (!response.ok) {
-		throw new Error(`Failed to fetch timeline (${response.status})`);
+		let errorMessage = `Failed to fetch timeline (${response.status})`;
+		try {
+			const errorData: { error?: string } = await response.json();
+			if (errorData.error) {
+				errorMessage = errorData.error;
+			}
+		} catch (e) {
+			// If JSON parsing fails, use default message
+			console.error("Failed to parse error response body:", e);
+		}
+
+		const error = new Error(errorMessage) as Error & { status?: number };
+		error.status = response.status;
+		throw error;
 	}
 
 	const payload: NotificationTimelineResponse = await response.json();

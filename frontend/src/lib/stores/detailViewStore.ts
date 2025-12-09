@@ -32,6 +32,7 @@ export function createDetailViewStore(notificationStore: NotificationStore) {
 	const detailLoading = writable<boolean>(false);
 	const detailShowingStaleData = writable<boolean>(false);
 	const detailIsRefreshing = writable<boolean>(false);
+	const detailHasPermissionError = writable<boolean>(false);
 
 	// DERIVED: Is detail open? (true if detailNotificationId is set)
 	const detailOpen = derived(
@@ -69,6 +70,7 @@ export function createDetailViewStore(notificationStore: NotificationStore) {
 		detailLoading: detailLoading as Writable<boolean>,
 		detailShowingStaleData: detailShowingStaleData as Writable<boolean>,
 		detailIsRefreshing: detailIsRefreshing as Writable<boolean>,
+		detailHasPermissionError: detailHasPermissionError as Writable<boolean>,
 
 		// Derived stores (automatically stay in sync)
 		detailOpen: detailOpen as Readable<boolean>,
@@ -86,6 +88,7 @@ export function createDetailViewStore(notificationStore: NotificationStore) {
 			detailLoading.set(false);
 			detailShowingStaleData.set(false);
 			detailIsRefreshing.set(false);
+			detailHasPermissionError.set(false);
 		},
 		setDetail: (detail: NotificationDetail | null) => {
 			currentDetail.set(detail);
@@ -98,6 +101,9 @@ export function createDetailViewStore(notificationStore: NotificationStore) {
 		},
 		setRefreshing: (refreshing: boolean) => {
 			detailIsRefreshing.set(refreshing);
+		},
+		setPermissionError: (hasError: boolean) => {
+			detailHasPermissionError.set(hasError);
 		},
 	};
 }

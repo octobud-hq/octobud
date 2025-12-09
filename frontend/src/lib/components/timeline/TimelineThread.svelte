@@ -21,6 +21,7 @@
 
 	export let githubId: string;
 	export let timelineController: TimelineController;
+	export let hasPermissionError: boolean = false;
 
 	const { items, isLoading, error, pagination, hasAttemptedAutoLoad } = timelineController.stores;
 	const { autoLoadTimeline, loadTimeline, loadMoreTimeline } = timelineController.actions;
@@ -87,7 +88,9 @@
 	// Use derived logic to prevent button from disappearing during load
 	$: showLoadMoreButton = $isLoadingMore || hasMoreToLoad;
 	// Only show initial button if auto-load failed and we haven't loaded manually
-	$: showInitialButton = $hasAttemptedAutoLoad && $error && !hasItems && !$isLoading;
+	// Hide button if there's a permission error (403)
+	$: showInitialButton =
+		!hasPermissionError && $hasAttemptedAutoLoad && $error && !hasItems && !$isLoading;
 	// Show initial loading state when we're loading and have no items yet
 	$: showInitialLoading = $isLoading && !hasItems;
 </script>

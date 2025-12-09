@@ -57,6 +57,7 @@
 	export let loading = false;
 	export let showingStaleData = false;
 	export let isRefreshing = false;
+	export let hasPermissionError = false;
 	export let isSplitView: boolean = false;
 	export let timelineController: TimelineController | undefined = undefined;
 	export let markingRead = false;
@@ -190,6 +191,7 @@
 				return "Release";
 			case "checkrun":
 			case "checksuite":
+			case "workflowrun":
 				return "CI Activity";
 			case "repositoryvulnerabilityalert":
 			case "securityalert":
@@ -258,7 +260,7 @@
 	function checkIsCIActivity(subjectType: string | undefined | null): boolean {
 		if (!subjectType) return false;
 		const type = subjectType.toLowerCase().replace(/[-_\s]/g, "");
-		return type === "checkrun" || type === "checksuite";
+		return type === "checkrun" || type === "checksuite" || type === "workflowrun";
 	}
 
 	// Compute GitHub URLs
@@ -547,6 +549,54 @@
 							{/if}
 						</div>
 					</div>
+
+					<!-- Permission Error Warning -->
+					{#if hasPermissionError}
+						<div
+							class="mt-8 mb-6 flex items-start gap-3 rounded-lg border border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-900/20 px-4 py-3"
+						>
+							<svg
+								class="w-5 h-5 flex-shrink-0 text-amber-600 dark:text-amber-400 mt-0.5"
+								viewBox="0 0 24 24"
+								fill="none"
+								xmlns="http://www.w3.org/2000/svg"
+								aria-hidden="true"
+							>
+								<path
+									d="M12 9V13M12 17H12.01M10.29 3.86L1.82 18C1.64537 18.3024 1.55299 18.6453 1.55201 18.9945C1.55103 19.3437 1.64149 19.6871 1.81442 19.9905C1.98735 20.2939 2.23672 20.5467 2.53771 20.7239C2.83869 20.901 3.18072 20.9962 3.53 21H20.47C20.8193 20.9962 21.1613 20.901 21.4623 20.7239C21.7633 20.5467 22.0127 20.2939 22.1856 19.9905C22.3585 19.6871 22.449 19.3437 22.448 18.9945C22.447 18.6453 22.3546 18.3024 22.18 18L13.71 3.86C13.5317 3.56611 13.2807 3.32312 12.9812 3.15448C12.6817 2.98585 12.3437 2.89725 12 2.89725C11.6563 2.89725 11.3183 2.98585 11.0188 3.15448C10.7193 3.32312 10.4683 3.56611 10.29 3.86Z"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								/>
+							</svg>
+							<div class="flex-1 text-sm text-amber-800 dark:text-amber-200">
+								<p class="font-semibold mb-1">Unable to load PR/Issue details</p>
+								<p class="text-amber-700 dark:text-amber-300">
+									Your token doesn't have permission to access repository details for this
+									organization. This is a known limitation with some organizations that restrict
+									Personal Access Token access. See the
+									<a
+										href="https://github.com/octobud-hq/octobud/blob/main/docs/guides/personal-access-token-setup.md"
+										target="_blank"
+										rel="noopener noreferrer"
+										class="inline-flex items-center gap-1 text-amber-900 dark:text-amber-100 underline hover:text-amber-950 dark:hover:text-amber-50"
+									>
+										setup guide
+										<svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												stroke-width="2"
+												d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+											/>
+										</svg>
+									</a>
+									for more information.
+								</p>
+							</div>
+						</div>
+					{/if}
 
 					<!-- Open on GitHub buttons -->
 					{#if detail}
@@ -842,7 +892,11 @@
 					<!-- Timeline Thread - only show for types that support timeline -->
 					{#if timelineController && notification.githubId && typeConfig?.showCommentThread}
 						{#key notification.githubId}
-							<TimelineThread githubId={notification.githubId} {timelineController} />
+							<TimelineThread
+								githubId={notification.githubId}
+								{timelineController}
+								{hasPermissionError}
+							/>
 						{/key}
 					{/if}
 				</div>

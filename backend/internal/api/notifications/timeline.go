@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -142,10 +143,21 @@ func (h *Handler) handleGetNotificationTimeline(w http.ResponseWriter, r *http.R
 		page,
 	)
 	if err != nil {
+		// Check if this is a 403 Forbidden error (likely due to organization restrictions)
+		errStr := err.Error()
+		if strings.Contains(errStr, "status 403") || strings.Contains(errStr, "403") {
+			h.logger.Warn(
+				"permission error fetching timeline",
+				zap.String("github_id", githubID),
+				zap.Error(errors.Join(ErrFailedToFetchTimeline, err)),
+			)
+			helpers.WriteError(w, http.StatusForbidden, "permission denied to fetch timeline")
+			return
+		}
 		h.logger.Error(
 			"failed to fetch timeline",
 			zap.String("github_id", githubID),
-			zap.Error(err),
+			zap.Error(errors.Join(ErrFailedToFetchTimeline, err)),
 		)
 		helpers.WriteError(w, http.StatusInternalServerError, "failed to fetch timeline")
 		return

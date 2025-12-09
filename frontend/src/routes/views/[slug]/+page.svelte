@@ -100,6 +100,7 @@
 		detailLoading,
 		detailShowingStaleData,
 		detailIsRefreshing,
+		detailHasPermissionError,
 		keyboardFocusIndex,
 		selectedIds,
 		splitModeEnabled,
@@ -129,6 +130,13 @@
 
 	let lastData: typeof data | null = null;
 	let lastProcessedNotificationId: string | null = null;
+
+	// Helper to check if a notification type is CI activity
+	function checkIsCIActivity(subjectType: string | undefined | null): boolean {
+		if (!subjectType) return false;
+		const type = subjectType.toLowerCase().replace(/[-_\s]/g, "");
+		return type === "checkrun" || type === "checksuite" || type === "workflowrun";
+	}
 
 	// ============================================================================
 	// TIMELINE CONTROLLER (PR timeline data)
@@ -257,9 +265,12 @@
 			(n) => (n.githubId ?? n.id) === notificationId
 		);
 
+		// Start loading state
+		detailLoading.set(true);
 		// Start refreshing in background (no loading skeleton, just refresh spinner)
 		detailIsRefreshing.set(true);
 		detailShowingStaleData.set(false);
+		detailHasPermissionError.set(false);
 
 		const currentQuery = get(quickQuery);
 
@@ -280,6 +291,7 @@
 
 					// Populate detail state with subject from detail fetch
 					currentDetail.set(detail);
+					detailLoading.set(false);
 					detailShowingStaleData.set(false);
 
 					// SINGLE MODE: Mark as read when detail loads (fire-and-forget)
@@ -307,6 +319,7 @@
 				console.error("Failed to load notification detail:", error);
 				// Show stale data indicator
 				if (get(detailNotificationId) === notificationId) {
+					detailLoading.set(false);
 					detailShowingStaleData.set(true);
 					// Fall back to cached data if we have it, otherwise show error state
 					if (notification) {
@@ -321,6 +334,7 @@
 			});
 
 		// Step 2: Kick off refresh subject call concurrently (if we have a githubId from the fetched detail)
+		// Skip refresh for CI activities (workflowrun, checksuite, checkrun) as they don't have refreshable subject data
 		detailPromise.then((detail) => {
 			if (!detail) {
 				// No detail fetched, just clear the refreshing indicator
@@ -332,6 +346,14 @@
 			const githubId = detail.notification.githubId;
 			if (!githubId) {
 				// No githubId, just clear the refreshing indicator
+				if (get(detailNotificationId) === notificationId) {
+					detailIsRefreshing.set(false);
+				}
+				return;
+			}
+			// Skip refresh for CI activities - they don't have refreshable subject data
+			if (checkIsCIActivity(detail.notification.subjectType)) {
+				// Clear refreshing indicator immediately for CI activities
 				if (get(detailNotificationId) === notificationId) {
 					detailIsRefreshing.set(false);
 				}
@@ -359,12 +381,28 @@
 							});
 						}
 						detailShowingStaleData.set(false);
+						detailHasPermissionError.set(false);
 					}
 				})
 				.catch((refreshErr) => {
-					// Only show stale indicator if we have cached subject data
-					if (get(detailNotificationId) === notificationId && notification?.subjectRaw) {
-						detailShowingStaleData.set(true);
+					// Check if we're still viewing the same notification
+					if (get(detailNotificationId) === notificationId) {
+						// Check if this is a 403 Forbidden error (permission issue)
+						const errorWithStatus = refreshErr as Error & { status?: number; statusCode?: number };
+						const statusCode = errorWithStatus?.status ?? errorWithStatus?.statusCode;
+						const errorMessage = refreshErr?.message ?? "";
+						const is403Error = statusCode === 403 || errorMessage.includes("403");
+
+						if (is403Error) {
+							detailHasPermissionError.set(true);
+							detailShowingStaleData.set(false);
+						} else {
+							// Only show stale indicator if we have cached subject data
+							if (notification?.subjectRaw) {
+								detailShowingStaleData.set(true);
+							}
+							detailHasPermissionError.set(false);
+						}
 					}
 				})
 				.finally(() => {
@@ -391,6 +429,9 @@
 		}
 		if (get(detailIsRefreshing)) {
 			detailIsRefreshing.set(false);
+		}
+		if (get(detailHasPermissionError)) {
+			detailHasPermissionError.set(false);
 		}
 		if (lastProcessedNotificationId !== null) {
 			lastProcessedNotificationId = null;
@@ -897,6 +938,7 @@
 	detailLoading={$detailLoading}
 	detailShowingStaleData={$detailShowingStaleData}
 	detailIsRefreshing={$detailIsRefreshing}
+	hasPermissionError={$detailHasPermissionError}
 	{timelineController}
 	totalCount={$pageData.total}
 	listPaneWidth={$listPaneWidth}

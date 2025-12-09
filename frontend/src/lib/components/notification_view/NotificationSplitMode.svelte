@@ -36,6 +36,7 @@
 	$: detailLoading = context.detailView.detailLoading;
 	$: detailShowingStaleData = context.detailView.detailShowingStaleData;
 	$: detailIsRefreshing = context.detailView.detailIsRefreshing;
+	$: hasPermissionError = context.detailView.hasPermissionError;
 	$: timelineController = context.detailView.timelineController;
 	$: hasActiveFilters = context.listView.hasActiveFilters;
 	$: totalCount = context.listView.totalCount;
@@ -96,6 +97,7 @@
 				loading={detailLoading}
 				showingStaleData={detailShowingStaleData}
 				isRefreshing={detailIsRefreshing}
+				{hasPermissionError}
 				isSplitView={true}
 				hideBackButton={true}
 				{timelineController}

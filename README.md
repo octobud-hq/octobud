@@ -93,7 +93,7 @@ make build
 ./bin/octobud
 ```
 
-🎉 That's it! On macOS, Octobud will appear in your menu bar and open in your browser. On Linux and Windows, open `http://localhost:8808` manually. Connect your GitHub account - OAuth is the preferred method (recommended), or you can use a Personal Access Token as an alternative.
+🎉 That's it! On macOS, Octobud will appear in your menu bar and open in your browser. On Linux and Windows, open `http://localhost:8808` manually. Connect your GitHub account - OAuth is the preferred method (recommended), or you can use a Personal Access Token as an alternative. See the [OAuth Setup Guide](docs/guides/oauth-setup.md) or [Personal Access Token Setup Guide](docs/guides/personal-access-token-setup.md) for detailed instructions.
 
 <details>
 <summary><strong>More options</strong></summary>
@@ -128,7 +128,12 @@ Open `http://localhost:5173`
 
 When you first launch Octobud, you'll be guided through setup:
 
-1. **Connect GitHub** - You'll be prompted to connect your GitHub account. OAuth is the preferred method (recommended), or you can use a Personal Access Token as an alternative. Both require `repo`, `notifications`, and `discussions` (read) scopes. You can update your authentication method later in Settings → Account.
+1. **Connect GitHub** - You'll be prompted to connect your GitHub account. OAuth is the preferred method (recommended), or you can use a Personal Access Token as an alternative. Both require the following scopes:
+   - `repo`
+   - `notifications`
+   - `read:discussions` (this permission is only required for PAT)
+   
+   See the [OAuth Setup Guide](docs/guides/oauth-setup.md) or [Personal Access Token Setup Guide](docs/guides/personal-access-token-setup.md) for detailed instructions. You can update your authentication method later in Settings → Account.
 
 2. **Configure Initial Sync** - Next, you'll be prompted to configure how far back to sync notifications. Start small (30 days) - you can always [sync more later](docs/start-here.md#syncing-more-later).
 
@@ -148,6 +153,8 @@ The app runs locally at `http://localhost:8808`.
 ## Documentation
 
 - [Start Here](docs/start-here.md) - Initial setup and core workflows
+- [OAuth Setup](docs/guides/oauth-setup.md) - Complete guide for OAuth authentication
+- [Personal Access Token Setup](docs/guides/personal-access-token-setup.md) - Complete guide for PAT setup
 - [Query Syntax](docs/guides/query-syntax.md) - Filter and search notifications
 - [Keyboard Shortcuts](docs/guides/keyboard-shortcuts.md) - Navigate efficiently
 - [Views & Rules](docs/guides/views-and-rules.md) - Organize your inbox

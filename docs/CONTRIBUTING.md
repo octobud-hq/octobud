@@ -69,7 +69,12 @@ For a detailed architecture overview, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 - **Go** 1.21+
 - **Node.js** 18+ and npm
-- **GitHub account** - OAuth is the preferred authentication method (recommended). Alternatively, you can use a Personal Access Token with `repo`, `notifications`, and `discussions` (read) scopes ([create one here](https://github.com/settings/tokens))
+- **GitHub account** - OAuth is the preferred authentication method (recommended). Alternatively, you can use a Personal Access Token with the following scopes ([create one here](https://github.com/settings/tokens)):
+  - `repo`
+  - `notifications`
+  - `read:discussions`
+  
+  See the [OAuth Setup Guide](guides/oauth-setup.md) or [Personal Access Token Setup Guide](guides/personal-access-token-setup.md) for detailed instructions.
 
 No external dependencies required - Octobud uses SQLite and runs as a single desktop application binary.
 
@@ -93,7 +98,7 @@ make backend-dev    # Terminal 1 - Backend runs locally (port 8080 for dev)
 make frontend-dev   # Terminal 2 - Frontend with hot reload (port 5173)
 ```
 
-Open http://localhost:5173 and connect your GitHub account. OAuth is the preferred method (recommended), or you can configure a Personal Access Token in the app (Settings → Account).
+Open http://localhost:5173 and connect your GitHub account. OAuth is the preferred method (recommended), or you can configure a Personal Access Token in the app (Settings → Account). See the [OAuth Setup Guide](guides/oauth-setup.md) or [Personal Access Token Setup Guide](guides/personal-access-token-setup.md) for detailed instructions.
 
 ### All Available Commands
 

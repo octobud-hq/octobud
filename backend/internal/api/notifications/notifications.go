@@ -238,6 +238,21 @@ func (h *Handler) handleRefreshNotificationSubject(w http.ResponseWriter, r *htt
 	// Refresh the subject by fetching fresh data from GitHub
 	err = h.refreshSubjectData(ctx, userID, githubID)
 	if err != nil {
+		// Check if this is a 403 Forbidden error (likely due to organization restrictions)
+		errStr := err.Error()
+		if strings.Contains(errStr, "status 403") || strings.Contains(errStr, "403") {
+			h.logger.Warn(
+				"forbidden when refreshing subject data (likely organization restriction)",
+				zap.String("github_id", githubID),
+				zap.Error(errors.Join(ErrFailedToRefreshSubjectData, err)),
+			)
+			helpers.WriteError(
+				w,
+				http.StatusForbidden,
+				"insufficient permissions to access repository details",
+			)
+			return
+		}
 		h.logger.Error(
 			"failed to refresh subject data",
 			zap.String("github_id", githubID),

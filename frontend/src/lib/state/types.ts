@@ -167,6 +167,7 @@ export interface NotificationPageControllerStores {
 	detailLoading: Writable<boolean>;
 	detailShowingStaleData: Writable<boolean>;
 	detailIsRefreshing: Writable<boolean>;
+	detailHasPermissionError: Writable<boolean>;
 	splitModeEnabled: Writable<boolean>;
 	listPaneWidth: Writable<number>;
 	savedListScrollPosition: Writable<number>;

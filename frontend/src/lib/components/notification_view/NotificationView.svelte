@@ -73,6 +73,7 @@
 	export let detailLoading: boolean;
 	export let detailShowingStaleData: boolean;
 	export let detailIsRefreshing: boolean;
+	export let hasPermissionError: boolean;
 	export let timelineController: TimelineController | undefined;
 
 	// Split view specific props
@@ -103,6 +104,7 @@
 			detailLoading,
 			detailShowingStaleData,
 			detailIsRefreshing,
+			hasPermissionError,
 			timelineController,
 		},
 		splitView: {
@@ -134,6 +136,7 @@
 			detailLoading,
 			detailShowingStaleData,
 			detailIsRefreshing,
+			hasPermissionError,
 			timelineController,
 		},
 		splitView: {

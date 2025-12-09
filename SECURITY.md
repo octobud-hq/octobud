@@ -74,7 +74,10 @@ When using Octobud:
 
 ## Known Security Considerations
 
-- **GitHub Token Scope** - Octobud requires `repo`, `notifications`, and `discussions` (read) scopes, which grants read access to your repositories and discussions
+- **GitHub Token Scope** - Octobud requires the following scopes, which grants read access to your repositories and discussions:
+  - `repo`
+  - `notifications`
+  - `read:discussions`
 - **Self-Hosted** - You are responsible for securing your own deployment
 - **Local-First** - Octobud is designed as a desktop application that trusts localhost. All data is stored locally
 - **Single-User Application** - Octobud is designed for single-user use. For network-accessible deployments, consider additional security layers (VPN, reverse proxy authentication, firewall rules)
@@ -103,7 +106,10 @@ For enhanced security in production or sensitive environments:
    - Consider using a separate user account for running Octobud
 3. **Regular Updates**: Keep Octobud and its dependencies updated
 4. **Token Rotation**: Periodically rotate your GitHub Personal Access Token
-5. **Minimal Scopes**: Use the minimum required GitHub token scopes (`repo`, `notifications`, and `discussions` (read))
+5. **Minimal Scopes**: Use the minimum required GitHub token scopes:
+   - `repo`
+   - `notifications`
+   - `read:discussions`
 6. **Firewall Rules**: Restrict network access to Octobud if running on a shared machine
 7. **File Permissions**: Ensure database and key files have restricted permissions (0600)
 

@@ -271,6 +271,7 @@ export function createNotificationPageController(
 			detailLoading: detailStore.detailLoading,
 			detailShowingStaleData: detailStore.detailShowingStaleData,
 			detailIsRefreshing: detailStore.detailIsRefreshing,
+			detailHasPermissionError: detailStore.detailHasPermissionError,
 			splitModeEnabled: uiStore.splitModeEnabled,
 			listPaneWidth: uiStore.listPaneWidth,
 			savedListScrollPosition: uiStore.savedListScrollPosition,

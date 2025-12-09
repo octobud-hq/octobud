@@ -13,6 +13,8 @@ Detailed reference documentation for using Octobud effectively:
 - **[Query Syntax](guides/query-syntax.md)** - Filter and search your notifications
 - **[Views and Rules](guides/views-and-rules.md)** - Organize with saved views and automate with rules
 - **[Keyboard Shortcuts](guides/keyboard-shortcuts.md)** - Navigate and take actions quickly
+- **[OAuth Setup](guides/oauth-setup.md)** - Complete guide for OAuth authentication, including organization approval
+- **[Personal Access Token Setup](guides/personal-access-token-setup.md)** - Complete guide for setting up a PAT, including SSO authorization
 
 ## Concepts
 
@@ -24,8 +26,7 @@ Understanding how Octobud works under the hood:
 
 ## Installation & Configuration
 
-- **[Installation Guide](installation
-.md)** - Installing and configuring Octobud on macOS
+- **[Installation Guide](installation.md)** - Installing and configuring Octobud on macOS
 
 ## Contributing
 

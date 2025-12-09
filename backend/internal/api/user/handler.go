@@ -233,7 +233,7 @@ func (h *Handler) HandleSetGitHubToken(w http.ResponseWriter, r *http.Request) {
 			helpers.WriteError(
 				w,
 				http.StatusBadRequest,
-				"Token does not have required permissions (needs 'repo', 'notifications', and 'discussions' (read) scopes)",
+				"Token does not have required permissions (needs 'repo', 'notifications', and 'read:discussions' scopes)",
 			)
 			return
 		}

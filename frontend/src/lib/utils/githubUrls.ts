@@ -67,12 +67,14 @@ export function constructGitHubHtmlUrl(
 	}
 
 	// Handle types that don't need a subjectUrl to construct a URL
-	// Check runs/suites -> actions page
+	// Check runs/suites/workflow runs -> actions page
 	if (
 		normalizedType === "checkrun" ||
 		normalizedType === "check_run" ||
 		normalizedType === "checksuite" ||
-		normalizedType === "check_suite"
+		normalizedType === "check_suite" ||
+		normalizedType === "workflowrun" ||
+		normalizedType === "workflow_run"
 	) {
 		return `https://github.com/${repoFullName}/actions`;
 	}
@@ -167,12 +169,14 @@ function constructFromApiUrlPattern(
 		return `https://github.com/${repoFullName}/security/dependabot`;
 	}
 
-	// For check runs/suites
+	// For check runs/suites/workflow runs
 	if (
 		subjectType === "checkrun" ||
 		subjectType === "check_run" ||
 		subjectType === "checksuite" ||
-		subjectType === "check_suite"
+		subjectType === "check_suite" ||
+		subjectType === "workflowrun" ||
+		subjectType === "workflow_run"
 	) {
 		return `https://github.com/${repoFullName}/actions`;
 	}

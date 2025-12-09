@@ -153,8 +153,12 @@ export function getNotificationIcon(
 		};
 	}
 
-	// Check Run / Check Suite (CI/Actions)
-	if (normalizedType === "checkrun" || normalizedType === "checksuite") {
+	// Check Run / Check Suite / Workflow Run (CI/Actions)
+	if (
+		normalizedType === "checkrun" ||
+		normalizedType === "checksuite" ||
+		normalizedType === "workflowrun"
+	) {
 		return {
 			path: getIconPath("play"),
 			colorClass: "text-gray-500 dark:text-gray-400",

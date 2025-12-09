@@ -47,6 +47,7 @@ export interface DetailViewContext {
 	detailLoading: boolean;
 	detailShowingStaleData: boolean;
 	detailIsRefreshing: boolean;
+	hasPermissionError: boolean;
 	timelineController: TimelineController | undefined;
 }
 
