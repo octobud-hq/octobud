@@ -43,7 +43,7 @@
         "tailwindcss": "^4.1.17",
         "tslib": "^2.7.0",
         "typescript": "^5.6.3",
-        "vite": "^7.2.4",
+        "vite": "^7.2.7",
         "vitest": "^3.1.4"
     },
     "dependencies": {
