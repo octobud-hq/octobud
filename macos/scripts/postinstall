@@ -1,0 +1,26 @@
+#!/bin/bash
+# Octobud postinstall script
+# Refreshes icon cache and sets up auto-start Login Item
+
+APP_PATH="/Applications/Octobud.app"
+
+# Refresh icon cache by touching the app bundle and its icon
+if [ -d "$APP_PATH" ]; then
+    touch "$APP_PATH"
+    touch "$APP_PATH/Contents/Resources/AppIcon.icns" 2>/dev/null || true
+    # Refresh LaunchServices database to pick up new icon
+    /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$APP_PATH" 2>/dev/null || true
+fi
+
+# Add to Login Items using osascript (if not already present)
+if [ -d "$APP_PATH" ]; then
+    if osascript -e 'tell application "System Events" to get name of every login item' 2>/dev/null | grep -q "Octobud"; then
+        echo "Octobud is already in Login Items"
+    else
+        osascript -e "tell application \"System Events\" to make login item at end with properties {path:\"$APP_PATH\", hidden:false}" 2>/dev/null
+        echo "✓ Octobud added to Login Items - will start automatically on login"
+    fi
+fi
+
+exit 0
+

@@ -1,0 +1,262 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag to release (e.g., v1.0.0)'
+        required: true
+        type: string
+
+jobs:
+  release:
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch full history for tags
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/}"
+          fi
+          # Remove 'v' prefix if present
+          VERSION="${VERSION#v}"
+          
+          # Validate that VERSION file matches tag (if it exists)
+          if [ -f VERSION ]; then
+            VERSION_FILE=$(cat VERSION | tr -d '[:space:]')
+            if [ "$VERSION_FILE" != "$VERSION" ]; then
+              echo "⚠️  Warning: VERSION file ($VERSION_FILE) doesn't match tag ($VERSION)"
+              echo "   Using tag version for release: $VERSION"
+            fi
+          fi
+          
+          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+          echo "VERSION_TAG=v${VERSION}" >> $GITHUB_OUTPUT
+          echo "Release version: ${VERSION}"
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: ./frontend
+        run: npm run build
+
+      - name: Copy frontend assets
+        run: |
+          mkdir -p backend/web/dist
+          cp -r frontend/build/* backend/web/dist/
+
+      - name: Build macOS arm64 binary
+        working-directory: ./backend
+        env:
+          CGO_ENABLED: 1
+          GOOS: darwin
+          GOARCH: arm64
+        run: |
+          go build -ldflags="-s -w -X github.com/octobud-hq/octobud/backend/internal/version.Version=${{ steps.version.outputs.VERSION_TAG }}" \
+            -o ../dist/octobud-darwin-arm64 ./cmd/octobud
+
+      - name: Build macOS amd64 binary
+        working-directory: ./backend
+        env:
+          CGO_ENABLED: 1
+          GOOS: darwin
+          GOARCH: amd64
+        run: |
+          go build -ldflags="-s -w -X github.com/octobud-hq/octobud/backend/internal/version.Version=${{ steps.version.outputs.VERSION_TAG }}" \
+            -o ../dist/octobud-darwin-amd64 ./cmd/octobud
+
+      - name: Create macOS app bundles
+        run: |
+          mkdir -p dist/Octobud-arm64.app/Contents/MacOS
+          mkdir -p dist/Octobud-arm64.app/Contents/Resources
+          mkdir -p dist/Octobud-amd64.app/Contents/MacOS
+          mkdir -p dist/Octobud-amd64.app/Contents/Resources
+          
+          cp dist/octobud-darwin-arm64 dist/Octobud-arm64.app/Contents/MacOS/octobud
+          cp dist/octobud-darwin-amd64 dist/Octobud-amd64.app/Contents/MacOS/octobud
+          
+          cp macos/Info.plist dist/Octobud-arm64.app/Contents/
+          cp macos/Info.plist dist/Octobud-amd64.app/Contents/
+          sed -i '' "s/VERSION/${{ steps.version.outputs.VERSION }}/g" dist/Octobud-arm64.app/Contents/Info.plist
+          sed -i '' "s/VERSION/${{ steps.version.outputs.VERSION }}/g" dist/Octobud-amd64.app/Contents/Info.plist
+          
+          if [ -f macos/AppIcon.icns ]; then
+            cp macos/AppIcon.icns dist/Octobud-arm64.app/Contents/Resources/
+            cp macos/AppIcon.icns dist/Octobud-amd64.app/Contents/Resources/
+          fi
+
+      - name: Import signing certificates
+        if: ${{ secrets.APPLE_APP_CERT_P12 != '' && secrets.APPLE_INSTALLER_CERT_P12 != '' }}
+        env:
+          APP_CERT: ${{ secrets.APPLE_APP_CERT_P12 }}
+          INSTALLER_CERT: ${{ secrets.APPLE_INSTALLER_CERT_P12 }}
+          CERT_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          # Create keychain
+          security create-keychain -p temp_password build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p temp_password build.keychain
+          security set-keychain-settings -t 3600 -u build.keychain
+          
+          # Import certificates
+          echo "$APP_CERT" | base64 --decode > app_cert.p12
+          echo "$INSTALLER_CERT" | base64 --decode > installer_cert.p12
+          
+          security import app_cert.p12 -k build.keychain -P "$CERT_PASSWORD" -T /usr/bin/codesign -T /usr/bin/productsign
+          security import installer_cert.p12 -k build.keychain -P "$CERT_PASSWORD" -T /usr/bin/codesign -T /usr/bin/productsign
+          
+          # Allow codesign to access keychain
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k temp_password build.keychain
+          
+          # Cleanup
+          rm app_cert.p12 installer_cert.p12
+
+      - name: Sign macOS app bundles
+        if: ${{ secrets.APPLE_APP_CERT_P12 != '' && secrets.APPLE_SIGNING_IDENTITY != '' }}
+        env:
+          SIGN_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          if [ -n "$SIGN_IDENTITY" ]; then
+            codesign --force --options runtime --sign "$SIGN_IDENTITY" --timestamp \
+              dist/Octobud-arm64.app/Contents/MacOS/octobud
+            codesign --force --options runtime --sign "$SIGN_IDENTITY" --timestamp \
+              dist/Octobud-arm64.app
+            codesign --verify --deep --strict dist/Octobud-arm64.app
+            
+            codesign --force --options runtime --sign "$SIGN_IDENTITY" --timestamp \
+              dist/Octobud-amd64.app/Contents/MacOS/octobud
+            codesign --force --options runtime --sign "$SIGN_IDENTITY" --timestamp \
+              dist/Octobud-amd64.app
+            codesign --verify --deep --strict dist/Octobud-amd64.app
+          fi
+
+      - name: Create macOS installers
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          pkgbuild --root dist/Octobud-arm64.app \
+            --identifier "io.octobud" \
+            --version "$VERSION" \
+            --install-location "/Applications/Octobud.app" \
+            --scripts macos/scripts \
+            dist/Octobud-$VERSION-macos-arm64-unsigned.pkg
+          
+          pkgbuild --root dist/Octobud-amd64.app \
+            --identifier "io.octobud" \
+            --version "$VERSION" \
+            --install-location "/Applications/Octobud.app" \
+            --scripts macos/scripts \
+            dist/Octobud-$VERSION-macos-amd64-unsigned.pkg
+
+      - name: Sign macOS installers
+        if: ${{ secrets.APPLE_INSTALLER_CERT_P12 != '' && secrets.APPLE_SIGNING_IDENTITY != '' }}
+        env:
+          INSTALLER_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          if [ -n "$INSTALLER_IDENTITY" ]; then
+            productsign --sign "$INSTALLER_IDENTITY" \
+              dist/Octobud-$VERSION-macos-arm64-unsigned.pkg \
+              dist/Octobud-$VERSION-macos-arm64.pkg
+            rm dist/Octobud-$VERSION-macos-arm64-unsigned.pkg
+            
+            productsign --sign "$INSTALLER_IDENTITY" \
+              dist/Octobud-$VERSION-macos-amd64-unsigned.pkg \
+              dist/Octobud-$VERSION-macos-amd64.pkg
+            rm dist/Octobud-$VERSION-macos-amd64-unsigned.pkg
+          else
+            mv dist/Octobud-$VERSION-macos-arm64-unsigned.pkg dist/Octobud-$VERSION-macos-arm64.pkg
+            mv dist/Octobud-$VERSION-macos-amd64-unsigned.pkg dist/Octobud-$VERSION-macos-amd64.pkg
+          fi
+
+      - name: Notarize macOS installers
+        if: ${{ secrets.APPLE_API_KEY_ID != '' && secrets.APPLE_API_KEY_ISSUER != '' && secrets.APPLE_API_KEY_P8 != '' }}
+        env:
+          API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          API_KEY_ISSUER: ${{ secrets.APPLE_API_KEY_ISSUER }}
+          API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          echo "$API_KEY_P8" | base64 --decode > api_key.p8
+          
+          xcrun notarytool submit dist/Octobud-$VERSION-macos-arm64.pkg \
+            --key api_key.p8 \
+            --key-id "$API_KEY_ID" \
+            --issuer "$API_KEY_ISSUER" \
+            --wait
+          
+          xcrun notarytool submit dist/Octobud-$VERSION-macos-amd64.pkg \
+            --key api_key.p8 \
+            --key-id "$API_KEY_ID" \
+            --issuer "$API_KEY_ISSUER" \
+            --wait
+          
+          xcrun stapler staple dist/Octobud-$VERSION-macos-arm64.pkg
+          xcrun stapler staple dist/Octobud-$VERSION-macos-amd64.pkg
+          
+          rm api_key.p8
+
+      - name: Generate checksums
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          cd dist
+          shasum -a 256 Octobud-$VERSION-macos-*.pkg > checksums.txt
+          cat checksums.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.VERSION_TAG }}
+          name: Release ${{ steps.version.outputs.VERSION_TAG }}
+          body: |
+            ## Changes
+            
+            See the [CHANGELOG](CHANGELOG.md) for detailed information about this release.
+            
+            ## Downloads
+            
+            ### macOS
+            
+            - **Apple Silicon (M1/M2/M3)**: [Octobud-${{ steps.version.outputs.VERSION }}-macos-arm64.pkg](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION_TAG }}/Octobud-${{ steps.version.outputs.VERSION }}-macos-arm64.pkg)
+            - **Intel**: [Octobud-${{ steps.version.outputs.VERSION }}-macos-amd64.pkg](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION_TAG }}/Octobud-${{ steps.version.outputs.VERSION }}-macos-amd64.pkg)
+            
+            ### Checksums
+            
+            SHA-256 checksums are available in the `checksums.txt` file.
+            
+            ## Auto-Update
+            
+            Octobud will automatically check for updates. To manually check, go to Settings → About.
+          files: |
+            dist/Octobud-${{ steps.version.outputs.VERSION }}-macos-*.pkg
+            dist/checksums.txt
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.VERSION, '-') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

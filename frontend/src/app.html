@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="/favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script>
+        // Prevent flash of unstyled content by setting theme before page loads
+        (function () {
+            const theme = localStorage.getItem('octobud:theme');
+            if (theme === 'light' || theme === 'dark') {
+                document.documentElement.classList.toggle('dark', theme === 'dark');
+            } else {
+                // Default to dark if no preference is set
+                document.documentElement.classList.add('dark');
+            }
+        })();
+    </script>
+    <style>
+        /* Splash screen styles - shown before hydration */
+        #splash-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #f9fafb;
+        }
+
+        .dark #splash-screen {
+            background-color: #030712;
+        }
+
+        #splash-screen .logo-squish {
+            display: flex;
+            height: 8rem;
+            width: 8rem;
+            align-items: center;
+            justify-content: center;
+            border-radius: 2rem;
+            background: linear-gradient(to bottom right, #6366f1, #8b5cf6, #a855f7);
+            box-shadow: 0 10px 40px -10px rgba(99, 102, 241, 0.5), 0 4px 12px -2px rgba(139, 92, 246, 0.3);
+        }
+
+        .dark #splash-screen .logo-squish {
+            box-shadow: none;
+        }
+
+        #splash-screen .logo-squish img {
+            height: 4.5rem;
+            width: 4.5rem;
+        }
+
+        @keyframes squish {
+            0% {
+                transform: scale(0.7);
+                opacity: 0;
+            }
+
+            50% {
+                transform: scale(1.05);
+            }
+
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.1);
+            }
+        }
+
+        #splash-screen .logo-squish {
+            animation: squish 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards,
+                pulse 2s ease-in-out infinite 0.4s;
+        }
+
+        /* Hide splash screen when app is hydrated */
+        body:not(.loading) #splash-screen {
+            display: none;
+        }
+
+        /* Prevent body scroll during splash */
+        body.loading {
+            overflow: hidden;
+        }
+    </style>
+    %sveltekit.head%
+</head>
+
+<body data-sveltekit-preload-data="hover" class="loading">
+    <!-- Splash screen shown before hydration -->
+    <div id="splash-screen">
+        <div class="logo-squish">
+            <img src="/baby_octo.svg" alt="Octobud" />
+        </div>
+    </div>
+
+    <div style="display: contents">%sveltekit.body%</div>
+
+    <script>
+        // The splash screen will be hidden by the layout component's onMount
+        // This script is just a safety fallback to ensure it eventually disappears
+        // if something goes wrong with the component mounting
+        (function () {
+            var maxWait = 5000; // Maximum 5 seconds
+            var startTime = Date.now();
+
+            function tryHideSplash() {
+                if (document.body.classList.contains('loading')) {
+                    var elapsed = Date.now() - startTime;
+                    if (elapsed < maxWait) {
+                        setTimeout(tryHideSplash, 100);
+                    } else {
+                        // Force hide after max wait time
+                        document.body.classList.remove('loading');
+                    }
+                }
+            }
+
+            // Start checking after a brief delay
+            setTimeout(tryHideSplash, 500);
+        })();
+    </script>
+</body>
+
+</html>

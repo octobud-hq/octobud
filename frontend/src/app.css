@@ -1,0 +1,106 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+@plugin "@tailwindcss/forms";
+
+/* Tailwind v4: Define dark mode variant */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* 
+ * Gray Color Palette
+ * Light mode: white/gray-50 backgrounds, gray-900 text
+ * Dark mode: gray-950 (darkest), gray-900 (cards/surfaces), gray-800 (darker elements)
+ * Borders: gray-200/300 (light), gray-700/800 (dark)
+ * Text: gray-600-900 (light), gray-50-600 (dark)
+ * Accents: blue-600 for focus states only
+ */
+@layer base {
+	:root {
+		color-scheme: light dark;
+	}
+
+	html {
+		height: 100%;
+	}
+
+	body {
+		height: 100%;
+		min-height: 100%;
+		overflow: hidden;
+		display: flex;
+		flex-direction: column;
+		@apply bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-200;
+		font-family:
+			"Inter",
+			system-ui,
+			-apple-system,
+			BlinkMacSystemFont,
+			"Segoe UI",
+			sans-serif;
+	}
+
+	a {
+		@apply text-gray-600 underline-offset-2 transition hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-300;
+	}
+
+	/* scrollbar styling */
+	/* Light mode scrollbars - lighter gray */
+	* {
+		scrollbar-width: thin;
+		scrollbar-color: rgba(209, 213, 219, 0.6) transparent;
+		/* gray-300 */
+	}
+
+	/* Dark mode scrollbars - darker gray */
+	.dark * {
+		scrollbar-color: rgba(156, 163, 175, 0.6) transparent;
+		/* gray-400 */
+	}
+
+	*::-webkit-scrollbar {
+		width: 8px;
+	}
+
+	*::-webkit-scrollbar-track {
+		background: transparent;
+	}
+
+	/* Light mode scrollbar thumb */
+	*::-webkit-scrollbar-thumb {
+		background-color: rgba(209, 213, 219, 0.4);
+		/* gray-300 */
+		border-radius: 9999px;
+		border: 2px solid transparent;
+		background-clip: padding-box;
+	}
+
+	*::-webkit-scrollbar-thumb:hover {
+		background-color: rgba(209, 213, 219, 0.6);
+		/* gray-300 */
+	}
+
+	/* Dark mode scrollbar thumb */
+	.dark *::-webkit-scrollbar-thumb {
+		background-color: rgba(156, 163, 175, 0.4);
+		/* gray-400 */
+	}
+
+	.dark *::-webkit-scrollbar-thumb:hover {
+		background-color: rgba(156, 163, 175, 0.6);
+		/* gray-400 */
+	}
+
+	/* Text selection colors */
+	/* Light mode selection */
+	::selection {
+		background: #b3d4fc;
+		/* Light blue selection */
+		color: #24292e;
+	}
+
+	/* Dark mode selection */
+	.dark ::selection {
+		background: #264f78;
+		/* Dark blue selection */
+		color: #c9d1d9;
+	}
+}

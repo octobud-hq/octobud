@@ -1,0 +1,33 @@
+# Environment files
+.env
+backend/.env
+frontend/.env
+frontend/.env.local
+
+# Dependencies and build
+frontend/node_modules
+frontend/.svelte-kit
+frontend/build
+
+# Built binaries and embedded frontend assets
+backend/bin/
+backend/web/dist/*
+!backend/web/dist/.gitkeep
+
+# Build outputs
+bin/
+dist/
+
+# OS files
+.DS_Store
+*/.DS_Store
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Coverage reports
+*.out
+coverage/

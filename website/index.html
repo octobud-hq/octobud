@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Octobud - GitHub Notification Manager</title>
+    <meta name="description"
+        content="A keyboard-driven GitHub notification manager. Like Gmail for your GitHub notifications.">
+    <meta name="theme-color" content="#0d1117">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Octobud - GitHub Notification Manager">
+    <meta property="og:description"
+        content="A keyboard-driven GitHub notification manager. Like Gmail for your GitHub notifications.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://octobud.io">
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Octobud - GitHub Notification Manager">
+    <meta name="twitter:description" content="A keyboard-driven GitHub notification manager.">
+
+    <link rel="icon" type="image/png" href="favicon.png">
+
+    <style>
+        :root {
+            --bg-primary: #0d1117;
+            --bg-secondary: #161b22;
+            --bg-tertiary: #21262d;
+            --text-primary: #f0f6fc;
+            --text-secondary: #8b949e;
+            --text-muted: #6e7681;
+            --accent: #a78bfa;
+            --accent-emphasis: #7c3aed;
+            --border: #30363d;
+            --success: #3fb950;
+            --warning: #d29922;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        /* Header */
+        header {
+            padding: 24px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+            color: var(--text-primary);
+        }
+
+        .logo img {
+            width: 40px;
+            height: 40px;
+        }
+
+        .logo span {
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 24px;
+            align-items: center;
+        }
+
+        .nav-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 14px;
+            transition: color 0.2s;
+        }
+
+        .nav-links a:hover {
+            color: var(--text-primary);
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            text-decoration: none;
+            transition: all 0.2s;
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn-primary {
+            background: var(--accent-emphasis);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #8b5cf6;
+        }
+
+        .btn-secondary {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            background: var(--border);
+        }
+
+        /* Hero */
+        .hero {
+            padding: 120px 0 80px;
+            text-align: center;
+        }
+
+        .hero h1 {
+            font-size: 56px;
+            font-weight: 800;
+            line-height: 1.1;
+            margin-bottom: 24px;
+            background: linear-gradient(135deg, var(--text-primary) 0%, var(--accent) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero p {
+            font-size: 20px;
+            color: var(--text-secondary);
+            max-width: 600px;
+            margin: 0 auto 24px;
+        }
+
+        .hero .tech-stack {
+            font-size: 14px;
+            color: var(--text-muted);
+            margin-bottom: 40px;
+        }
+
+        .hero-buttons {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .hero-buttons .btn {
+            padding: 14px 28px;
+            font-size: 16px;
+        }
+
+        /* Showcase */
+        .showcase {
+            padding: 80px 0;
+            border-top: 1px solid var(--border);
+        }
+
+        .showcase h2 {
+            font-size: 32px;
+            margin-bottom: 48px;
+            text-align: center;
+        }
+
+        .showcase-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 32px;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .showcase-item {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .showcase-item img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .showcase-item h3 {
+            padding: 24px;
+            font-size: 20px;
+            border-top: 1px solid var(--border);
+            text-align: center;
+            margin: 0;
+            font-weight: 600;
+        }
+
+        /* Features */
+        .features {
+            padding: 80px 0;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+        }
+
+        .feature-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 32px;
+            transition: border-color 0.2s;
+        }
+
+        .feature-card:hover {
+            border-color: var(--accent);
+        }
+
+        .feature-icon {
+            width: 48px;
+            height: 48px;
+            background: var(--bg-tertiary);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 20px;
+            font-size: 24px;
+        }
+
+        .feature-card h3 {
+            font-size: 18px;
+            margin-bottom: 12px;
+        }
+
+        .feature-card p {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        /* Quick Start */
+        .quickstart {
+            padding: 80px 0;
+            border-top: 1px solid var(--border);
+        }
+
+        .quickstart h2 {
+            font-size: 32px;
+            margin-bottom: 40px;
+            text-align: center;
+        }
+
+        .code-block {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 24px;
+            overflow-x: auto;
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        .code-block pre {
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Consolas', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            color: var(--text-secondary);
+        }
+
+        .code-block .comment {
+            color: var(--text-muted);
+        }
+
+        .code-block .command {
+            color: var(--accent);
+        }
+
+        /* Footer */
+        footer {
+            padding: 40px 0;
+            border-top: 1px solid var(--border);
+            text-align: center;
+        }
+
+        .footer-links {
+            display: flex;
+            gap: 32px;
+            justify-content: center;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+        }
+
+        .footer-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 14px;
+        }
+
+        .footer-links a:hover {
+            color: var(--text-primary);
+        }
+
+        .footer-text {
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 36px;
+            }
+
+            .hero p {
+                font-size: 16px;
+            }
+
+            .nav-links {
+                display: none;
+            }
+
+            .showcase-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <div class="container header-content">
+            <a href="/" class="logo">
+                <img src="logo.svg" alt="Octobud">
+                <span>Octobud</span>
+            </a>
+            <nav class="nav-links">
+                <a href="https://github.com/octobud-hq/octobud/tree/main/docs">Docs</a>
+                <a href="https://github.com/octobud-hq/octobud" class="btn btn-secondary">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        <path fill-rule="evenodd"
+                            d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
+                    </svg>
+                    GitHub
+                </a>
+            </nav>
+        </div>
+    </header>
+
+    <main>
+        <section class="hero">
+            <div class="container">
+                <h1>Gmail for your<br>GitHub notifications</h1>
+                <p>Octobud is a Mac desktop application that helps you manage the flood of GitHub notifications with
+                    advanced filtering, custom views, keyboard shortcuts, and automation rules.</p>
+                <p class="tech-stack">Built with <strong>Go</strong>, <strong>Svelte 5</strong>, and
+                    <strong>SQLite</strong>. Runs locally as a single binary. Full support on macOS; Linux and Windows
+                    have limited support.
+                </p>
+                <div class="hero-buttons">
+                    <a id="download-btn" href="https://github.com/octobud-hq/octobud/releases/latest"
+                        class="btn btn-primary">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"
+                            style="display: inline-block; vertical-align: middle;">
+                            <path
+                                d="M2.75 14A1.75 1.75 0 0 1 1 12.25v-2.5a.75.75 0 0 1 1.5 0v2.5c0 .138.112.25.25.25h10.5a.25.25 0 0 0 .25-.25v-2.5a.75.75 0 0 1 1.5 0v2.5A1.75 1.75 0 0 1 13.25 14Z" />
+                            <path
+                                d="M7.25 9.69V2a.75.75 0 0 1 1.5 0v7.69l2.22-2.22a.75.75 0 1 1 1.06 1.06l-3.5 3.5a.75.75 0 0 1-1.06 0L4.03 8.53a.75.75 0 1 1 1.06-1.06l2.16 2.22Z" />
+                        </svg>
+                        <span id="download-text">Download</span>
+                    </a>
+                    <a href="https://github.com/octobud-hq/octobud" class="btn btn-secondary">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                            <path fill-rule="evenodd"
+                                d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
+                        </svg>
+                        View on GitHub
+                    </a>
+                </div>
+            </div>
+        </section>
+
+        <section class="showcase">
+            <div class="container">
+                <h2>See It In Action</h2>
+                <div class="showcase-grid">
+                    <div class="showcase-item">
+                        <img src="hero_inbox.gif" alt="Gmail-like Notification Inbox">
+                        <h3>Gmail-like Notification Inbox</h3>
+                    </div>
+                    <div class="showcase-item">
+                        <img src="hero_split_detail.gif" alt="Split Pane Mode">
+                        <h3>Split Pane Mode</h3>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="features">
+            <div class="container">
+                <div class="features-grid">
+                    <div class="feature-card">
+                        <div class="feature-icon">📥</div>
+                        <h3>Full Lifecycle Management</h3>
+                        <p>Star, Snooze, Archive, Tag, and Mute notifications. Keep your inbox clean and focused.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">💬</div>
+                        <h3>Inline Issue and PR Details</h3>
+                        <p>View status, comments, and more inline without leaving your inbox.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">📑</div>
+                        <h3>Split Pane Mode</h3>
+                        <p>View details side by side with your inbox for efficient triage.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">🔍</div>
+                        <h3>Custom Views</h3>
+                        <p>Create filtered views with a query language (e.g.,
+                            <code>repo:octobud,traefik,vscode AND (reason:review_requested OR tags:followup)</code>).
+                        </p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">⌨️</div>
+                        <h3>Keyboard-First</h3>
+                        <p>Navigate and manage notifications without touching your mouse. Vim-style j/k navigation and
+                            intuitive shortcuts.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">⚡</div>
+                        <h3>Automation Rules</h3>
+                        <p>Automatically archive, filter, or tag notifications based on criteria. Skip the noise,
+                            surface what matters.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">🏷️</div>
+                        <h3>Tags</h3>
+                        <p>Organize notifications with custom tags and colors for better organization.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">🔄</div>
+                        <h3>Real-Time Sync</h3>
+                        <p>Background worker keeps notifications up to date automatically.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">🔔</div>
+                        <h3>Desktop Notifications</h3>
+                        <p>Never miss a review request or issue reply with desktop notifications.</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-icon">🔒</div>
+                        <h3>Privacy-First</h3>
+                        <p>Local-first desktop app, your data stays on your machine. Open source under AGPL-3.0.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="quickstart">
+            <div class="container">
+                <h2>Quick Start</h2>
+                <p style="text-align: center; color: var(--text-secondary); margin-bottom: 24px;">
+                    Download and install the Mac app (recommended), or build from source for Linux/Windows.
+                </p>
+                <div class="code-block">
+                    <pre><span class="comment"># Option 1: Download installer (recommended)</span>
+<span class="comment"># Download from: https://github.com/octobud-hq/octobud/releases</span>
+<span class="comment"># Install the .pkg file, then launch Octobud from Applications</span>
+
+<span class="comment"># Option 2: Build from source</span>
+<span class="command">git clone</span> https://github.com/octobud-hq/octobud.git
+<span class="command">cd</span> octobud
+<span class="command">make</span> build
+<span class="command">./bin/octobud</span></pre>
+                </div>
+                <p style="text-align: center; color: var(--text-secondary); margin-top: 24px; font-size: 14px;">
+                    On macOS, Octobud appears in your menu bar and opens automatically. On Linux/Windows, open
+                    <code>http://localhost:8808</code> manually. See the <a
+                        href="https://github.com/octobud-hq/octobud#quick-start" style="color: var(--accent);">full
+                        setup
+                        guide</a> for more details.
+                </p>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <div class="footer-links">
+                <a href="https://github.com/octobud-hq/octobud">GitHub</a>
+                <a href="https://github.com/octobud-hq/octobud/tree/main/docs">Documentation</a>
+                <a href="https://github.com/octobud-hq/octobud/blob/main/docs/CONTRIBUTING.md">Contributing</a>
+                <a href="https://github.com/octobud-hq/octobud/blob/main/LICENSE.txt">License</a>
+            </div>
+            <p class="footer-text">
+                Made with ❤️ by someone who hates reading GitHub notifications in plain text and managing a million
+                Gmail filters.
+            </p>
+        </div>
+    </footer>
+
+    <script>
+        // Detect OS and fetch appropriate download URL
+        (function () {
+            const downloadBtn = document.getElementById('download-btn');
+            const downloadText = document.getElementById('download-text');
+
+            if (!downloadBtn || !downloadText) return;
+
+            // Detect platform
+            function detectPlatform() {
+                const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+                const platform = navigator.platform || navigator.userAgentData?.platform || '';
+
+                // macOS detection
+                if (/Mac|iPhone|iPad|iPod/.test(platform) || /Mac/.test(userAgent)) {
+                    return { platform: 'macos', arch: 'arm64' }; // Default to arm64, will try both
+                }
+
+                // Windows detection
+                if (/Win/.test(platform) || /Windows/.test(userAgent)) {
+                    return { platform: 'windows', arch: 'amd64' };
+                }
+
+                // Linux detection
+                if (/Linux/.test(platform) || /Linux/.test(userAgent)) {
+                    return { platform: 'linux', arch: 'amd64' };
+                }
+
+                // Default to macOS
+                return { platform: 'macos', arch: 'arm64' };
+            }
+
+            // Find appropriate asset for platform
+            function findPlatformAsset(assets, platform, arch) {
+                const patterns = [
+                    `${platform}-${arch}`, // e.g., macos-arm64
+                    platform,             // e.g., macos
+                    ''                     // any matching file
+                ];
+
+                for (const pattern of patterns) {
+                    for (const asset of assets) {
+                        const name = asset.name.toLowerCase();
+                        if (pattern === '' || name.includes(pattern)) {
+                            if (platform === 'macos' && name.endsWith('.pkg')) {
+                                return asset;
+                            }
+                            if (platform === 'windows' && (name.endsWith('.exe') || name.endsWith('.msi'))) {
+                                return asset;
+                            }
+                            if (platform === 'linux' && (name.endsWith('.deb') || name.endsWith('.rpm') || name.endsWith('.appimage'))) {
+                                return asset;
+                            }
+                        }
+                    }
+                }
+
+                // Fallback to first asset
+                return assets.length > 0 ? assets[0] : null;
+            }
+
+            // Fetch latest release and update download button
+            async function updateDownloadButton() {
+                try {
+                    downloadText.textContent = 'Loading...';
+
+                    const response = await fetch('https://api.github.com/repos/octobud-hq/octobud/releases/latest', {
+                        headers: {
+                            'Accept': 'application/vnd.github+json',
+                            'X-GitHub-Api-Version': '2022-11-28'
+                        }
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Failed to fetch release');
+                    }
+
+                    const release = await response.json();
+                    const { platform, arch } = detectPlatform();
+
+                    // Try to find platform-specific asset
+                    let asset = findPlatformAsset(release.assets, platform, arch);
+
+                    // For macOS, also try amd64 if arm64 not found
+                    if (!asset && platform === 'macos' && arch === 'arm64') {
+                        asset = findPlatformAsset(release.assets, platform, 'amd64');
+                    }
+
+                    if (asset) {
+                        downloadBtn.href = asset.browser_download_url;
+                        downloadBtn.download = asset.name;
+                        downloadText.textContent = `Download for ${platform === 'macos' ? 'macOS' : platform === 'windows' ? 'Windows' : 'Linux'}`;
+                    } else {
+                        // Fallback to releases page
+                        downloadBtn.href = 'https://github.com/octobud-hq/octobud/releases/latest';
+                        downloadText.textContent = 'View Releases';
+                    }
+                } catch (error) {
+                    console.error('Failed to fetch download URL:', error);
+                    // Fallback to releases page on error
+                    downloadBtn.href = 'https://github.com/octobud-hq/octobud/releases/latest';
+                    downloadText.textContent = 'View Releases';
+                }
+            }
+
+            // Update button on page load
+            updateDownloadButton();
+        })();
+    </script>
+</body>
+
+</html>

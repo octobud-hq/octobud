@@ -1,0 +1,9 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://github.com/octobud-hq/octobud/tree/main/docs
+    about: Check the documentation for guides and answers
+  - name: Discussions
+    url: https://github.com/octobud-hq/octobud/discussions
+    about: Ask questions and discuss Octobud with the community
+

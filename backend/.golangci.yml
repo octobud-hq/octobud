@@ -1,0 +1,159 @@
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+output:
+  format: colored-line-number
+  print-issued-lines: true
+  print-linter-name: true
+
+issues:
+  exclude-dirs:
+    - vendor
+    - mocks
+  exclude-files:
+    - ".*\\.pb\\.go$"
+    - ".*\\.gen\\.go$"
+
+formatters:
+  enable:
+    - gofmt
+    - golines
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+  goconst:
+    min-len: 3
+    min-occurrences: 3
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - experimental
+      - opinionated
+      - performance
+      - style
+    disabled-checks:
+      - dupImport
+      - ifElseChain
+      - octalLiteral
+      - whyNoLint
+      - wrapperFunc
+      - hugeParam # Too many false positives
+      - rangeValCopy # Common pattern, not always a problem
+  gocyclo:
+    min-complexity: 20 # Increase threshold - some complex functions are necessary
+  goimports:
+    local-prefixes: github.com/octobud-hq/octobud
+  govet:
+    enable-all: true
+    # check-shadowing is deprecated, use shadow linter instead
+    disable:
+      - fieldalignment # Field alignment is a performance optimization, not a correctness issue
+  lll:
+    line-length: 120
+  misspell:
+    locale: US
+  nolintlint:
+    allow-unused: false
+    require-explanation: false
+    require-specific: false
+  revive:
+    rules:
+      - name: exported
+        severity: warning
+        disabled: true # Too many false positives with package stuttering
+      - name: var-naming
+        severity: warning
+      - name: var-declaration
+        severity: warning
+      - name: package-comments
+        severity: warning
+      - name: range
+        severity: warning
+      - name: increment-decrement
+        severity: warning
+      - name: error-return
+        severity: warning
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - goconst
+    - gocritic
+    - gocyclo
+    - gosec
+    - govet
+    - ineffassign
+    - lll
+    - misspell
+    - nakedret
+    - noctx
+    - nolintlint
+    - revive
+    - staticcheck
+    - unconvert
+    - unparam
+    - unused
+    - whitespace
+
+  exclusions:
+    rules:
+      # Exclude some linters from generated files
+      - path: _gen\.go
+        linters:
+          - lll
+          - errcheck
+          - gosec
+      # Exclude known linter issues in test files
+      - path: .*_test\.go$
+        linters:
+          - errcheck # Test files often ignore errors for test setup
+          - gosec # Test files may have intentional security issues
+          - goconst # Test files often use repeated strings
+          - fieldalignment # Test structs don't need optimal alignment
+          - shadow # Test files often reuse variable names
+          - lll # Allow long lines in test files
+          - unparam # Test helper functions may have unused parameters
+      # Also exclude lll for test files using text pattern (backup)
+      - path: .*_test\.go$
+        text: "The line is.*characters long"
+        linters:
+          - lll
+      # Exclude goimports false positives in files with generics
+      # These files compile correctly but goimports has trouble parsing generics
+      - path: '.*/jobs/(apply_rule|process_notification|sync_notifications)\.go$'
+        linters:
+          - goimports
+      - path: '.*/query/eval/evaluator_test\.go$'
+        linters:
+          - goimports
+      - path: '.*/github/sync(_test)?\.go$'
+        linters:
+          - goimports
+      - path: 'internal/core/timeline/timeline_test\.go'
+        linters:
+          - goimports
+      - path: 'internal/core/rules/rules\.go'
+        linters:
+          - goimports
+      - path: 'internal/github/sync\.go'
+        linters:
+          - goimports
+      # Exclude gosec G115 (integer overflow) - false positives for int->int32 conversions
+      - linters:
+          - gosec
+        text: "G115:"
+      # Field alignment is a performance optimization, not a correctness issue
+      - linters:
+          - fieldalignment
+        text: "fieldalignment:"
+      # Exclude type assertion errors in test files (errcheck with check-type-assertions)
+      - path: .*_test\.go$
+        text: "Error return value is not checked"
+        linters:
+          - errcheck
