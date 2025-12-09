@@ -16,7 +16,7 @@
 
 	import type { Notification, NotificationDetail } from "$lib/api/types";
 	import { fade } from "svelte/transition";
-	import { onDestroy, getContext } from "svelte";
+	import { onDestroy, getContext, onMount } from "svelte";
 	import { normalizeReason, parseSubjectMetadata } from "$lib/utils/notificationHelpers";
 	import { formatRelativeShort } from "$lib/utils/time";
 	import { getNotificationIcon } from "$lib/utils/notificationIcons";
@@ -30,6 +30,7 @@
 	import type { NotificationPageController } from "$lib/state/types";
 	import { currentTime } from "$lib/stores/timeStore";
 	import octicons from "@primer/octicons";
+	import { computeAvatarUrl, isRedirectAvatarUrl, resolveAvatarRedirect } from "$lib/utils/avatar";
 
 	// Subscribe to time store to trigger re-renders when time updates
 	// This ensures relative timestamps for same-day notifications stay fresh
@@ -315,15 +316,40 @@
 	$: isBot =
 		authorName.toLowerCase().includes("[bot]") || authorName.toLowerCase().endsWith("-bot");
 	$: authorInitial = authorName.charAt(0).toUpperCase();
-	$: authorAvatarUrl =
-		authorName !== "Unknown" ? `https://github.com/${encodeURIComponent(authorName)}.png` : null;
 
+	// Try to find direct avatar URL from timeline items first
+	// Access commentItems store reactively to ensure updates trigger recalculation
+	$: directAvatarUrl = (() => {
+		if (!authorName || authorName === "Unknown") return null;
+
+		// Check timeline items for the same author
+		// Access the store value reactively
+		const items = commentItems ? $commentItems : [];
+		for (const item of items) {
+			const itemAuthor = item.author?.login || item.actor?.login;
+			if (itemAuthor === authorName) {
+				const avatarUrl = item.author?.avatarUrl || item.actor?.avatarUrl;
+				if (avatarUrl) {
+					return avatarUrl;
+				}
+			}
+		}
+
+		return null;
+	})();
+
+	// Compute base avatar URL (direct or redirect)
+	$: authorAvatarUrl = computeAvatarUrl(directAvatarUrl, authorName);
+
+	// Resolved avatar URL (after following redirect if needed)
+	let resolvedAvatarUrl: string | null = null;
 	let avatarLoadFailed = false;
 	let previousGithubId: string | null = null;
 
 	// Reset avatar error state and timeline when switching to a different notification
 	$: if (notification) {
 		avatarLoadFailed = false;
+		resolvedAvatarUrl = null;
 
 		// Only reset timeline controller when switching to a DIFFERENT notification
 		const currentGithubId = notification.githubId;
@@ -333,8 +359,22 @@
 		}
 	}
 
-	function handleAvatarError() {
-		avatarLoadFailed = true;
+	// Use resolved URL if available, otherwise fall back to original
+	$: finalAvatarUrl = resolvedAvatarUrl || authorAvatarUrl;
+
+	async function handleAvatarError() {
+		// If we haven't resolved the redirect yet, try one more time
+		if (authorAvatarUrl && !directAvatarUrl && !resolvedAvatarUrl && !avatarLoadFailed) {
+			const resolved = await resolveAvatarRedirect(authorAvatarUrl);
+			if (resolved) {
+				resolvedAvatarUrl = resolved;
+				avatarLoadFailed = false;
+			} else {
+				avatarLoadFailed = true;
+			}
+		} else {
+			avatarLoadFailed = true;
+		}
 	}
 
 	// Helper to get the SVG path from an octicon
@@ -741,9 +781,9 @@
 								<!-- Avatar / Initial -->
 								<div class="flex-shrink-0">
 									{#key notification.id}
-										{#if authorAvatarUrl && !avatarLoadFailed}
+										{#if finalAvatarUrl && !avatarLoadFailed}
 											<img
-												src={authorAvatarUrl}
+												src={finalAvatarUrl}
 												alt={`${authorName}'s avatar`}
 												class="h-10 w-10 rounded-full bg-gray-300 dark:bg-gray-700 ring-2 ring-white dark:ring-gray-950"
 												on:error={handleAvatarError}

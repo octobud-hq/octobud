@@ -22,6 +22,7 @@
 	import type { NotificationPageController } from "$lib/state/types";
 	import { githubUsername } from "$lib/stores/authStore";
 	import type { CommandPaletteComponent } from "$lib/types/components";
+	import { computeAvatarUrl, isRedirectAvatarUrl, resolveAvatarRedirect } from "$lib/utils/avatar";
 
 	// Get page controller from context
 	const pageController = getContext<NotificationPageController>("notificationPageController");
@@ -73,17 +74,35 @@
 	});
 
 	$: username = $githubUsername;
-	$: avatarUrl = username ? `https://github.com/${encodeURIComponent(username)}.png` : null;
-	let avatarLoadFailed = false;
+	$: redirectAvatarUrl = computeAvatarUrl(null, username);
 
-	function handleAvatarError() {
-		avatarLoadFailed = true;
-	}
+	// Resolved avatar URL (after following redirect if needed)
+	let resolvedAvatarUrl: string | null = null;
+	let avatarLoadFailed = false;
 
 	// Reset avatar error state when username changes
 	$: {
 		if (username) {
 			avatarLoadFailed = false;
+			resolvedAvatarUrl = null;
+		}
+	}
+
+	// Use resolved URL if available, otherwise fall back to redirect URL
+	$: avatarUrl = resolvedAvatarUrl || redirectAvatarUrl;
+
+	async function handleAvatarError() {
+		// If we haven't resolved the redirect yet, try one more time
+		if (redirectAvatarUrl && !resolvedAvatarUrl && !avatarLoadFailed) {
+			const resolved = await resolveAvatarRedirect(redirectAvatarUrl);
+			if (resolved) {
+				resolvedAvatarUrl = resolved;
+				avatarLoadFailed = false;
+			} else {
+				avatarLoadFailed = true;
+			}
+		} else {
+			avatarLoadFailed = true;
 		}
 	}
 

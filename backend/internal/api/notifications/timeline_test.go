@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap"
 
 	"github.com/octobud-hq/octobud/backend/internal/core/timeline"
 	githubmocks "github.com/octobud-hq/octobud/backend/internal/github/mocks"
@@ -30,7 +31,7 @@ import (
 func TestFetchAndFilterTimelineEvents(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now()
-	service := timeline.NewService()
+	service := timeline.NewService(zap.NewNop())
 
 	tests := []struct {
 		name          string
@@ -259,6 +260,7 @@ func TestFetchAndFilterTimelineEvents(t *testing.T) {
 				ctx,
 				client,
 				subjectInfo,
+				"issue", // subject type for test
 				tt.perPage,
 				tt.page,
 			)

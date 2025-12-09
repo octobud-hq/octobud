@@ -43,6 +43,27 @@ For more control when creating a view:
 4. Choose an icon
 5. Click **Save**
 
+### Recommended Starting Views
+
+Here are some recommended views to help you get started:
+
+**Assigned / Authored**
+```
+in:inbox,filtered (reason:assign OR author:<YOUR_USERNAME>)
+```
+Replace `<YOUR_USERNAME>` with your GitHub username.
+
+**Reviews**
+```
+in:inbox,filtered reason:review_requested
+```
+
+**Bots** (with auto-filter rule)
+```
+in:inbox,filtered author:[bot]
+```
+Create this view and then add a rule with the same query (`author:[bot]`) that skips the inbox. This will automatically filter bot notifications out of your inbox while keeping them accessible in this view.
+
 ### Example Views
 
 **Needs Review**

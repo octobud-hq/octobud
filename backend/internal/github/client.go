@@ -31,8 +31,9 @@ import (
 )
 
 const (
-	defaultPerPage = 50
-	githubAPIBase  = "https://api.github.com"
+	defaultPerPage    = 50
+	githubAPIBase     = "https://api.github.com"
+	githubGraphQLBase = "https://api.github.com/graphql"
 )
 
 // clientImpl wraps calls to the GitHub API for interacting with the Notifications API.
@@ -417,4 +418,188 @@ func (c *clientImpl) FetchTimeline(
 	}
 
 	return timeline, nil
+}
+
+// GraphQLRequest represents a GraphQL request payload.
+type GraphQLRequest struct {
+	Query     string                 `json:"query"`
+	Variables map[string]interface{} `json:"variables,omitempty"`
+}
+
+// GraphQLResponse represents a GraphQL response.
+type GraphQLResponse struct {
+	Data   json.RawMessage `json:"data"`
+	Errors []GraphQLError  `json:"errors,omitempty"`
+}
+
+// GraphQLError represents a GraphQL error.
+type GraphQLError struct {
+	Message string        `json:"message"`
+	Path    []interface{} `json:"path,omitempty"`
+}
+
+// DiscussionComment represents a comment from a discussion via GraphQL.
+type DiscussionComment struct {
+	ID        string    `json:"id"`
+	Body      string    `json:"body"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+	Author    struct {
+		Login     string `json:"login"`
+		AvatarURL string `json:"avatarUrl"`
+	} `json:"author"`
+	URL string `json:"url"`
+}
+
+// DiscussionCommentsResponse represents the GraphQL response for discussion comments.
+type DiscussionCommentsResponse struct {
+	Repository struct {
+		Discussion struct {
+			Comments struct {
+				Nodes    []DiscussionComment `json:"nodes"`
+				PageInfo struct {
+					HasNextPage bool   `json:"hasNextPage"`
+					EndCursor   string `json:"endCursor"`
+				} `json:"pageInfo"`
+			} `json:"comments"`
+		} `json:"discussion"`
+	} `json:"repository"`
+}
+
+// FetchDiscussionComments retrieves comments for a discussion using GraphQL API.
+// Returns timeline events, hasNextPage, endCursor, and error.
+func (c *clientImpl) FetchDiscussionComments( //nolint:gocritic // Prefer in-line naming of results.
+	ctx context.Context,
+	owner, repo string,
+	number, first int,
+	after string, // cursor for pagination
+) ([]types.TimelineEvent, bool, string, error) {
+	// GraphQL query to fetch discussion comments
+	query := `
+		query GetDiscussionComments($owner: String!, $repo: String!, $number: Int!, $first: Int!, $after: String) {
+			repository(owner: $owner, name: $repo) {
+				discussion(number: $number) {
+					comments(first: $first, after: $after, orderBy: {field: CREATED_AT, direction: DESC}) {
+						nodes {
+							id
+							body
+							createdAt
+							updatedAt
+							author {
+								login
+								avatarUrl
+							}
+							url
+						}
+						pageInfo {
+							hasNextPage
+							endCursor
+						}
+					}
+				}
+			}
+		}
+	`
+
+	variables := map[string]interface{}{
+		"owner":  owner,
+		"repo":   repo,
+		"number": number,
+		"first":  first,
+	}
+	if after != "" {
+		variables["after"] = after
+	}
+
+	reqBody := GraphQLRequest{
+		Query:     query,
+		Variables: variables,
+	}
+
+	jsonBody, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, false, "", fmt.Errorf("github: marshal graphql request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(
+		ctx,
+		"POST",
+		githubGraphQLBase,
+		bytes.NewBuffer(jsonBody),
+	)
+	if err != nil {
+		return nil, false, "", fmt.Errorf("github: create graphql request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, false, "", fmt.Errorf("github: execute graphql request: %w", err)
+	}
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			_ = closeErr
+		}
+	}()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, false, "", fmt.Errorf("github: read graphql response body: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, false, "", fmt.Errorf(
+			"github: graphql status %d: %s",
+			resp.StatusCode,
+			string(body),
+		)
+	}
+
+	var graphqlResp GraphQLResponse
+	if err := json.Unmarshal(body, &graphqlResp); err != nil {
+		return nil, false, "", fmt.Errorf("github: unmarshal graphql response: %w", err)
+	}
+
+	// Check for GraphQL errors
+	if len(graphqlResp.Errors) > 0 {
+		var errorMsgs []string
+		for _, err := range graphqlResp.Errors {
+			errorMsgs = append(errorMsgs, err.Message)
+		}
+		return nil, false, "", fmt.Errorf("github: graphql errors: %v", errorMsgs)
+	}
+
+	// Parse the data
+	var data DiscussionCommentsResponse
+	if err := json.Unmarshal(graphqlResp.Data, &data); err != nil {
+		return nil, false, "", fmt.Errorf("github: unmarshal graphql data: %w", err)
+	}
+
+	comments := data.Repository.Discussion.Comments.Nodes
+	hasNextPage := data.Repository.Discussion.Comments.PageInfo.HasNextPage
+	endCursor := data.Repository.Discussion.Comments.PageInfo.EndCursor
+
+	// Convert DiscussionComment to TimelineEvent
+	timelineEvents := make([]types.TimelineEvent, len(comments))
+	for i, comment := range comments {
+		createdAt := comment.CreatedAt
+		updatedAt := comment.UpdatedAt
+		timelineEvents[i] = types.TimelineEvent{
+			Event:     "commented",
+			ID:        json.RawMessage(fmt.Sprintf(`%q`, comment.ID)),
+			CreatedAt: &createdAt,
+			UpdatedAt: &updatedAt,
+			Body:      comment.Body,
+			HTMLURL:   comment.URL,
+			User: &types.SimpleUser{
+				Login:     comment.Author.Login,
+				AvatarURL: comment.Author.AvatarURL,
+			},
+		}
+	}
+
+	return timelineEvents, hasNextPage, endCursor, nil
 }

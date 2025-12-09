@@ -34,6 +34,7 @@ When you first launch Octobud:
    - `notifications`
    - `read:discussions`
 4. **Configure Initial Sync** - After connecting GitHub, you'll be prompted to configure how far back to sync your existing notifications. We recommend starting with 30 days - you can always sync more later from Settings → Data.
+5. **Set up Views and Rules** - See [Start Here](start-here.md#recommended-starting-views-and-rules) for recommended starting views and rules to help organize your notifications.
 
 ## Menu Bar
 

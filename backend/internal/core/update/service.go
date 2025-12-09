@@ -100,7 +100,7 @@ func (s *Service) CheckForUpdates(
 
 	// Handle 404 for /releases/latest endpoint (no releases exist)
 	if resp.StatusCode == http.StatusNotFound && !includePrereleases {
-		s.logger.Debug("No releases found in repository",
+		s.logger.Info("No releases found in repository",
 			zap.String("current", currentVersion),
 		)
 		return nil, nil // No releases available, not an error
@@ -118,7 +118,7 @@ func (s *Service) CheckForUpdates(
 			return nil, fmt.Errorf("failed to decode releases: %w", decodeErr)
 		}
 		if len(releases) == 0 {
-			s.logger.Debug("No releases found in repository",
+			s.logger.Info("No releases found in repository",
 				zap.String("current", currentVersion),
 			)
 			return nil, nil
@@ -133,15 +133,38 @@ func (s *Service) CheckForUpdates(
 
 	// Strip 'v' prefix from tag for comparison
 	latestVersion := strings.TrimPrefix(release.TagName, "v")
+	// Normalize current version (strip 'v' prefix if present)
+	normalizedCurrentVersion := strings.TrimPrefix(currentVersion, "v")
+
+	// Log the comparison for debugging (Info level so it's visible)
+	s.logger.Info("Comparing versions for update check",
+		zap.String("current", currentVersion),
+		zap.String("normalizedCurrent", normalizedCurrentVersion),
+		zap.String("latest", latestVersion),
+		zap.String("latestTag", release.TagName),
+		zap.Bool("isPrerelease", release.Prerelease),
+		zap.String("releaseName", release.Name),
+	)
 
 	// Compare versions
-	if !IsNewer(latestVersion, currentVersion) {
-		s.logger.Debug("No update available",
+	comparisonResult := CompareVersions(latestVersion, normalizedCurrentVersion)
+	if comparisonResult <= 0 {
+		s.logger.Info("No update available - current version is up to date",
 			zap.String("current", currentVersion),
+			zap.String("normalizedCurrent", normalizedCurrentVersion),
 			zap.String("latest", latestVersion),
+			zap.String("latestTag", release.TagName),
+			zap.Int("comparisonResult", comparisonResult),
 		)
 		return nil, nil
 	}
+
+	s.logger.Info("Update available",
+		zap.String("current", currentVersion),
+		zap.String("normalizedCurrent", normalizedCurrentVersion),
+		zap.String("latest", latestVersion),
+		zap.String("latestTag", release.TagName),
+	)
 
 	// Find appropriate asset for current platform
 	asset, err := s.GetPlatformAsset(release.Assets)

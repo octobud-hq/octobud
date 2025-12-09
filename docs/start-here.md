@@ -100,6 +100,21 @@ repo:owner/name reason:mention       # Mentions in a specific repo
 author:dependabot                    # All Dependabot notifications
 ```
 
+## Recommended Starting Views and Rules
+
+Here are some recommended views and rules to help you get started:
+
+**Views:**
+
+- **Assigned / Authored** - `in:inbox,filtered (reason:assign OR author:<YOUR_USERNAME>)`
+- **Reviews** - `in:inbox,filtered reason:review_requested`
+
+**Views with auto-filter rule:**
+
+- **[Bots]** - `in:inbox,filtered author:[bot]` + rule to skip inbox
+
+See the [Views & Rules guide](guides/views-and-rules.md) for detailed instructions on creating views and rules.
+
 ## Next Steps
 
 - **[Query Syntax Guide](guides/query-syntax.md)** - Master the query language

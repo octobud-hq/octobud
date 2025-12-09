@@ -113,7 +113,7 @@ export function createUpdateStore() {
 		error.set(null);
 
 		try {
-			const response = await checkForUpdates();
+			const response = await checkForUpdates(force);
 			updateInfo.set(response);
 
 			// Update last checked time from settings

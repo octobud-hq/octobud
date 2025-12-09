@@ -505,9 +505,13 @@ export async function updateUpdateSettings(
 	return response.json();
 }
 
-export async function checkForUpdates(fetchImpl?: typeof fetch): Promise<UpdateCheckResponse> {
+export async function checkForUpdates(
+	force: boolean = false,
+	fetchImpl?: typeof fetch
+): Promise<UpdateCheckResponse> {
+	const url = force ? "/api/user/update-check?force=true" : "/api/user/update-check";
 	const response = await fetchAPI(
-		"/api/user/update-check",
+		url,
 		{
 			method: "GET",
 		},

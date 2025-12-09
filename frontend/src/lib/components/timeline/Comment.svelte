@@ -17,6 +17,7 @@
 	import type { NotificationThreadItem } from "$lib/api/types";
 	import { formatRelativeShort } from "$lib/utils/time";
 	import { renderMarkdown } from "$lib/utils/markdown";
+	import { computeAvatarUrl, isRedirectAvatarUrl, resolveAvatarRedirect } from "$lib/utils/avatar";
 
 	export let item: NotificationThreadItem;
 	export let showThread: boolean = true;
@@ -24,14 +25,34 @@
 
 	$: authorName = item.author.login;
 	$: authorInitial = authorName.charAt(0).toUpperCase();
-	$: authorAvatarUrl = item.author.avatarUrl;
+	$: directAvatarUrl = item.author.avatarUrl;
 	$: isBot =
 		authorName.toLowerCase().includes("[bot]") || authorName.toLowerCase().endsWith("-bot");
 
+	// Compute base avatar URL (direct or redirect)
+	$: authorAvatarUrl = computeAvatarUrl(directAvatarUrl, authorName);
+
+	// Resolved avatar URL (after following redirect if needed)
+	let resolvedAvatarUrl: string | null = null;
+
+	// Use resolved URL if available, otherwise fall back to original
+	$: finalAvatarUrl = resolvedAvatarUrl || authorAvatarUrl;
+
 	let avatarLoadFailed = false;
 
-	function handleAvatarError() {
-		avatarLoadFailed = true;
+	async function handleAvatarError() {
+		// If we haven't resolved the redirect yet, try one more time
+		if (authorAvatarUrl && !directAvatarUrl && !resolvedAvatarUrl && !avatarLoadFailed) {
+			const resolved = await resolveAvatarRedirect(authorAvatarUrl);
+			if (resolved) {
+				resolvedAvatarUrl = resolved;
+				avatarLoadFailed = false;
+			} else {
+				avatarLoadFailed = true;
+			}
+		} else {
+			avatarLoadFailed = true;
+		}
 	}
 
 	$: timestamp =
@@ -116,9 +137,9 @@
 		<div class="flex flex-col items-center flex-shrink-0 relative z-10" style="width: 40px;">
 			<!-- Avatar / Initial -->
 			<div class="flex-shrink-0">
-				{#if authorAvatarUrl && !avatarLoadFailed}
+				{#if finalAvatarUrl && !avatarLoadFailed}
 					<img
-						src={authorAvatarUrl}
+						src={finalAvatarUrl}
 						alt={`${authorName}'s avatar`}
 						class="h-8 w-8 rounded-full bg-gray-300 dark:bg-gray-700 ring-2 ring-white dark:ring-gray-950"
 						on:error={handleAvatarError}
@@ -180,9 +201,9 @@
 		<div class="flex flex-col items-center flex-shrink-0 relative z-10" style="width: 40px;">
 			<!-- Avatar -->
 			<div class="flex-shrink-0">
-				{#if authorAvatarUrl && !avatarLoadFailed}
+				{#if finalAvatarUrl && !avatarLoadFailed}
 					<img
-						src={authorAvatarUrl}
+						src={finalAvatarUrl}
 						alt={`${authorName}'s avatar`}
 						class="h-10 w-10 rounded-full bg-gray-700 ring-2 ring-gray-200 dark:ring-gray-950"
 						on:error={handleAvatarError}

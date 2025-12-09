@@ -4,10 +4,6 @@ This document outlines planned features for Octobud. Items here are under consid
 
 ## Planned Features
 
-### Discussion Comments
-
-Add support for discussion replies in the detail view (like we have for Issues/PRs).
-
 ### Better timeline handling
 
 Currently many timeline events are filtered from the Issue/PR timeline. Many of them are just noisy, but they can trigger notifications, so it can be confusing to see a notification returned to the inbox without an obviously new timeline entry.

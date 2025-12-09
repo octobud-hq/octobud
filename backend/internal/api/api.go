@@ -93,7 +93,7 @@ func WithSyncService(
 			store, // userStore for sync settings
 		)
 		h.githubClient = githubClient
-		h.timelineSvc = timelinesvc.NewService()
+		h.timelineSvc = timelinesvc.NewService(logger)
 	}
 }
 

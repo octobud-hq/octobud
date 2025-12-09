@@ -44,16 +44,16 @@ func (m *MockTimelineService) EXPECT() *MockTimelineServiceMockRecorder {
 }
 
 // FetchFilteredTimeline mocks base method.
-func (m *MockTimelineService) FetchFilteredTimeline(ctx context.Context, client githubinterfaces.Client, subjectInfo *types.SubjectInfo, perPage, page int) (*models.TimelineResult, error) {
+func (m *MockTimelineService) FetchFilteredTimeline(ctx context.Context, client githubinterfaces.Client, subjectInfo *types.SubjectInfo, subjectType string, perPage, page int) (*models.TimelineResult, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FetchFilteredTimeline", ctx, client, subjectInfo, perPage, page)
+	ret := m.ctrl.Call(m, "FetchFilteredTimeline", ctx, client, subjectInfo, subjectType, perPage, page)
 	ret0, _ := ret[0].(*models.TimelineResult)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // FetchFilteredTimeline indicates an expected call of FetchFilteredTimeline.
-func (mr *MockTimelineServiceMockRecorder) FetchFilteredTimeline(ctx, client, subjectInfo, perPage, page any) *gomock.Call {
+func (mr *MockTimelineServiceMockRecorder) FetchFilteredTimeline(ctx, client, subjectInfo, subjectType, perPage, page any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FetchFilteredTimeline", reflect.TypeOf((*MockTimelineService)(nil).FetchFilteredTimeline), ctx, client, subjectInfo, perPage, page)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FetchFilteredTimeline", reflect.TypeOf((*MockTimelineService)(nil).FetchFilteredTimeline), ctx, client, subjectInfo, subjectType, perPage, page)
 }

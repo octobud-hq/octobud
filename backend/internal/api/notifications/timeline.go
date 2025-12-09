@@ -34,7 +34,10 @@ import (
 	"github.com/octobud-hq/octobud/backend/internal/models"
 )
 
-func (h *Handler) handleGetNotificationTimeline(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) handleGetNotificationTimeline( //nolint:gocyclo // This is a complex function
+	w http.ResponseWriter,
+	r *http.Request,
+) {
 	ctx := r.Context()
 	userID, ok := helpers.RequireUserID(ctx, w, h.authSvc)
 	if !ok {
@@ -80,7 +83,7 @@ func (h *Handler) handleGetNotificationTimeline(w http.ResponseWriter, r *http.R
 	}
 
 	// Check if this notification type supports timeline before attempting to fetch
-	// This is important for Discussions which don't have a REST API timeline endpoint
+	// Discussions use GraphQL API (no REST API timeline endpoint), while issues/PRs use REST API
 	if !timeline.SupportsTimeline(notification.SubjectType) {
 		h.logger.Debug(
 			"timeline not supported for notification type",
@@ -113,6 +116,8 @@ func (h *Handler) handleGetNotificationTimeline(w http.ResponseWriter, r *http.R
 		h.logger.Error(
 			"failed to parse subject info",
 			zap.String("github_id", githubID),
+			zap.String("subject_type", notification.SubjectType),
+			zap.String("subject_url", subjectURL),
 			zap.Error(errors.Join(ErrFailedToParseSubjectInfo, err)),
 		)
 		helpers.WriteError(
@@ -121,6 +126,13 @@ func (h *Handler) handleGetNotificationTimeline(w http.ResponseWriter, r *http.R
 			fmt.Sprintf("could not parse subject info: %v", err),
 		)
 		return
+	}
+
+	normalizedType := strings.ToLower(strings.ReplaceAll(notification.SubjectType, "_", ""))
+	isDiscussion := normalizedType == "discussion"
+	apiType := "REST"
+	if isDiscussion {
+		apiType = "GraphQL"
 	}
 
 	// Ensure we have a GitHub client and timeline service
@@ -135,20 +147,28 @@ func (h *Handler) handleGetNotificationTimeline(w http.ResponseWriter, r *http.R
 	}
 
 	// Fetch filtered timeline using the core timeline service
+	// Discussions use GraphQL API, issues/PRs use REST API
 	result, err := h.timelineSvc.FetchFilteredTimeline(
 		ctx,
 		h.githubClient,
 		subjectInfo,
+		notification.SubjectType,
 		perPage,
 		page,
 	)
 	if err != nil {
 		// Check if this is a 403 Forbidden error (likely due to organization restrictions)
+		// This applies to both REST and GraphQL APIs
 		errStr := err.Error()
-		if strings.Contains(errStr, "status 403") || strings.Contains(errStr, "403") {
+		isForbidden := strings.Contains(errStr, "status 403") ||
+			strings.Contains(errStr, "403") ||
+			(strings.Contains(errStr, "graphql errors") && strings.Contains(errStr, "FORBIDDEN"))
+		if isForbidden {
 			h.logger.Warn(
 				"permission error fetching timeline",
 				zap.String("github_id", githubID),
+				zap.String("subject_type", notification.SubjectType),
+				zap.String("api_type", apiType),
 				zap.Error(errors.Join(ErrFailedToFetchTimeline, err)),
 			)
 			helpers.WriteError(w, http.StatusForbidden, "permission denied to fetch timeline")
@@ -157,6 +177,8 @@ func (h *Handler) handleGetNotificationTimeline(w http.ResponseWriter, r *http.R
 		h.logger.Error(
 			"failed to fetch timeline",
 			zap.String("github_id", githubID),
+			zap.String("subject_type", notification.SubjectType),
+			zap.String("api_type", apiType),
 			zap.Error(errors.Join(ErrFailedToFetchTimeline, err)),
 		)
 		helpers.WriteError(w, http.StatusInternalServerError, "failed to fetch timeline")

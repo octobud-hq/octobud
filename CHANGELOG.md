@@ -14,6 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 ### Security
 
+## [0.1.2] - 2025-12-09
+
+- Fix update check version resolution when doing manual checks
+- Improve avatar fetching
+- Add a first attempt at Discussion timeline fetching
+
 ## [0.1.1] - 2025-12-09
 
 - Bug fixes and in-app doc improvements around OAuth/PAT

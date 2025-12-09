@@ -83,6 +83,10 @@ func TestIsNewer(t *testing.T) {
 		{"pre-release newer numeric", "1.0.0-beta.10", "1.0.0-beta.2", true},
 		{"stable vs pre-release", "1.0.0", "1.0.0-beta", true},
 		{"pre-release vs stable", "1.0.0-beta", "1.0.0", false},
+		{"0.1.1 vs 0.1.0", "0.1.1", "0.1.0", true},
+		{"0.1.1 vs v0.1.0", "0.1.1", "v0.1.0", true},
+		{"v0.1.1 vs 0.1.0", "v0.1.1", "0.1.0", true},
+		{"v0.1.1 vs v0.1.0", "v0.1.1", "v0.1.0", true},
 	}
 
 	for _, tt := range tests {

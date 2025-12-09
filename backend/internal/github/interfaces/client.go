@@ -55,4 +55,13 @@ type Client interface {
 		owner, repo string,
 		number, perPage, page int,
 	) ([]types.PullRequestReview, error)
+	// FetchDiscussionComments retrieves comments for a discussion using GraphQL API.
+	// Returns comments as TimelineEvents, hasNextPage, endCursor, and error.
+	// This method converts discussion comments to TimelineEvent format for consistency.
+	FetchDiscussionComments(
+		ctx context.Context,
+		owner, repo string,
+		number, first int,
+		after string,
+	) ([]types.TimelineEvent, bool, string, error)
 }

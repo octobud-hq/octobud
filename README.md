@@ -139,14 +139,20 @@ When you first launch Octobud, you'll be guided through setup:
 
 3. **Learn the basics** - Press `h` for keyboard shortcuts, or see [Start Here](docs/start-here.md).
 
-### macOS Menu Bar
+### Recommended Starting Views and Rules
 
-On macOS, Octobud runs as a menu bar app. Click the menu bar icon to:
-- Open Inbox, Starred, or Snoozed views
-- Check status and last sync time
-- Temporarily mute desktop notifications (30 min, 1 hour, rest of day)
-- Open Settings
-- Quit the app
+Here are some recommended views and rules to help you get started:
+
+**Views:**
+
+- **Assigned / Authored** - `in:inbox,filtered (reason:assign OR author:<YOUR_USERNAME>)`
+- **Reviews** - `in:inbox,filtered reason:review_requested`
+
+**Views with auto-filter rule:**
+
+- **[Bots]** - `in:inbox,filtered author:[bot]` + rule to skip inbox
+
+See the [Views & Rules guide](docs/guides/views-and-rules.md) for detailed instructions on creating views and rules.
 
 The app runs locally at `http://localhost:8808`.
 

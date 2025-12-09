@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap"
 
 	githubmocks "github.com/octobud-hq/octobud/backend/internal/github/mocks"
 	"github.com/octobud-hq/octobud/backend/internal/github/types"
@@ -29,7 +30,7 @@ import (
 func TestFetchFilteredTimeline(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now()
-	service := NewService()
+	service := NewService(zap.NewNop())
 
 	tests := []struct {
 		name          string
@@ -198,6 +199,7 @@ func TestFetchFilteredTimeline(t *testing.T) {
 				ctx,
 				client,
 				subjectInfo,
+				"issue", // subject type for test
 				tt.perPage,
 				tt.page,
 			)
@@ -243,8 +245,8 @@ func TestSupportsTimeline(t *testing.T) {
 		{"pull request no underscore", "pull_request", true},
 		{"issue", "Issue", true},
 		{"issue lowercase", "issue", true},
-		{"discussion", "Discussion", false},
-		{"discussion lowercase", "discussion", false},
+		{"discussion", "Discussion", true},
+		{"discussion lowercase", "discussion", true},
 		{"unsupported type", "Commit", false},
 		{"unsupported type", "Release", false},
 	}

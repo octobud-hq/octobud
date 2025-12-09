@@ -113,8 +113,16 @@ func (h *Handler) HandleUpdateUpdateSettings(w http.ResponseWriter, r *http.Requ
 }
 
 // HandleCheckForUpdates handles GET /api/user/update-check
+// Query parameter: ?force=true to bypass enabled check (for manual checks)
 func (h *Handler) HandleCheckForUpdates(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+
+	// Check if this is a forced/manual check
+	force := r.URL.Query().Get("force") == "true"
+
+	h.logger.Info("Update check requested",
+		zap.Bool("force", force),
+	)
 
 	// Get user's update settings
 	settings, err := h.authSvc.GetUserUpdateSettings(ctx)
@@ -124,18 +132,29 @@ func (h *Handler) HandleCheckForUpdates(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// If updates are disabled, return no update available
-	if !settings.Enabled {
+	h.logger.Info("Update settings retrieved",
+		zap.Bool("enabled", settings.Enabled),
+		zap.String("checkFrequency", settings.CheckFrequency),
+		zap.Bool("includePrereleases", settings.IncludePrereleases),
+		zap.String("dismissedUntil", settings.DismissedUntil),
+	)
+
+	// If updates are disabled and this is not a forced check, return no update available
+	if !force && !settings.Enabled {
+		h.logger.Info("Update check skipped - updates are disabled (not forced)")
 		helpers.WriteJSON(w, http.StatusOK, UpdateCheckResponse{
 			UpdateAvailable: false,
 		})
 		return
 	}
 
-	// Check if we should skip based on dismissed until
-	if settings.DismissedUntil != "" {
+	// Check if we should skip based on dismissed until (unless forced)
+	if !force && settings.DismissedUntil != "" {
 		dismissedUntil, parseErr := time.Parse(time.RFC3339, settings.DismissedUntil)
 		if parseErr == nil && time.Now().Before(dismissedUntil) {
+			h.logger.Info("Update check skipped - dismissed until (not forced)",
+				zap.String("dismissedUntil", settings.DismissedUntil),
+			)
 			helpers.WriteJSON(w, http.StatusOK, UpdateCheckResponse{
 				UpdateAvailable: false,
 			})
@@ -149,6 +168,10 @@ func (h *Handler) HandleCheckForUpdates(w http.ResponseWriter, r *http.Request) 
 		helpers.WriteError(w, http.StatusServiceUnavailable, "Update service not available")
 		return
 	}
+
+	h.logger.Info("Checking for updates",
+		zap.Bool("includePrereleases", settings.IncludePrereleases),
+	)
 
 	info, err := h.updateService.CheckForUpdates(ctx, settings.IncludePrereleases)
 	if err != nil {
@@ -164,6 +187,7 @@ func (h *Handler) HandleCheckForUpdates(w http.ResponseWriter, r *http.Request) 
 			h.logger.Warn("failed to update last checked time", zap.Error(err))
 		}
 
+		h.logger.Info("Update check completed - no update available")
 		helpers.WriteJSON(w, http.StatusOK, UpdateCheckResponse{
 			UpdateAvailable: false,
 		})
@@ -175,6 +199,13 @@ func (h *Handler) HandleCheckForUpdates(w http.ResponseWriter, r *http.Request) 
 	if err := h.authSvc.UpdateUserUpdateSettings(ctx, settings); err != nil {
 		h.logger.Warn("failed to update last checked time", zap.Error(err))
 	}
+
+	h.logger.Info("Update available",
+		zap.String("currentVersion", info.CurrentVersion),
+		zap.String("latestVersion", info.LatestVersion),
+		zap.String("releaseName", info.ReleaseName),
+		zap.Bool("isPrerelease", info.IsPrerelease),
+	)
 
 	response := UpdateCheckResponse{
 		UpdateAvailable: true,

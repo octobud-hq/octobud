@@ -22,6 +22,8 @@ import (
 	"sort"
 	"strings"
 
+	"go.uber.org/zap"
+
 	githubinterfaces "github.com/octobud-hq/octobud/backend/internal/github/interfaces"
 	"github.com/octobud-hq/octobud/backend/internal/github/types"
 	"github.com/octobud-hq/octobud/backend/internal/models"
@@ -78,16 +80,21 @@ type TimelineService interface {
 		ctx context.Context,
 		client githubinterfaces.Client,
 		subjectInfo *types.SubjectInfo,
+		subjectType string,
 		perPage, page int,
 	) (*models.TimelineResult, error)
 }
 
 // Service provides timeline business logic operations.
-type Service struct{}
+type Service struct {
+	logger *zap.Logger
+}
 
-// NewService creates a new timeline service.
-func NewService() *Service {
-	return &Service{}
+// NewService creates a new timeline service with a logger.
+func NewService(logger *zap.Logger) *Service {
+	return &Service{
+		logger: logger,
+	}
 }
 
 // SupportsTimeline returns true if the notification type supports timeline.
@@ -99,6 +106,8 @@ func SupportsTimeline(subjectType string) bool {
 		return true
 	case "issue":
 		return true
+	case "discussion":
+		return true
 	default:
 		return false
 	}
@@ -107,14 +116,41 @@ func SupportsTimeline(subjectType string) bool {
 // FetchFilteredTimeline fetches and filters timeline events from GitHub,
 // intelligently fetching multiple pages if needed to satisfy pagination requirements.
 // Note: Callers should check SupportsTimeline() before calling this function.
+// subjectType is used to determine if GraphQL should be used (for discussions).
 func (s *Service) FetchFilteredTimeline(
 	ctx context.Context,
 	client githubinterfaces.Client,
 	subjectInfo *types.SubjectInfo,
+	subjectType string,
 	perPage, page int,
 ) (*models.TimelineResult, error) {
-	allItems, err := fetchAndFilterTimelineEvents(ctx, client, subjectInfo, perPage, page)
+	s.logger.Info(
+		"fetching filtered timeline",
+		zap.String("owner", subjectInfo.Owner),
+		zap.String("repo", subjectInfo.Repo),
+		zap.Int("number", subjectInfo.Number),
+		zap.String("subject_type", subjectType),
+		zap.Int("per_page", perPage),
+		zap.Int("page", page),
+	)
+
+	allItems, err := fetchAndFilterTimelineEvents(
+		ctx,
+		s.logger,
+		client,
+		subjectInfo,
+		subjectType,
+		perPage,
+		page,
+	)
 	if err != nil {
+		s.logger.Error(
+			"failed to fetch timeline events",
+			zap.String("owner", subjectInfo.Owner),
+			zap.String("repo", subjectInfo.Repo),
+			zap.Int("number", subjectInfo.Number),
+			zap.Error(err),
+		)
 		return nil, fmt.Errorf("failed to fetch timeline events: %w", err)
 	}
 
@@ -145,13 +181,45 @@ func (s *Service) FetchFilteredTimeline(
 	}
 
 	result.Items = allItems[start:end]
+
+	s.logger.Info(
+		"timeline fetch completed",
+		zap.String("owner", subjectInfo.Owner),
+		zap.String("repo", subjectInfo.Repo),
+		zap.Int("number", subjectInfo.Number),
+		zap.Int("total_items", total),
+		zap.Int("returned_items", len(result.Items)),
+		zap.Bool("has_more", result.HasMore),
+	)
+
 	return result, nil
 }
 
 // fetchAndFilterTimelineEvents intelligently fetches timeline events from GitHub,
 // filtering out unwanted event types and requesting more events if needed.
+// For discussions, it uses GraphQL API. For issues/PRs, it uses REST API.
 func fetchAndFilterTimelineEvents(
 	ctx context.Context,
+	logger *zap.Logger,
+	client githubinterfaces.Client,
+	subjectInfo *types.SubjectInfo,
+	subjectType string,
+	perPage, page int,
+) ([]models.TimelineItem, error) {
+	normalizedType := strings.ToLower(strings.ReplaceAll(subjectType, "_", ""))
+	isDiscussion := normalizedType == "discussion"
+
+	if isDiscussion {
+		return fetchDiscussionTimelineEvents(ctx, logger, client, subjectInfo, perPage, page)
+	}
+
+	return fetchRESTTimelineEvents(ctx, logger, client, subjectInfo, perPage, page)
+}
+
+// fetchRESTTimelineEvents fetches timeline events using REST API (for issues/PRs).
+func fetchRESTTimelineEvents(
+	ctx context.Context,
+	logger *zap.Logger,
 	client githubinterfaces.Client,
 	subjectInfo *types.SubjectInfo,
 	perPage, page int,
@@ -170,6 +238,15 @@ func fetchAndFilterTimelineEvents(
 	// Keep fetching from GitHub until we have enough filtered events or reach the safety limit
 	for githubPage <= maxGitHubPages {
 		// Fetch a page from GitHub
+		logger.Info(
+			"fetching timeline page from GitHub",
+			zap.String("owner", subjectInfo.Owner),
+			zap.String("repo", subjectInfo.Repo),
+			zap.Int("number", subjectInfo.Number),
+			zap.Int("github_page", githubPage),
+			zap.Int("per_page", maxGitHubPerPage),
+		)
+
 		timeline, err := client.FetchTimeline(
 			ctx,
 			subjectInfo.Owner,
@@ -179,6 +256,15 @@ func fetchAndFilterTimelineEvents(
 			githubPage,
 		)
 		if err != nil {
+			logger.Warn(
+				"failed to fetch timeline page from GitHub",
+				zap.String("owner", subjectInfo.Owner),
+				zap.String("repo", subjectInfo.Repo),
+				zap.Int("number", subjectInfo.Number),
+				zap.Int("github_page", githubPage),
+				zap.Int("filtered_items_so_far", len(allFilteredItems)),
+				zap.Error(err),
+			)
 			// If this is the first fetch and we have no data, return the error
 			// Otherwise, return what we have so far (graceful degradation)
 			if githubPage == 1 && len(allFilteredItems) == 0 {
@@ -189,18 +275,196 @@ func fetchAndFilterTimelineEvents(
 			break
 		}
 
+		logger.Info(
+			"received timeline page from GitHub",
+			zap.String("owner", subjectInfo.Owner),
+			zap.String("repo", subjectInfo.Repo),
+			zap.Int("number", subjectInfo.Number),
+			zap.Int("github_page", githubPage),
+			zap.Int("events_returned", len(timeline)),
+		)
+
 		// If GitHub returned no events, we've reached the end
 		if len(timeline) == 0 {
+			logger.Info(
+				"no more timeline events from GitHub",
+				zap.String("owner", subjectInfo.Owner),
+				zap.String("repo", subjectInfo.Repo),
+				zap.Int("number", subjectInfo.Number),
+				zap.Int("github_page", githubPage),
+			)
 			break
 		}
 
 		// Convert and filter timeline events
+		filteredCount := 0
+		skippedCount := 0
 		for _, event := range timeline {
 			// Skip filtered event types
 			if FilteredEventTypes[event.Event] {
+				skippedCount++
 				continue
 			}
 
+			item := convertTimelineEvent(event)
+			if item == nil {
+				// Skip events without timestamp
+				skippedCount++
+				continue
+			}
+			allFilteredItems = append(allFilteredItems, *item)
+			filteredCount++
+		}
+
+		logger.Info(
+			"processed timeline page",
+			zap.String("owner", subjectInfo.Owner),
+			zap.String("repo", subjectInfo.Repo),
+			zap.Int("number", subjectInfo.Number),
+			zap.Int("github_page", githubPage),
+			zap.Int("events_included", filteredCount),
+			zap.Int("events_skipped", skippedCount),
+			zap.Int("total_filtered_items", len(allFilteredItems)),
+			zap.Int("total_needed", totalNeeded),
+		)
+
+		// If we have enough filtered events, we can stop fetching
+		if len(allFilteredItems) >= totalNeeded {
+			logger.Info(
+				"collected enough filtered timeline events",
+				zap.String("owner", subjectInfo.Owner),
+				zap.String("repo", subjectInfo.Repo),
+				zap.Int("number", subjectInfo.Number),
+				zap.Int("total_filtered_items", len(allFilteredItems)),
+				zap.Int("total_needed", totalNeeded),
+			)
+			break
+		}
+
+		// If GitHub returned fewer events than requested, we've reached the end
+		if len(timeline) < maxGitHubPerPage {
+			logger.Info(
+				"reached end of timeline (fewer events than requested)",
+				zap.String("owner", subjectInfo.Owner),
+				zap.String("repo", subjectInfo.Repo),
+				zap.Int("number", subjectInfo.Number),
+				zap.Int("events_returned", len(timeline)),
+				zap.Int("max_per_page", maxGitHubPerPage),
+			)
+			break
+		}
+
+		githubPage++
+	}
+
+	logger.Info(
+		"finished fetching timeline events",
+		zap.String("owner", subjectInfo.Owner),
+		zap.String("repo", subjectInfo.Repo),
+		zap.Int("number", subjectInfo.Number),
+		zap.Int("total_filtered_items", len(allFilteredItems)),
+		zap.Int("github_pages_fetched", githubPage-1),
+	)
+
+	return allFilteredItems, nil
+}
+
+// fetchDiscussionTimelineEvents fetches timeline events using GraphQL API (for discussions).
+func fetchDiscussionTimelineEvents(
+	ctx context.Context,
+	logger *zap.Logger,
+	client githubinterfaces.Client,
+	subjectInfo *types.SubjectInfo,
+	perPage, page int,
+) ([]models.TimelineItem, error) {
+	const (
+		maxGraphQLPerPage = 100
+		maxGraphQLPages   = 10 // Safety limit to avoid infinite loops
+	)
+
+	// Calculate how many events we need in total (for all pages up to and including the requested page)
+	totalNeeded := perPage * page
+
+	var allFilteredItems []models.TimelineItem
+	var after string // GraphQL cursor for pagination
+	graphqlPage := 1
+
+	// Keep fetching from GitHub GraphQL until we have enough events or reach the safety limit
+	for graphqlPage <= maxGraphQLPages {
+		// Calculate how many to fetch this time
+		// We need to fetch enough to satisfy totalNeeded, but cap at maxGraphQLPerPage
+		remainingNeeded := totalNeeded - len(allFilteredItems)
+		first := remainingNeeded
+		if first > maxGraphQLPerPage {
+			first = maxGraphQLPerPage
+		}
+		if first <= 0 {
+			first = maxGraphQLPerPage
+		}
+
+		logger.Info(
+			"fetching discussion timeline page from GitHub GraphQL",
+			zap.String("owner", subjectInfo.Owner),
+			zap.String("repo", subjectInfo.Repo),
+			zap.Int("number", subjectInfo.Number),
+			zap.Int("graphql_page", graphqlPage),
+			zap.Int("first", first),
+			zap.String("after", after),
+		)
+
+		timeline, hasNextPage, endCursor, err := client.FetchDiscussionComments(
+			ctx,
+			subjectInfo.Owner,
+			subjectInfo.Repo,
+			subjectInfo.Number,
+			first,
+			after,
+		)
+		if err != nil {
+			logger.Warn(
+				"failed to fetch discussion timeline page from GitHub GraphQL",
+				zap.String("owner", subjectInfo.Owner),
+				zap.String("repo", subjectInfo.Repo),
+				zap.Int("number", subjectInfo.Number),
+				zap.Int("graphql_page", graphqlPage),
+				zap.Int("filtered_items_so_far", len(allFilteredItems)),
+				zap.Error(err),
+			)
+			// If this is the first fetch and we have no data, return the error
+			// Otherwise, return what we have so far (graceful degradation)
+			if graphqlPage == 1 && len(allFilteredItems) == 0 {
+				return nil, fmt.Errorf("failed to fetch discussion timeline events: %w", err)
+			}
+			// Don't fail completely - maybe the repo is private or deleted
+			// Return what we have so far
+			break
+		}
+
+		logger.Info(
+			"received discussion timeline page from GitHub GraphQL",
+			zap.String("owner", subjectInfo.Owner),
+			zap.String("repo", subjectInfo.Repo),
+			zap.Int("number", subjectInfo.Number),
+			zap.Int("graphql_page", graphqlPage),
+			zap.Int("events_returned", len(timeline)),
+			zap.Bool("has_next_page", hasNextPage),
+		)
+
+		// If GitHub returned no events, we've reached the end
+		if len(timeline) == 0 {
+			logger.Info(
+				"no more discussion timeline events from GitHub GraphQL",
+				zap.String("owner", subjectInfo.Owner),
+				zap.String("repo", subjectInfo.Repo),
+				zap.Int("number", subjectInfo.Number),
+				zap.Int("graphql_page", graphqlPage),
+			)
+			break
+		}
+
+		// Convert timeline events to TimelineItems
+		// For discussions, we don't filter out any event types (all comments are relevant)
+		for _, event := range timeline {
 			item := convertTimelineEvent(event)
 			if item == nil {
 				// Skip events without timestamp
@@ -209,18 +473,55 @@ func fetchAndFilterTimelineEvents(
 			allFilteredItems = append(allFilteredItems, *item)
 		}
 
+		logger.Info(
+			"processed discussion timeline page",
+			zap.String("owner", subjectInfo.Owner),
+			zap.String("repo", subjectInfo.Repo),
+			zap.Int("number", subjectInfo.Number),
+			zap.Int("graphql_page", graphqlPage),
+			zap.Int("events_included", len(timeline)),
+			zap.Int("total_filtered_items", len(allFilteredItems)),
+			zap.Int("total_needed", totalNeeded),
+		)
+
 		// If we have enough filtered events, we can stop fetching
 		if len(allFilteredItems) >= totalNeeded {
+			logger.Info(
+				"collected enough filtered discussion timeline events",
+				zap.String("owner", subjectInfo.Owner),
+				zap.String("repo", subjectInfo.Repo),
+				zap.Int("number", subjectInfo.Number),
+				zap.Int("total_filtered_items", len(allFilteredItems)),
+				zap.Int("total_needed", totalNeeded),
+			)
 			break
 		}
 
-		// If GitHub returned fewer events than requested, we've reached the end
-		if len(timeline) < maxGitHubPerPage {
+		// If there's no next page, we've reached the end
+		if !hasNextPage {
+			logger.Info(
+				"reached end of discussion timeline (no next page)",
+				zap.String("owner", subjectInfo.Owner),
+				zap.String("repo", subjectInfo.Repo),
+				zap.Int("number", subjectInfo.Number),
+				zap.Int("events_returned", len(timeline)),
+			)
 			break
 		}
 
-		githubPage++
+		// Update cursor for next page
+		after = endCursor
+		graphqlPage++
 	}
+
+	logger.Info(
+		"finished fetching discussion timeline events",
+		zap.String("owner", subjectInfo.Owner),
+		zap.String("repo", subjectInfo.Repo),
+		zap.Int("number", subjectInfo.Number),
+		zap.Int("total_filtered_items", len(allFilteredItems)),
+		zap.Int("graphql_pages_fetched", graphqlPage-1),
+	)
 
 	return allFilteredItems, nil
 }

@@ -43,6 +43,23 @@ func (m *MockClient) EXPECT() *MockClientMockRecorder {
 	return m.recorder
 }
 
+// FetchDiscussionComments mocks base method.
+func (m *MockClient) FetchDiscussionComments(ctx context.Context, owner, repo string, number, first int, after string) ([]types.TimelineEvent, bool, string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FetchDiscussionComments", ctx, owner, repo, number, first, after)
+	ret0, _ := ret[0].([]types.TimelineEvent)
+	ret1, _ := ret[1].(bool)
+	ret2, _ := ret[2].(string)
+	ret3, _ := ret[3].(error)
+	return ret0, ret1, ret2, ret3
+}
+
+// FetchDiscussionComments indicates an expected call of FetchDiscussionComments.
+func (mr *MockClientMockRecorder) FetchDiscussionComments(ctx, owner, repo, number, first, after any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FetchDiscussionComments", reflect.TypeOf((*MockClient)(nil).FetchDiscussionComments), ctx, owner, repo, number, first, after)
+}
+
 // FetchIssueComments mocks base method.
 func (m *MockClient) FetchIssueComments(ctx context.Context, owner, repo string, number, perPage, page int) ([]types.IssueComment, error) {
 	m.ctrl.T.Helper()
