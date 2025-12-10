@@ -5,16 +5,26 @@ All notable changes to Octobud will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.4]
 
 ### Added
 
 - Added "title:" support in query syntax to filter against the subject title
+- Add new version installation detection and refresh prompt + restart.
+- Re-apply rules if subject is refreshed and wasn't present before.
 
 ### Changed
+
+- Make PAT auth more prominent in onboarding/settings.
+
 ### Deprecated
 ### Removed
 ### Fixed
+
+- Fix log filing.
+- Fix unread count in tray.
+- Fix bug that would periodically allow notifications to be synced without processing/rule application.
+
 ### Security
 
 ## [0.1.3] - 2025-12-09
