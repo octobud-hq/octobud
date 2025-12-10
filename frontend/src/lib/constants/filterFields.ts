@@ -73,6 +73,10 @@ export const FILTER_FIELDS: FilterFieldConfig[] = [
 		description: "Author login",
 	},
 	{
+		value: "title",
+		description: "Notification title",
+	},
+	{
 		value: "org",
 		description: "Organization name",
 	},

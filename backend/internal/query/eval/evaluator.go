@@ -159,6 +159,8 @@ func (e *Evaluator) evaluateFieldValue(
 			return notif.Reason.String == value
 		}
 		return false
+	case "title":
+		return strings.Contains(strings.ToLower(notif.SubjectTitle), strings.ToLower(value))
 	case "type":
 		return strings.EqualFold(notif.SubjectType, value)
 	// Add other fields as needed (participant, label, etc.)

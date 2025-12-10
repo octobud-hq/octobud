@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
+- Added "title:" support in query syntax to filter against the subject title
+
 ### Changed
 ### Deprecated
 ### Removed

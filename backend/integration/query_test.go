@@ -425,3 +425,30 @@ func TestQuery_FreeTextSearch(t *testing.T) {
 		require.Equal(t, matchingNotif.GithubID, result.Notifications[0].GithubID)
 	})
 }
+
+func TestQuery_TitleFilter(t *testing.T) {
+	RunWithBackends(t, func(t *testing.T, ts *testserver.TestServer, c *client.Client) {
+		ctx := context.Background()
+		userID := ts.UserID
+
+		repo := fixtures.NewRepository().Build(t, ctx, ts.Store, userID)
+
+		// Create notifications with different titles
+		securityNotif := fixtures.NewNotification(repo.ID).
+			WithGithubID("security-notif").
+			WithSubjectTitle("Security vulnerability in dependencies").
+			Build(t, ctx, ts.Store, userID)
+
+		fixtures.NewNotification(repo.ID).
+			WithGithubID("bug-notif").
+			WithSubjectTitle("Fix critical bug in authentication").
+			Build(t, ctx, ts.Store, userID)
+
+		// Query by title
+		result := c.ListNotifications(t, "title:security in:anywhere", 1, 100)
+
+		// Should only see the notification with "security" in title
+		require.Equal(t, int64(1), result.Total)
+		require.Equal(t, securityNotif.GithubID, result.Notifications[0].GithubID)
+	})
+}

@@ -193,6 +193,7 @@ func isKnownField(field string) bool {
 		"type":         true,
 		"subject_type": true,
 		"author":       true,
+		"title":        true,
 		"state":        true,
 		"read":         true,
 		"archived":     true,

@@ -135,6 +135,7 @@ Combine all operators for sophisticated filtering:
 | `repo:owner/name` | Match repository (contains matching) |
 | `org:owner` | All repos in an organization (contains matching) |
 | `author:username` | Filter by author (contains matching) |
+| `title:text` | Match notification title (contains matching) |
 
 ### State Filters
 
@@ -219,6 +220,13 @@ author:dependabot type:PullRequest
 
 ```
 tags:urgent
+```
+
+### Notifications with specific text in title
+
+```
+title:security
+title:bug,fix  # title contains "bug" OR "fix"
 ```
 
 ### Filtered notifications (skipped inbox)

@@ -228,6 +228,17 @@
 						</td>
 					</tr>
 					<tr class="bg-gray-50/30 dark:bg-gray-800/30">
+						<td class="px-3 py-2"
+							><code class="text-indigo-600 dark:text-indigo-300">title:</code></td
+						>
+						<td class="px-3 py-2 text-gray-600 dark:text-gray-400"
+							>Notification title (contains match)</td
+						>
+						<td class="px-3 py-2 text-gray-700 dark:text-gray-500">
+							<code class="text-indigo-600 dark:text-indigo-300">security</code>
+						</td>
+					</tr>
+					<tr class="bg-gray-50/30 dark:bg-gray-800/30">
 						<td class="px-3 py-2"><code class="text-indigo-600 dark:text-indigo-300">org:</code></td
 						>
 						<td class="px-3 py-2 text-gray-600 dark:text-gray-400">Organization (contains match)</td
