@@ -51,6 +51,13 @@ func TestBuilder_BasicTerms(t *testing.T) {
 			wantArgs:  []interface{}{"%Issue%"},
 			wantJoins: 0,
 		},
+		{
+			name:      "title term",
+			input:     "title:security",
+			wantWhere: "n.subject_title LIKE ?",
+			wantArgs:  []interface{}{"%security%"},
+			wantJoins: 0,
+		},
 	}
 
 	for _, tt := range tests {

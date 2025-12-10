@@ -501,6 +501,34 @@ func TestEvaluator_evaluateFieldValue(t *testing.T) {
 			term:     &parse.Term{Field: "author", Values: []string{"username"}},
 			expected: false,
 		},
+		// Title field tests
+		{
+			name: "title matches",
+			notif: &db.Notification{
+				SubjectTitle: "Fix security vulnerability",
+			},
+			repo:     &db.Repository{},
+			term:     &parse.Term{Field: "title", Values: []string{"security"}},
+			expected: true,
+		},
+		{
+			name: "title matches case insensitive",
+			notif: &db.Notification{
+				SubjectTitle: "Fix Security Vulnerability",
+			},
+			repo:     &db.Repository{},
+			term:     &parse.Term{Field: "title", Values: []string{"security"}},
+			expected: true,
+		},
+		{
+			name: "title does not match different text",
+			notif: &db.Notification{
+				SubjectTitle: "Add new feature",
+			},
+			repo:     &db.Repository{},
+			term:     &parse.Term{Field: "title", Values: []string{"security"}},
+			expected: false,
+		},
 		// Reason field tests
 		{
 			name: "reason matches",
