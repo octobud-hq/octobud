@@ -168,6 +168,8 @@ func (b *Builder) visitTerm(node *parse.Term) (string, error) {
 		return b.handleTypeField(node.Values)
 	case "author":
 		return b.handleAuthorField(node.Values)
+	case "title":
+		return b.handleTitleField(node.Values)
 	case "state":
 		return b.handleStateField(node.Values)
 	case "merged":
@@ -454,6 +456,10 @@ func (b *Builder) handleTagsField(values []string) (string, error) {
 			"WHERE ta.entity_type = 'notification' AND ta.entity_id = n.id AND (%s))",
 		strings.Join(conditions, " OR "),
 	), nil
+}
+
+func (b *Builder) handleTitleField(values []string) (string, error) {
+	return b.buildStringFilter("n.subject_title", values), nil
 }
 
 // Helper methods
