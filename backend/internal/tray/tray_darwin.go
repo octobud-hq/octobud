@@ -36,6 +36,7 @@ import (
 
 	"github.com/octobud-hq/octobud/backend/assets"
 	"github.com/octobud-hq/octobud/backend/internal/api/navigation"
+	"github.com/octobud-hq/octobud/backend/internal/osactions"
 )
 
 // Status colors using Unicode circles
@@ -58,6 +59,9 @@ type Tray struct {
 
 	// Navigation broadcaster for SSE events
 	navBroadcaster *navigation.Broadcaster
+
+	// OS actions service for browser tab activation
+	osActionsSvc osactions.Service
 
 	// Menu items (for updating)
 	mStatus      *systray.MenuItem
@@ -82,7 +86,12 @@ func RunWithApp(baseURL string, logger *zap.Logger, onAppReady func(t *Tray), on
 	if logger == nil {
 		logger = zap.NewNop()
 	}
-	t := &Tray{baseURL: baseURL, logger: logger}
+	osActionsSvc := osactions.NewService()
+	t := &Tray{
+		baseURL:      baseURL,
+		logger:       logger,
+		osActionsSvc: osActionsSvc,
+	}
 
 	systray.Run(func() {
 		t.onReady()
@@ -372,133 +381,31 @@ func (t *Tray) broadcastNavigation(ctx context.Context, url string) {
 func (t *Tray) activateExistingTab(ctx context.Context, url string) bool {
 	t.logger.Info("Attempting to find existing Octobud tab", zap.String("target_url", url))
 
-	// Try Safari first
-	if t.activateSafariTab(ctx) {
+	if t.osActionsSvc == nil {
+		t.logger.Debug("OS actions service not available, skipping tab activation")
+		return false
+	}
+
+	// Try Safari first (don't navigate - keep current route, navigation handled via SSE)
+	found, err := t.osActionsSvc.ActivateBrowserTab(ctx, "safari", url, "")
+	if err != nil {
+		t.logger.Debug("Failed to activate Safari tab", zap.Error(err))
+	} else if found {
 		t.logger.Info("Found and activated Octobud tab in Safari")
 		return true
 	}
 
-	// Try Chrome
-	if t.activateChromeTab(ctx) {
+	// Try Chrome (don't navigate - keep current route, navigation handled via SSE)
+	found, err = t.osActionsSvc.ActivateBrowserTab(ctx, "chrome", url, "")
+	if err != nil {
+		t.logger.Debug("Failed to activate Chrome tab", zap.Error(err))
+	} else if found {
 		t.logger.Info("Found and activated Octobud tab in Chrome")
 		return true
 	}
 
 	t.logger.Info("No existing Octobud tab found")
 	return false
-}
-
-// activateSafariTab uses AppleScript to find and activate any Safari tab with the baseURL.
-// Returns true if a tab was found and activated, false otherwise.
-func (t *Tray) activateSafariTab(ctx context.Context) bool {
-	t.logger.Debug("Checking Safari for existing Octobud tab")
-	// Escape the baseURL for AppleScript
-	escapedBaseURL := strings.ReplaceAll(t.baseURL, "\\", "\\\\")
-	escapedBaseURL = strings.ReplaceAll(escapedBaseURL, "\"", "\\\"")
-
-	// AppleScript to check Safari for existing tabs with baseURL and activate if found
-	script := fmt.Sprintf(`
-		tell application "System Events"
-			if not (exists process "Safari") then
-				return "false"
-			end if
-		end tell
-		
-		tell application "Safari"
-			activate
-			repeat with w in windows
-				repeat with t in tabs of w
-					if URL of t starts with "%s" then
-						set current tab of w to t
-						set index of w to 1
-						return "true"
-					end if
-				end repeat
-			end repeat
-		end tell
-		return "false"
-	`, escapedBaseURL)
-
-	//nolint:gosec // G204: osascript is a standard macOS utility, the script variable is controlled
-	cmd := exec.CommandContext(ctx, "osascript", "-e", script)
-	output, err := cmd.Output()
-	if err != nil {
-		t.logger.Error("Safari AppleScript error", zap.Error(err))
-		// Try to get stderr for more details
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			t.logger.Error(
-				"Safari AppleScript stderr",
-				zap.String("stderr", string(exitErr.Stderr)),
-			)
-		}
-		return false
-	}
-	result := strings.TrimSpace(string(output))
-	found := result == "true"
-	if !found {
-		t.logger.Debug("Safari: No Octobud tab found", zap.String("applescript_result", result))
-	} else {
-		t.logger.Info("Safari: Octobud tab found and activated")
-	}
-	return found
-}
-
-// activateChromeTab uses AppleScript to find and activate any Chrome tab with the baseURL.
-// Returns true if a tab was found and activated, false otherwise.
-func (t *Tray) activateChromeTab(ctx context.Context) bool {
-	t.logger.Debug("Checking Chrome for existing Octobud tab")
-	// Escape the baseURL for AppleScript
-	escapedBaseURL := strings.ReplaceAll(t.baseURL, "\\", "\\\\")
-	escapedBaseURL = strings.ReplaceAll(escapedBaseURL, "\"", "\\\"")
-
-	// AppleScript to check Chrome for existing tabs and activate if found
-	// Note: We use a counter for tab index since "get index of t" doesn't work reliably in Chrome
-	script := fmt.Sprintf(`
-		tell application "System Events"
-			if not (exists process "Google Chrome") then
-				return "false"
-			end if
-		end tell
-		
-		tell application "Google Chrome"
-			activate
-			repeat with w in windows
-				set tabIndex to 1
-				repeat with t in tabs of w
-					if URL of t starts with "%s" then
-						set active tab index of w to tabIndex
-						set index of w to 1
-						return "true"
-					end if
-					set tabIndex to tabIndex + 1
-				end repeat
-			end repeat
-		end tell
-		return "false"
-	`, escapedBaseURL)
-
-	//nolint:gosec // G204: osascript is a standard macOS utility, the script variable is controlled
-	cmd := exec.CommandContext(ctx, "osascript", "-e", script)
-	output, err := cmd.Output()
-	if err != nil {
-		t.logger.Error("Chrome AppleScript error", zap.Error(err))
-		// Try to get stderr for more details
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			t.logger.Error(
-				"Chrome AppleScript stderr",
-				zap.String("stderr", string(exitErr.Stderr)),
-			)
-		}
-		return false
-	}
-	result := strings.TrimSpace(string(output))
-	found := result == "true"
-	if !found {
-		t.logger.Debug("Chrome: No tab found", zap.String("applescript_result", result))
-	} else {
-		t.logger.Info("Chrome: Tab found and activated")
-	}
-	return found
 }
 
 // setMute sets the mute status via API

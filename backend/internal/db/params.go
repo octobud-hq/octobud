@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-// Package db provides the database queries for the application.
+// Package db provides the database layer for the application.
 package db
 
 import (
@@ -268,6 +268,8 @@ type UpdateNotificationSubjectParams struct {
 	SubjectState       sql.NullString
 	SubjectMerged      sql.NullBool
 	SubjectStateReason sql.NullString
+	AuthorLogin        sql.NullString
+	AuthorID           sql.NullInt64
 }
 
 // UpdateUserGitHubIdentityParams contains the parameters for updating user's GitHub identity

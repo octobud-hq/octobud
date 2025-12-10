@@ -52,6 +52,7 @@
 	import SyncStatusBanner from "$lib/components/shared/SyncStatusBanner.svelte";
 	import SWHealthBanner from "$lib/components/shared/SWHealthBanner.svelte";
 	import UpdateBanner from "$lib/components/shared/UpdateBanner.svelte";
+	import RestartBanner from "$lib/components/shared/RestartBanner.svelte";
 	import { getUpdateStore } from "$lib/stores/updateStore";
 
 	// State Controllers
@@ -832,6 +833,11 @@
 				onDismiss={dismissSWHealthBanner}
 				onRefresh={refreshPage}
 			/>
+
+			<!-- Restart needed banner (shows when new version is installed) -->
+			{#if !isLoginRoute && !isSetupRoute}
+				<RestartBanner />
+			{/if}
 
 			<!-- Update available banner -->
 			{#if !isLoginRoute && !isSetupRoute}

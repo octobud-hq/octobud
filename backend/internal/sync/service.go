@@ -107,8 +107,9 @@ type SyncOperations interface {
 	// ProcessNotificationData processes a notification from JSON data
 	ProcessNotificationData(ctx context.Context, userID string, data []byte) error
 
-	// RefreshSubjectData fetches fresh subject data from GitHub and updates the notification
-	RefreshSubjectData(ctx context.Context, userID string, githubID string) error
+	// RefreshSubjectData fetches fresh subject data from GitHub and updates the notification.
+	// Returns (wasMissing, error) where wasMissing indicates if subject data was previously missing.
+	RefreshSubjectData(ctx context.Context, userID string, githubID string) (bool, error)
 
 	// IsInitialSyncComplete checks if the initial sync has been completed
 	IsInitialSyncComplete(ctx context.Context, userID string) (bool, error)
@@ -122,10 +123,10 @@ type Service struct {
 	logger              *zap.Logger
 	clock               func() time.Time
 	client              githubinterfaces.Client
-	syncStateService    *syncstate.Service
-	repositoryService   *repository.Service
-	pullRequestService  *pullrequest.Service
-	notificationService *notification.Service
+	syncStateService    syncstate.SyncStateService
+	repositoryService   repository.RepositoryService
+	pullRequestService  pullrequest.PullRequestService
+	notificationService notification.NotificationService
 	userStore           db.Store // Used only for GetUser (sync settings)
 }
 
@@ -134,10 +135,10 @@ func NewService(
 	logger *zap.Logger,
 	clock func() time.Time,
 	client githubinterfaces.Client,
-	syncStateService *syncstate.Service,
-	repositoryService *repository.Service,
-	pullRequestService *pullrequest.Service,
-	notificationService *notification.Service,
+	syncStateService syncstate.SyncStateService,
+	repositoryService repository.RepositoryService,
+	pullRequestService pullrequest.PullRequestService,
+	notificationService notification.NotificationService,
 	userStore db.Store,
 ) *Service {
 	return &Service{

@@ -36,7 +36,9 @@ import (
 	notificationmocks "github.com/octobud-hq/octobud/backend/internal/core/notification/mocks"
 	repositorymocks "github.com/octobud-hq/octobud/backend/internal/core/repository/mocks"
 	tagmocks "github.com/octobud-hq/octobud/backend/internal/core/tag/mocks"
+	"github.com/octobud-hq/octobud/backend/internal/db"
 	"github.com/octobud-hq/octobud/backend/internal/models"
+	syncmocks "github.com/octobud-hq/octobud/backend/internal/sync/mocks"
 )
 
 func setupTestHandler(
@@ -47,6 +49,7 @@ func setupTestHandler(
 	mockRepositorySvc := repositorymocks.NewMockRepositoryService(ctrl)
 	mockTagSvc := tagmocks.NewMockTagService(ctrl)
 	mockAuthSvc := authmocks.NewMockAuthService(ctrl)
+	mockSyncService := syncmocks.NewMockSyncOperations(ctrl)
 
 	handler := &Handler{
 		logger:        logger,
@@ -56,7 +59,7 @@ func setupTestHandler(
 		tagSvc:        mockTagSvc,
 		timelineSvc:   nil, // Set in individual tests if needed
 		githubClient:  nil, // Set in individual tests if needed
-		syncService:   nil, // Set in individual tests if needed
+		syncService:   mockSyncService,
 		scheduler:     nil, // Set in individual tests if needed
 		authSvc:       mockAuthSvc,
 	}
@@ -275,6 +278,82 @@ func TestHandler_handleGetNotification(t *testing.T) {
 			if tt.expectedBody != nil {
 				tt.expectedBody(t, w)
 			}
+		})
+	}
+}
+
+// TestHandler_handleRefreshNotificationSubject_Basic tests basic endpoint behavior
+// for the refresh-subject endpoint. Full testing including rule re-application
+// logic is tested in the ApplyRulesToNotificationHandler tests and RefreshSubjectData tests.
+func TestHandler_handleRefreshNotificationSubject_Basic(t *testing.T) {
+	tests := []struct {
+		name               string
+		githubID           string
+		setupMocks         func(*notificationmocks.MockNotificationService)
+		excludeSyncService bool
+		expectedStatus     int
+	}{
+		{
+			name:               "sync service unavailable returns 503",
+			githubID:           "notif-123",
+			excludeSyncService: true,
+			setupMocks: func(mockNotifSvc *notificationmocks.MockNotificationService) {
+			},
+			expectedStatus: http.StatusServiceUnavailable,
+		},
+		{
+			name:     "notification not found returns 404",
+			githubID: "not-found",
+			setupMocks: func(mockNotifSvc *notificationmocks.MockNotificationService) {
+				// GetByGithubID is called first to verify notification exists (before refreshSubjectData)
+				mockNotifSvc.EXPECT().
+					GetByGithubID(gomock.Any(), "test-user-id", "not-found").
+					Return(db.Notification{}, sql.ErrNoRows)
+			},
+			expectedStatus: http.StatusNotFound,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			const testUserID = "test-user-id"
+			handler, mockNotifSvc, _, mockAuthSvc := setupTestHandler(ctrl)
+			mockAuthSvc.EXPECT().
+				GetUser(gomock.Any()).
+				Return(&models.User{GithubUserID: testUserID}, nil).
+				AnyTimes()
+
+			// syncService is set by default in setupTestHandler as a mock
+			// Override to nil if excludeSyncService is true
+			if tt.excludeSyncService {
+				handler.syncService = nil
+				handler.scheduler = nil
+			}
+
+			if tt.setupMocks != nil {
+				tt.setupMocks(mockNotifSvc)
+			}
+
+			req := createRequest(
+				http.MethodPost,
+				"/notifications/"+url.PathEscape(tt.githubID)+"/refresh-subject",
+				nil,
+			)
+
+			rctx := chi.NewRouteContext()
+			if tt.githubID != "" {
+				rctx.URLParams.Add("githubID", tt.githubID)
+			}
+			req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+			req = req.WithContext(helpers.ContextWithUserID(req.Context(), testUserID))
+
+			w := httptest.NewRecorder()
+			handler.handleRefreshNotificationSubject(w, req)
+
+			require.Equal(t, tt.expectedStatus, w.Code)
 		})
 	}
 }

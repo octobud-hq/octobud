@@ -55,6 +55,20 @@ func (mr *MockSchedulerMockRecorder) EnqueueApplyRule(ctx, userID, ruleID any) *
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnqueueApplyRule", reflect.TypeOf((*MockScheduler)(nil).EnqueueApplyRule), ctx, userID, ruleID)
 }
 
+// EnqueueApplyRulesToNotification mocks base method.
+func (m *MockScheduler) EnqueueApplyRulesToNotification(ctx context.Context, userID, githubID string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "EnqueueApplyRulesToNotification", ctx, userID, githubID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// EnqueueApplyRulesToNotification indicates an expected call of EnqueueApplyRulesToNotification.
+func (mr *MockSchedulerMockRecorder) EnqueueApplyRulesToNotification(ctx, userID, githubID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnqueueApplyRulesToNotification", reflect.TypeOf((*MockScheduler)(nil).EnqueueApplyRulesToNotification), ctx, userID, githubID)
+}
+
 // EnqueueProcessNotification mocks base method.
 func (m *MockScheduler) EnqueueProcessNotification(ctx context.Context, userID string, notificationData []byte) error {
 	m.ctrl.T.Helper()

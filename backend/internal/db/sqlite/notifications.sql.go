@@ -880,7 +880,9 @@ UPDATE notifications SET
     subject_number = ?,
     subject_state = ?,
     subject_merged = ?,
-    subject_state_reason = ?
+    subject_state_reason = ?,
+    author_login = ?,
+    author_id = ?
 WHERE user_id = ? AND github_id = ?
 `
 
@@ -892,6 +894,8 @@ type UpdateNotificationSubjectParams struct {
 	SubjectState       sql.NullString
 	SubjectMerged      sql.NullInt64
 	SubjectStateReason sql.NullString
+	AuthorLogin        sql.NullString
+	AuthorID           sql.NullInt64
 	UserID             string
 	GithubID           string
 }
@@ -905,6 +909,8 @@ func (q *Queries) UpdateNotificationSubject(ctx context.Context, arg UpdateNotif
 		arg.SubjectState,
 		arg.SubjectMerged,
 		arg.SubjectStateReason,
+		arg.AuthorLogin,
+		arg.AuthorID,
 		arg.UserID,
 		arg.GithubID,
 	)

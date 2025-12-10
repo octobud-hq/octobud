@@ -4,7 +4,9 @@ This guide walks you through connecting Octobud to your GitHub account using OAu
 
 ## Overview
 
-OAuth is the preferred way to authenticate with GitHub in Octobud. It uses GitHub's Device Flow, which allows you to authorize Octobud without sharing your password. OAuth provides better security and easier management compared to Personal Access Tokens.
+OAuth is a convenient way to authenticate with GitHub in Octobud. It uses GitHub's Device Flow, which allows you to authorize Octobud without sharing your password. OAuth provides automatic token management and easier access control.
+
+**Note**: If your organization disables OAuth apps or you have multiple GitHub orgs, consider using a [Personal Access Token](./personal-access-token-setup.md) instead, as it may be the only viable option in those cases.
 
 ## Required Permissions
 
@@ -129,7 +131,8 @@ If your OAuth token stops working:
 ### When to Use Personal Access Token
 
 Consider using a Personal Access Token if:
-- Your organization doesn't allow OAuth applications
+- **Your organization disables OAuth apps** - Some organizations have policies that block OAuth applications entirely
+- **You have multiple GitHub orgs** - PATs can be more reliable when working across multiple organizations with different OAuth policies
 - You need fine-grained control over token permissions
 - You prefer managing tokens manually
 

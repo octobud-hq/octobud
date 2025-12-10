@@ -29,7 +29,11 @@ When you first launch Octobud:
 
 1. **Menu Bar Icon** - Octobud appears in your menu bar (top right on macOS)
 2. **Browser Opens** - Your default browser opens to `http://localhost:8808`
-3. **Connect GitHub** - You'll be prompted to connect your GitHub account. OAuth is the preferred method (recommended), or you can use a Personal Access Token as an alternative. Both require the following scopes:
+3. **Connect GitHub** - You'll be prompted to connect your GitHub account. Choose either **OAuth** or a **Personal Access Token (PAT)**. Both methods work equally well:
+   - **OAuth** - Convenient and secure, uses GitHub's device flow
+   - **PAT** - Recommended if your organization disables OAuth apps or you have multiple GitHub orgs
+   
+   Both require the following scopes:
    - `repo`
    - `notifications`
    - `read:discussions`
@@ -82,8 +86,9 @@ The data directory contains:
 
 Octobud supports two methods for authenticating with GitHub:
 
-1. **OAuth (Recommended)** - Connect your GitHub account directly through GitHub's OAuth flow. This is the preferred method as it's more secure and easier to set up. See the [OAuth Setup Guide](guides/oauth-setup.md) for detailed instructions, including organization approval requirements.
-2. **Personal Access Token (Alternative)** - Use a GitHub Personal Access Token if you prefer not to use OAuth. See the [Personal Access Token Setup Guide](guides/personal-access-token-setup.md) for detailed instructions.
+1. **OAuth** - Connect your GitHub account directly through GitHub's OAuth device flow. Convenient and secure, with automatic token management. See the [OAuth Setup Guide](guides/oauth-setup.md) for detailed instructions, including organization approval requirements.
+
+2. **Personal Access Token (PAT)** - Use a GitHub Personal Access Token for authentication. **Recommended if your organization disables OAuth apps or you have multiple GitHub orgs.** See the [Personal Access Token Setup Guide](guides/personal-access-token-setup.md) for detailed instructions.
 
 Both methods require the following scopes:
 - `repo`

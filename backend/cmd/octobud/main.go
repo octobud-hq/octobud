@@ -26,6 +26,7 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -53,6 +54,8 @@ import (
 	"github.com/octobud-hq/octobud/backend/internal/db/sqlite"
 	"github.com/octobud-hq/octobud/backend/internal/github"
 	"github.com/octobud-hq/octobud/backend/internal/jobs"
+	"github.com/octobud-hq/octobud/backend/internal/osactions"
+	"github.com/octobud-hq/octobud/backend/internal/query"
 	"github.com/octobud-hq/octobud/backend/internal/server"
 	"github.com/octobud-hq/octobud/backend/internal/sync"
 	"github.com/octobud-hq/octobud/backend/internal/tray"
@@ -136,24 +139,23 @@ func main() {
 		frontendURL: fURL,
 	}
 
-	// Create a basic logger for tray operations (before server logger is created)
-	// This will be replaced by the console logger in runServer, but we need
-	// something for tray initialization
-	trayLogger := config.NewConsoleLogger()
+	// Create a logger for tray operations that writes to both console and logfile
+	// This ensures tray operations and early initialization are logged for debugging
+	trayLogger := config.NewConsoleLoggerWithFile(logWriter)
 
 	// On macOS, RunWithApp blocks and runs the tray event loop on the main thread.
 	// The onReady callback runs our server logic.
 	// On other platforms, RunWithApp just calls onReady directly.
 	tray.RunWithApp(cfg.frontendURL, trayLogger, func(t *tray.Tray) {
 		// Start the server in a goroutine so tray can run its event loop
-		go runServer(cfg, t)
+		go runServer(cfg, t, logWriter)
 	}, nil)
 }
 
 // runServer contains all the server initialization and lifecycle logic.
 //
 //nolint:gocyclo // cyclomatic complexity is high but function is cohesive
-func runServer(cfg appConfig, trayApp *tray.Tray) {
+func runServer(cfg appConfig, trayApp *tray.Tray, logWriter *lumberjack.Logger) {
 	// Print startup banner
 	fmt.Println()
 	fmt.Println("  🐙 Octobud")
@@ -204,7 +206,8 @@ func runServer(cfg appConfig, trayApp *tray.Tray) {
 	}
 
 	// Initialize logger (console format for desktop app)
-	logger := config.NewConsoleLogger()
+	// Reuse the same logWriter that was created in main() for consistency
+	logger := config.NewConsoleLoggerWithFile(logWriter)
 
 	// Create store
 	store := db.NewStore(dbConn)
@@ -382,9 +385,9 @@ func runServer(cfg appConfig, trayApp *tray.Tray) {
 				trayApp.SetLastSync(state.LastSuccessfulPoll.Time)
 			}
 			// Update unread count
-			unreadCount, err := getUnreadCount(ctx, dbConn)
+			unreadCount, err := getUnreadCount(ctx, store, userID)
 			if err == nil {
-				trayApp.SetUnreadCount(unreadCount)
+				trayApp.SetUnreadCount(int(unreadCount))
 			}
 		}
 
@@ -528,17 +531,55 @@ func setContentType(w http.ResponseWriter, path string) {
 }
 
 // openBrowser opens the URL in the default browser.
-func openBrowser(url string) {
+// On macOS, it first checks for existing tabs and activates/refreshes them if found.
+func openBrowser(targetURL string) {
 	ctx := context.Background()
 	var err error
 
 	switch runtime.GOOS {
 	case "darwin":
-		err = exec.CommandContext(ctx, "open", url).Start()
+		// Try to find and activate existing tab first
+		// Navigate to baseURL (without path) to force a refresh
+		osActionsSvc := osactions.NewService()
+		baseURL := targetURL
+		if parsedURL, parseErr := url.Parse(targetURL); parseErr == nil {
+			baseURL = fmt.Sprintf("%s://%s", parsedURL.Scheme, parsedURL.Host)
+		}
+
+		// Try Safari first - navigate to baseURL to force refresh
+		found, tabErr := osActionsSvc.ActivateBrowserTab(
+			ctx,
+			"safari",
+			baseURL,
+			baseURL,
+		)
+		if tabErr != nil {
+			log.Printf("Failed to activate Safari tab: %v", tabErr)
+		} else if found {
+			log.Printf("Activated and refreshed existing Safari tab")
+			return
+		}
+
+		// Try Chrome - navigate to baseURL to force refresh
+		found, tabErr = osActionsSvc.ActivateBrowserTab(
+			ctx,
+			"chrome",
+			baseURL,
+			baseURL,
+		)
+		if tabErr != nil {
+			log.Printf("Failed to activate Chrome tab: %v", tabErr)
+		} else if found {
+			log.Printf("Activated and refreshed existing Chrome tab")
+			return
+		}
+
+		// No existing tab found, open new one
+		err = exec.CommandContext(ctx, "open", targetURL).Start()
 	case "linux":
-		err = exec.CommandContext(ctx, "xdg-open", url).Start()
+		err = exec.CommandContext(ctx, "xdg-open", targetURL).Start()
 	case "windows":
-		err = exec.CommandContext(ctx, "rundll32", "url.dll,FileProtocolHandler", url).Start()
+		err = exec.CommandContext(ctx, "rundll32", "url.dll,FileProtocolHandler", targetURL).Start()
 	}
 
 	if err != nil {
@@ -546,15 +587,22 @@ func openBrowser(url string) {
 	}
 }
 
-// getUnreadCount returns the count of unread, non-archived notifications.
-func getUnreadCount(ctx context.Context, dbConn *sql.DB) (int, error) {
-	var count int
-	err := dbConn.QueryRowContext(ctx, `
-		SELECT COUNT(*) FROM notifications 
-		WHERE is_read = 0 AND archived = 0
-	`).Scan(&count)
+// getUnreadCount returns the count of unread notifications in the inbox.
+// Uses the query engine to match the "in:inbox is:unread" query criteria,
+// ensuring consistency with how the rest of the application calculates unread counts.
+func getUnreadCount(ctx context.Context, store db.Store, userID string) (int64, error) {
+	// Use the same query string as calculateInboxUnreadCount in the view service
+	queryStr := "in:inbox is:unread"
+
+	dbQuery, err := query.BuildQuery(queryStr, 1, 0)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("failed to build query: %w", err)
 	}
-	return count, nil
+
+	result, err := store.ListNotificationsFromQuery(ctx, userID, dbQuery)
+	if err != nil {
+		return 0, fmt.Errorf("failed to list notifications: %w", err)
+	}
+
+	return result.Total, nil
 }

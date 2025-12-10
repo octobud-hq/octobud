@@ -39,7 +39,7 @@ type Handler struct {
 	tagSvc        tag.TagService
 	timelineSvc   *timelinesvc.Service
 	githubClient  githubinterfaces.Client
-	syncService   *sync.Service
+	syncService   sync.SyncOperations
 	scheduler     jobs.Scheduler
 	authSvc       authsvc.AuthService
 }
@@ -53,7 +53,7 @@ func New(
 	tagSvc tag.TagService,
 	timelineSvc *timelinesvc.Service,
 	githubClient githubinterfaces.Client,
-	syncService *sync.Service,
+	syncService sync.SyncOperations,
 	scheduler jobs.Scheduler,
 	authSvc authsvc.AuthService,
 ) *Handler {

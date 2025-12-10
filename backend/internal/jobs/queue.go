@@ -29,9 +29,10 @@ import (
 
 // Queue names for different job types
 const (
-	QueueProcessNotification = "process_notification"
-	QueueApplyRule           = "apply_rule"
-	QueueSyncOlder           = "sync_older"
+	QueueProcessNotification      = "process_notification"
+	QueueApplyRule                = "apply_rule"
+	QueueSyncOlder                = "sync_older"
+	QueueApplyRulesToNotification = "apply_rules_to_notification"
 )
 
 // Default configuration

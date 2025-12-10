@@ -69,7 +69,7 @@ For a detailed architecture overview, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 - **Go** 1.21+
 - **Node.js** 18+ and npm
-- **GitHub account** - OAuth is the preferred authentication method (recommended). Alternatively, you can use a Personal Access Token with the following scopes ([create one here](https://github.com/settings/tokens)):
+- **GitHub account** - Use either OAuth or a Personal Access Token (PAT). Both work equally well - choose OAuth for convenience, or PAT if your organization disables OAuth apps or you have multiple GitHub orgs. PAT requires the following scopes ([create one here](https://github.com/settings/tokens)):
   - `repo`
   - `notifications`
   - `read:discussions`
@@ -98,7 +98,7 @@ make backend-dev    # Terminal 1 - Backend runs locally (port 8080 for dev)
 make frontend-dev   # Terminal 2 - Frontend with hot reload (port 5173)
 ```
 
-Open http://localhost:5173 and connect your GitHub account. OAuth is the preferred method (recommended), or you can configure a Personal Access Token in the app (Settings → Account). See the [OAuth Setup Guide](guides/oauth-setup.md) or [Personal Access Token Setup Guide](guides/personal-access-token-setup.md) for detailed instructions.
+Open http://localhost:5173 and connect your GitHub account. Choose either OAuth or a Personal Access Token (PAT) - both work equally well. OAuth is convenient, while PAT is recommended if your organization disables OAuth apps or you have multiple GitHub orgs. You can configure either method in the app (Settings → Account). See the [OAuth Setup Guide](guides/oauth-setup.md) or [Personal Access Token Setup Guide](guides/personal-access-token-setup.md) for detailed instructions.
 
 ### All Available Commands
 

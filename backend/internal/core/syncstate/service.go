@@ -33,6 +33,14 @@ type SyncStateService interface {
 		lastSuccessfulPoll *time.Time,
 		latestNotificationAt *time.Time,
 	) (models.SyncState, error)
+	UpsertSyncStateWithInitialSync(
+		ctx context.Context,
+		userID string,
+		lastSuccessfulPoll *time.Time,
+		latestNotificationAt *time.Time,
+		initialSyncCompletedAt *time.Time,
+		oldestNotificationSyncedAt *time.Time,
+	) (models.SyncState, error)
 }
 
 // Service provides business logic for sync state operations

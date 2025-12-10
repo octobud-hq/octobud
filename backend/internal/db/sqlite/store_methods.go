@@ -1314,6 +1314,8 @@ func (s *Store) UpdateNotificationSubject(
 			SubjectState:       arg.SubjectState,
 			SubjectMerged:      fromNullBool(arg.SubjectMerged),
 			SubjectStateReason: arg.SubjectStateReason,
+			AuthorLogin:        arg.AuthorLogin,
+			AuthorID:           arg.AuthorID,
 		})
 	})
 }

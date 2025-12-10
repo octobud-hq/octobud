@@ -4,7 +4,11 @@ This guide walks you through creating and configuring a GitHub Personal Access T
 
 ## Overview
 
-While OAuth is the recommended authentication method, you can use a Personal Access Token as an alternative. This guide covers the complete setup process, including handling organization SSO requirements.
+Personal Access Tokens are a great authentication option for Octobud. **Consider using a PAT if:**
+- **Your organization disables OAuth apps** - Some organizations have policies that block OAuth applications entirely
+- **You have multiple GitHub orgs** - PATs can be more reliable when working across multiple organizations with different OAuth policies
+
+This guide covers the complete setup process, including handling organization SSO requirements.
 
 ## Required Permissions
 
@@ -61,12 +65,12 @@ Some GitHub organizations have policies that allow Personal Access Tokens to acc
 This is a limitation imposed by the organization's security policies, not by Octobud. If you encounter this issue:
 
 1. Check with your organization administrators about PAT policies
-2. Consider using OAuth instead, which may have different permission requirements
+2. If your organization allows OAuth apps, consider trying OAuth instead, which may have different permission requirements
 3. Some organizations may allow repository access through OAuth but restrict it for PATs
 
 ### Workaround
 
-If you need full functionality for organization repositories, OAuth is often the better choice as it may have different permission handling that bypasses these restrictions. However, the Organization administrator may still need to explicitly give Octobud permission to access the Org's data.
+If you need full functionality for organization repositories and your organization allows OAuth apps, OAuth may have different permission handling that bypasses these restrictions. However, the Organization administrator may still need to explicitly give Octobud permission to access the Org's data. **Note**: If your organization disables OAuth apps, PAT is your only option.
 
 ## Troubleshooting
 
@@ -82,7 +86,7 @@ If you need full functionality for organization repositories, OAuth is often the
 If notifications appear but PR/issue details don't load:
 
 1. This is likely due to organization restrictions on repository access (see "Known Limitations" above)
-2. Try using OAuth instead of a PAT
+2. If your organization allows OAuth apps, try using OAuth instead of a PAT
 3. Contact your organization administrators about PAT access policies
 
 ### Token Revoked or Expired
@@ -95,7 +99,7 @@ If your token stops working:
 
 ## Security Best Practices
 
-- **Use OAuth when possible** - OAuth is more secure and easier to manage
+- **Choose the right method** - Both OAuth and PAT are secure. Use OAuth if your organization allows it, or PAT if OAuth apps are disabled
 - **Set expiration dates** - Regularly rotate your tokens for better security
 - **Limit scope** - Only grant the minimum required permissions
 - **Store securely** - On macOS, tokens are stored in Keychain. On other platforms, they're encrypted but the key is stored locally

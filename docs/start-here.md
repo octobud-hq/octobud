@@ -6,7 +6,11 @@ This guide covers your first 5 minutes with Octobud: configuring your initial sy
 
 When you first launch Octobud, you'll be guided through two steps:
 
-1. **Connect GitHub** - Connect your GitHub account. OAuth is the preferred method (recommended), or you can use a Personal Access Token as an alternative. Both require the following scopes:
+1. **Connect GitHub** - Connect your GitHub account. Choose either **OAuth** or a **Personal Access Token (PAT)**. Both methods work equally well:
+   - **OAuth** - Convenient and secure, uses GitHub's device flow
+   - **PAT** - Recommended if your organization disables OAuth apps or you have multiple GitHub orgs
+   
+   Both require the following scopes:
    - `repo`
    - `notifications`
    - `read:discussions`

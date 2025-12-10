@@ -105,7 +105,9 @@ func TestSyncNotificationsHandler_EmptyResults(t *testing.T) {
 
 	result, err := handler.Handle(context.Background(), "test-user-id")
 	require.NoError(t, err)
-	require.Nil(t, result) // No result for empty notifications
+	require.NotNil(t, result) // Now returns a result even with no notifications
+	require.Len(t, result.Threads, 0)
+	require.True(t, result.LatestUpdate.IsZero()) // Zero time indicates no new notifications
 	require.Len(t, enqueuer.enqueuedData, 0)
 }
 
@@ -226,6 +228,30 @@ func TestSyncNotificationsHandler_UpdateSyncState(t *testing.T) {
 	result := &SyncResult{
 		UserID:        "test-user-id",
 		LatestUpdate:  latestUpdate,
+		IsInitialSync: false,
+	}
+
+	err := handler.UpdateSyncState(context.Background(), result)
+	require.NoError(t, err)
+}
+
+func TestSyncNotificationsHandler_UpdateSyncState_NoNewNotifications(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// Test that UpdateSyncState still updates LastSuccessfulPoll even when
+	// there are no new notifications (LatestUpdate is zero)
+	mockSync := syncmocks.NewMockSyncOperations(ctrl)
+	var zeroTime time.Time
+	mockSync.EXPECT().
+		UpdateSyncStateAfterProcessing(gomock.Any(), "test-user-id", zeroTime).
+		Return(nil)
+
+	handler := NewSyncNotificationsHandler(mockSync, nil, zap.NewNop())
+
+	result := &SyncResult{
+		UserID:        "test-user-id",
+		LatestUpdate:  zeroTime, // Zero time indicates no new notifications
 		IsInitialSync: false,
 	}
 

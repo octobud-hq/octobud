@@ -546,3 +546,43 @@ export async function getVersion(fetchImpl?: typeof fetch): Promise<VersionRespo
 
 	return response.json();
 }
+
+export async function getInstalledVersion(fetchImpl?: typeof fetch): Promise<VersionResponse> {
+	const response = await fetchAPI(
+		"/api/user/installed-version",
+		{
+			method: "GET",
+		},
+		fetchImpl
+	);
+
+	if (!response.ok) {
+		const error = await response.json().catch(() => ({ error: "Failed to get installed version" }));
+		throw new Error(error.error || "Failed to get installed version");
+	}
+
+	return response.json();
+}
+
+export interface RestartResponse {
+	status: string;
+	message?: string;
+}
+
+export async function restartApp(fetchImpl?: typeof fetch): Promise<void> {
+	const response = await fetchAPI(
+		"/api/user/restart",
+		{
+			method: "POST",
+		},
+		fetchImpl
+	);
+
+	if (!response.ok) {
+		const error = await response.json().catch(() => ({ error: "Failed to restart app" }));
+		throw new Error(error.error || "Failed to restart app");
+	}
+
+	// Response is not needed, but we can return it if needed
+	await response.json();
+}

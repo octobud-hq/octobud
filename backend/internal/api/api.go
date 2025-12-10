@@ -30,6 +30,7 @@ import (
 	"github.com/octobud-hq/octobud/backend/internal/api/tags"
 	apiuser "github.com/octobud-hq/octobud/backend/internal/api/user"
 	"github.com/octobud-hq/octobud/backend/internal/api/views"
+	config "github.com/octobud-hq/octobud/backend/internal/config"
 	authsvc "github.com/octobud-hq/octobud/backend/internal/core/auth"
 	"github.com/octobud-hq/octobud/backend/internal/core/notification"
 	"github.com/octobud-hq/octobud/backend/internal/core/pullrequest"
@@ -43,6 +44,7 @@ import (
 	"github.com/octobud-hq/octobud/backend/internal/db"
 	githubinterfaces "github.com/octobud-hq/octobud/backend/internal/github/interfaces"
 	"github.com/octobud-hq/octobud/backend/internal/jobs"
+	"github.com/octobud-hq/octobud/backend/internal/osactions"
 	"github.com/octobud-hq/octobud/backend/internal/sync"
 )
 
@@ -51,7 +53,7 @@ type Handler struct {
 	logger         *zap.Logger
 	store          db.Store
 	notifications  *notification.Service
-	syncService    *sync.Service
+	syncService    sync.SyncOperations
 	githubClient   githubinterfaces.Client
 	timelineSvc    *timelinesvc.Service
 	scheduler      jobs.Scheduler
@@ -122,12 +124,8 @@ func WithNavigationBroadcaster(broadcaster *navigation.Broadcaster) HandlerOptio
 
 // NewHandler returns an API handler backed by the provided db store.
 func NewHandler(store db.Store, opts ...HandlerOption) *Handler {
-	// Initialize zap logger
-	logger, err := zap.NewProduction()
-	if err != nil {
-		// Fallback to Nop logger if production logger fails
-		logger = zap.NewNop()
-	}
+	// Initialize zap logger with human-readable console format
+	logger := config.NewConsoleLogger()
 
 	// Create all business logic services
 	notificationsSvc := notification.NewService(store)
@@ -179,6 +177,10 @@ func NewHandler(store db.Store, opts ...HandlerOption) *Handler {
 	// Wire up update service
 	updateService := update.NewService(logger)
 	h.userH = h.userH.WithUpdateService(updateService)
+
+	// Wire up OS actions service (for restart and browser tab activation)
+	osActionsSvc := osactions.NewService()
+	h.userH = h.userH.WithOSActionsService(osActionsSvc)
 
 	return h
 }

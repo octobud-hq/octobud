@@ -127,7 +127,9 @@ UPDATE notifications SET
     subject_number = ?,
     subject_state = ?,
     subject_merged = ?,
-    subject_state_reason = ?
+    subject_state_reason = ?,
+    author_login = ?,
+    author_id = ?
 WHERE user_id = ? AND github_id = ?;
 
 -- name: ResetNotificationStatusOnSync :exec

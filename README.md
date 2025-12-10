@@ -93,7 +93,7 @@ make build
 ./bin/octobud
 ```
 
-🎉 That's it! On macOS, Octobud will appear in your menu bar and open in your browser. On Linux and Windows, open `http://localhost:8808` manually. Connect your GitHub account - OAuth is the preferred method (recommended), or you can use a Personal Access Token as an alternative. See the [OAuth Setup Guide](docs/guides/oauth-setup.md) or [Personal Access Token Setup Guide](docs/guides/personal-access-token-setup.md) for detailed instructions.
+🎉 That's it! On macOS, Octobud will appear in your menu bar and open in your browser. On Linux and Windows, open `http://localhost:8808` manually. Connect your GitHub account using either **OAuth** or a **Personal Access Token (PAT)**. Both methods work equally well - choose OAuth for convenience, or PAT if your organization disables OAuth apps or you have multiple GitHub orgs. See the [OAuth Setup Guide](docs/guides/oauth-setup.md) or [Personal Access Token Setup Guide](docs/guides/personal-access-token-setup.md) for detailed instructions.
 
 <details>
 <summary><strong>More options</strong></summary>
@@ -128,7 +128,11 @@ Open `http://localhost:5173`
 
 When you first launch Octobud, you'll be guided through setup:
 
-1. **Connect GitHub** - You'll be prompted to connect your GitHub account. OAuth is the preferred method (recommended), or you can use a Personal Access Token as an alternative. Both require the following scopes:
+1. **Connect GitHub** - You'll be prompted to connect your GitHub account. Choose either **OAuth** or a **Personal Access Token (PAT)**. Both methods work equally well:
+   - **OAuth** - Convenient and secure, uses GitHub's device flow
+   - **PAT** - Recommended if your organization disables OAuth apps or you have multiple GitHub orgs
+   
+   Both require the following scopes:
    - `repo`
    - `notifications`
    - `read:discussions` (this permission is only required for PAT)
@@ -154,7 +158,7 @@ Here are some recommended views and rules to help you get started:
 
 See the [Views & Rules guide](docs/guides/views-and-rules.md) for detailed instructions on creating views and rules.
 
-The app runs locally at `http://localhost:8808`.
+
 
 ## Documentation
 

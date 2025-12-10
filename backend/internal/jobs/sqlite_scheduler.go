@@ -18,6 +18,7 @@ package jobs
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	gosync "sync"
 	"time"
@@ -43,12 +44,13 @@ type SQLiteScheduler struct {
 	jobQueue JobQueue
 
 	// Handlers for job processing
-	applyRuleHandler            *handlers.ApplyRuleHandler
-	processNotificationHandler  *handlers.ProcessNotificationHandler
-	syncNotificationsHandler    *handlers.SyncNotificationsHandler
-	syncOlderHandler            *handlers.SyncOlderHandler
-	cleanupNotificationsHandler *handlers.CleanupNotificationsHandler
-	checkUpdatesHandler         *handlers.CheckUpdatesHandler
+	applyRuleHandler                *handlers.ApplyRuleHandler
+	processNotificationHandler      *handlers.ProcessNotificationHandler
+	syncNotificationsHandler        *handlers.SyncNotificationsHandler
+	syncOlderHandler                *handlers.SyncOlderHandler
+	cleanupNotificationsHandler     *handlers.CleanupNotificationsHandler
+	checkUpdatesHandler             *handlers.CheckUpdatesHandler
+	applyRulesToNotificationHandler *handlers.ApplyRulesToNotificationHandler
 
 	// Channels for non-persistent jobs (sync triggers)
 	syncNotificationsQueue chan struct{}
@@ -126,6 +128,10 @@ func NewSQLiteScheduler(cfg SQLiteSchedulerConfig) *SQLiteScheduler {
 	)
 	s.syncOlderHandler = handlers.NewSyncOlderHandler(cfg.SyncService, s, cfg.Logger)
 	s.cleanupNotificationsHandler = handlers.NewCleanupNotificationsHandler(cfg.Store, cfg.Logger)
+	s.applyRulesToNotificationHandler = handlers.NewApplyRulesToNotificationHandler(
+		cfg.Store,
+		cfg.Logger,
+	)
 
 	// Initialize update check handler if services are provided
 	if cfg.AuthService != nil && cfg.UpdateService != nil {
@@ -168,6 +174,10 @@ func (s *SQLiteScheduler) Start(ctx context.Context) error {
 		s.workerWg.Add(1)
 		go s.notificationWorker(ctx, i)
 	}
+
+	// Start apply rules to notification worker
+	s.workerWg.Add(1)
+	go s.applyRulesToNotificationWorker(ctx)
 
 	// Start stale job cleanup goroutine
 	s.workerWg.Add(1)
@@ -297,11 +307,37 @@ func (s *SQLiteScheduler) EnqueueSyncOlder(
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
-	default:
-		// Queue is full, run in background goroutine
-		go s.doSyncOlder(context.Background(), args)
-		return nil
 	}
+}
+
+// EnqueueApplyRulesToNotification enqueues a job to apply all enabled rules to a single notification.
+func (s *SQLiteScheduler) EnqueueApplyRulesToNotification(
+	ctx context.Context,
+	userID string,
+	githubID string,
+) error {
+	payload := map[string]string{
+		"userID":   userID,
+		"githubID": githubID,
+	}
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		s.logger.Warn("failed to marshal apply rules to notification job payload", zap.Error(err))
+		return err
+	}
+
+	jobID, err := s.jobQueue.Enqueue(ctx, EnqueueParams{
+		Queue:       QueueApplyRulesToNotification,
+		Payload:     payloadBytes,
+		MaxAttempts: DefaultMaxAttempts,
+	})
+	if err != nil {
+		s.logger.Warn("failed to enqueue apply rules to notification job", zap.Error(err))
+		return err
+	}
+
+	s.logger.Debug("apply rules to notification job enqueued", zap.Int64("jobID", jobID))
+	return nil
 }
 
 func (s *SQLiteScheduler) run(ctx context.Context) {
@@ -416,6 +452,87 @@ func (s *SQLiteScheduler) notificationWorker(ctx context.Context, workerID int) 
 			}
 		} else {
 			s.logger.Debug("notification job completed",
+				zap.Int64("jobID", job.ID),
+				zap.Int("attempt", job.Attempts))
+
+			// Ack removes the job from the queue
+			if ackErr := s.jobQueue.Ack(ctx, job.ID); ackErr != nil {
+				s.logger.Error("failed to ack job", zap.Int64("jobID", job.ID), zap.Error(ackErr))
+			}
+		}
+	}
+}
+
+// applyRulesToNotificationWorker processes apply rules to notification jobs from the persistent job queue.
+func (s *SQLiteScheduler) applyRulesToNotificationWorker(ctx context.Context) {
+	defer s.workerWg.Done()
+	s.logger.Debug("apply rules to notification worker started")
+
+	pollInterval := 100 * time.Millisecond
+
+	for {
+		select {
+		case <-s.stopCh:
+			s.logger.Debug("apply rules to notification worker stopping")
+			return
+		case <-ctx.Done():
+			s.logger.Debug("apply rules to notification worker context canceled")
+			return
+		default:
+		}
+
+		// Try to dequeue a job
+		job, err := s.jobQueue.Dequeue(ctx, QueueApplyRulesToNotification)
+		if err != nil {
+			if errors.Is(err, ErrNoJobAvailable) {
+				// No jobs available, wait before polling again
+				select {
+				case <-s.stopCh:
+					return
+				case <-ctx.Done():
+					return
+				case <-time.After(pollInterval):
+					continue
+				}
+			}
+			// Actual error
+			s.logger.Warn("failed to dequeue apply rules to notification job", zap.Error(err))
+			time.Sleep(time.Second) // Back off on errors
+			continue
+		}
+
+		// Get current user ID for processing
+		userID, err := s.getCurrentUserID(ctx)
+		if err != nil {
+			s.logger.Warn("cannot process apply rules to notification job - no user ID",
+				zap.Int64("jobID", job.ID),
+				zap.Error(err))
+			// Nack the job to retry later when user is configured
+			if nackErr := s.jobQueue.Nack(ctx, job.ID, err); nackErr != nil {
+				s.logger.Error("failed to nack job", zap.Int64("jobID", job.ID), zap.Error(nackErr))
+			}
+			continue
+		}
+
+		// Process the job
+		s.logger.Debug("processing apply rules to notification job",
+			zap.Int64("jobID", job.ID),
+			zap.Int("attempt", job.Attempts),
+			zap.Int("maxAttempts", job.MaxAttempts))
+
+		err = s.applyRulesToNotificationHandler.Handle(ctx, userID, job.Payload)
+		if err != nil {
+			s.logger.Warn("apply rules to notification job failed",
+				zap.Int64("jobID", job.ID),
+				zap.Int("attempt", job.Attempts),
+				zap.Error(err))
+
+			// Nack will either retry or dead-letter the job
+			if nackErr := s.jobQueue.Nack(ctx, job.ID, err); nackErr != nil {
+				s.logger.Error("failed to nack job", zap.Int64("jobID", job.ID), zap.Error(nackErr))
+			}
+		} else {
+			s.logger.Debug("apply rules to notification job completed",
 				zap.Int64("jobID", job.ID),
 				zap.Int("attempt", job.Attempts))
 

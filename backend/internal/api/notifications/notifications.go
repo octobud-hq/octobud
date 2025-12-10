@@ -236,7 +236,7 @@ func (h *Handler) handleRefreshNotificationSubject(w http.ResponseWriter, r *htt
 	}
 
 	// Refresh the subject by fetching fresh data from GitHub
-	err = h.refreshSubjectData(ctx, userID, githubID)
+	wasMissing, err := h.refreshSubjectData(ctx, userID, githubID)
 	if err != nil {
 		// Check if this is a 403 Forbidden error (likely due to organization restrictions)
 		errStr := err.Error()
@@ -260,6 +260,18 @@ func (h *Handler) handleRefreshNotificationSubject(w http.ResponseWriter, r *htt
 		)
 		helpers.WriteError(w, http.StatusInternalServerError, "failed to refresh subject data")
 		return
+	}
+
+	// If subject data was previously missing and refresh succeeded, enqueue rule re-application
+	if wasMissing && h.scheduler != nil {
+		h.logger.Debug("subject data was missing, enqueuing rule re-application",
+			zap.String("github_id", githubID))
+		if enqueueErr := h.scheduler.EnqueueApplyRulesToNotification(ctx, userID, githubID); enqueueErr != nil {
+			// Log but don't fail the request - rule application is best-effort
+			h.logger.Warn("failed to enqueue rule re-application job",
+				zap.String("github_id", githubID),
+				zap.Error(enqueueErr))
+		}
 	}
 
 	// Get the updated notification with details
@@ -349,15 +361,16 @@ func getQueryErrorMessage(err error) string {
 	return errStr
 }
 
-// refreshSubjectData fetches fresh subject data from GitHub and updates the notification
-func (h *Handler) refreshSubjectData(ctx context.Context, userID, githubID string) error {
+// refreshSubjectData fetches fresh subject data from GitHub and updates the notification.
+// Returns (wasMissing, error) where wasMissing indicates if subject data was previously missing.
+func (h *Handler) refreshSubjectData(ctx context.Context, userID, githubID string) (bool, error) {
 	if h.syncService == nil {
-		return ErrSyncServiceNotAvailable
+		return false, ErrSyncServiceNotAvailable
 	}
 
-	err := h.syncService.RefreshSubjectData(ctx, userID, githubID)
+	wasMissing, err := h.syncService.RefreshSubjectData(ctx, userID, githubID)
 	if err != nil {
-		return errors.Join(ErrFailedToRefreshSubjectData, err)
+		return wasMissing, errors.Join(ErrFailedToRefreshSubjectData, err)
 	}
-	return nil
+	return wasMissing, nil
 }

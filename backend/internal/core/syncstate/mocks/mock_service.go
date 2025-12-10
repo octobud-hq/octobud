@@ -71,3 +71,18 @@ func (mr *MockSyncStateServiceMockRecorder) UpsertSyncState(ctx, userID, lastSuc
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpsertSyncState", reflect.TypeOf((*MockSyncStateService)(nil).UpsertSyncState), ctx, userID, lastSuccessfulPoll, latestNotificationAt)
 }
+
+// UpsertSyncStateWithInitialSync mocks base method.
+func (m *MockSyncStateService) UpsertSyncStateWithInitialSync(ctx context.Context, userID string, lastSuccessfulPoll, latestNotificationAt, initialSyncCompletedAt, oldestNotificationSyncedAt *time.Time) (models.SyncState, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpsertSyncStateWithInitialSync", ctx, userID, lastSuccessfulPoll, latestNotificationAt, initialSyncCompletedAt, oldestNotificationSyncedAt)
+	ret0, _ := ret[0].(models.SyncState)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpsertSyncStateWithInitialSync indicates an expected call of UpsertSyncStateWithInitialSync.
+func (mr *MockSyncStateServiceMockRecorder) UpsertSyncStateWithInitialSync(ctx, userID, lastSuccessfulPoll, latestNotificationAt, initialSyncCompletedAt, oldestNotificationSyncedAt any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpsertSyncStateWithInitialSync", reflect.TypeOf((*MockSyncStateService)(nil).UpsertSyncStateWithInitialSync), ctx, userID, lastSuccessfulPoll, latestNotificationAt, initialSyncCompletedAt, oldestNotificationSyncedAt)
+}

@@ -124,7 +124,7 @@ func (s *Service) FetchFilteredTimeline(
 	subjectType string,
 	perPage, page int,
 ) (*models.TimelineResult, error) {
-	s.logger.Info(
+	s.logger.Debug(
 		"fetching filtered timeline",
 		zap.String("owner", subjectInfo.Owner),
 		zap.String("repo", subjectInfo.Repo),
@@ -182,7 +182,7 @@ func (s *Service) FetchFilteredTimeline(
 
 	result.Items = allItems[start:end]
 
-	s.logger.Info(
+	s.logger.Debug(
 		"timeline fetch completed",
 		zap.String("owner", subjectInfo.Owner),
 		zap.String("repo", subjectInfo.Repo),
@@ -238,7 +238,7 @@ func fetchRESTTimelineEvents(
 	// Keep fetching from GitHub until we have enough filtered events or reach the safety limit
 	for githubPage <= maxGitHubPages {
 		// Fetch a page from GitHub
-		logger.Info(
+		logger.Debug(
 			"fetching timeline page from GitHub",
 			zap.String("owner", subjectInfo.Owner),
 			zap.String("repo", subjectInfo.Repo),
@@ -275,7 +275,7 @@ func fetchRESTTimelineEvents(
 			break
 		}
 
-		logger.Info(
+		logger.Debug(
 			"received timeline page from GitHub",
 			zap.String("owner", subjectInfo.Owner),
 			zap.String("repo", subjectInfo.Repo),
@@ -286,7 +286,7 @@ func fetchRESTTimelineEvents(
 
 		// If GitHub returned no events, we've reached the end
 		if len(timeline) == 0 {
-			logger.Info(
+			logger.Debug(
 				"no more timeline events from GitHub",
 				zap.String("owner", subjectInfo.Owner),
 				zap.String("repo", subjectInfo.Repo),
@@ -316,7 +316,7 @@ func fetchRESTTimelineEvents(
 			filteredCount++
 		}
 
-		logger.Info(
+		logger.Debug(
 			"processed timeline page",
 			zap.String("owner", subjectInfo.Owner),
 			zap.String("repo", subjectInfo.Repo),
@@ -330,7 +330,7 @@ func fetchRESTTimelineEvents(
 
 		// If we have enough filtered events, we can stop fetching
 		if len(allFilteredItems) >= totalNeeded {
-			logger.Info(
+			logger.Debug(
 				"collected enough filtered timeline events",
 				zap.String("owner", subjectInfo.Owner),
 				zap.String("repo", subjectInfo.Repo),
@@ -343,7 +343,7 @@ func fetchRESTTimelineEvents(
 
 		// If GitHub returned fewer events than requested, we've reached the end
 		if len(timeline) < maxGitHubPerPage {
-			logger.Info(
+			logger.Debug(
 				"reached end of timeline (fewer events than requested)",
 				zap.String("owner", subjectInfo.Owner),
 				zap.String("repo", subjectInfo.Repo),
@@ -357,7 +357,7 @@ func fetchRESTTimelineEvents(
 		githubPage++
 	}
 
-	logger.Info(
+	logger.Debug(
 		"finished fetching timeline events",
 		zap.String("owner", subjectInfo.Owner),
 		zap.String("repo", subjectInfo.Repo),
@@ -390,7 +390,7 @@ func fetchDiscussionTimelineEvents(
 		fetchCount = maxCommentsToFetch
 	}
 
-	logger.Info(
+	logger.Debug(
 		"fetching discussion timeline from GitHub GraphQL",
 		zap.String("owner", subjectInfo.Owner),
 		zap.String("repo", subjectInfo.Repo),
@@ -421,7 +421,7 @@ func fetchDiscussionTimelineEvents(
 		return nil, fmt.Errorf("failed to fetch discussion timeline events: %w", err)
 	}
 
-	logger.Info(
+	logger.Debug(
 		"received discussion timeline from GitHub GraphQL",
 		zap.String("owner", subjectInfo.Owner),
 		zap.String("repo", subjectInfo.Repo),
@@ -442,7 +442,7 @@ func fetchDiscussionTimelineEvents(
 		allFilteredItems = append(allFilteredItems, *item)
 	}
 
-	logger.Info(
+	logger.Debug(
 		"finished fetching discussion timeline events",
 		zap.String("owner", subjectInfo.Owner),
 		zap.String("repo", subjectInfo.Repo),

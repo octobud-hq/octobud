@@ -18,24 +18,29 @@ package sync
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
 
-	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap"
 
 	"github.com/octobud-hq/octobud/backend/internal/core/notification"
+	notificationmocks "github.com/octobud-hq/octobud/backend/internal/core/notification/mocks"
 	"github.com/octobud-hq/octobud/backend/internal/core/pullrequest"
+	pullrequestmocks "github.com/octobud-hq/octobud/backend/internal/core/pullrequest/mocks"
 	"github.com/octobud-hq/octobud/backend/internal/core/repository"
+	repositorymocks "github.com/octobud-hq/octobud/backend/internal/core/repository/mocks"
 	"github.com/octobud-hq/octobud/backend/internal/core/syncstate"
+	syncstatemocks "github.com/octobud-hq/octobud/backend/internal/core/syncstate/mocks"
 	"github.com/octobud-hq/octobud/backend/internal/db"
-	_ "github.com/octobud-hq/octobud/backend/internal/db/sqlite" // Register SQLite store factory
+	dbmocks "github.com/octobud-hq/octobud/backend/internal/db/mocks"
 	githubinterfaces "github.com/octobud-hq/octobud/backend/internal/github/interfaces"
 	githubmocks "github.com/octobud-hq/octobud/backend/internal/github/mocks"
 	"github.com/octobud-hq/octobud/backend/internal/github/types"
+	"github.com/octobud-hq/octobud/backend/internal/models"
 )
 
 // mockClock returns a fixed time for testing
@@ -45,25 +50,23 @@ func mockClock() time.Time {
 
 // setupSyncService creates a Service with mocked dependencies for testing
 func setupSyncService(
-	_ *testing.T,
-	dbConn *sql.DB,
+	_ *gomock.Controller,
 	mockClient githubinterfaces.Client,
+	mockSyncState syncstate.SyncStateService,
+	mockRepository repository.RepositoryService,
+	mockPullRequest pullrequest.PullRequestService,
+	mockNotification notification.NotificationService,
+	mockUserStore db.Store,
 ) *Service {
-	queries := db.NewStore(dbConn)
-	syncStateService := syncstate.NewSyncStateService(queries)
-	repositoryService := repository.NewService(queries)
-	pullRequestService := pullrequest.NewService(queries)
-	notificationService := notification.NewService(queries)
-
 	return NewService(
 		zap.NewNop(),
 		mockClock,
 		mockClient,
-		syncStateService,
-		repositoryService,
-		pullRequestService,
-		notificationService,
-		queries, // userStore for sync settings
+		mockSyncState,
+		mockRepository,
+		mockPullRequest,
+		mockNotification,
+		mockUserStore,
 	)
 }
 
@@ -71,10 +74,6 @@ func setupSyncService(
 func TestFetchNotificationsToSync_InitialSync(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-
-	dbConn, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer dbConn.Close()
 
 	notifications := []types.NotificationThread{
 		{
@@ -96,14 +95,25 @@ func TestFetchNotificationsToSync_InitialSync(t *testing.T) {
 		FetchNotifications(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(notifications, nil)
 
-	// FetchNotificationsToSync is a pure function - no DB calls expected
-	service := setupSyncService(t, dbConn, mockClient)
+	mockSyncState := syncstatemocks.NewMockSyncStateService(ctrl)
+	mockRepository := repositorymocks.NewMockRepositoryService(ctrl)
+	mockPullRequest := pullrequestmocks.NewMockPullRequestService(ctrl)
+	mockNotification := notificationmocks.NewMockNotificationService(ctrl)
+	mockUserStore := dbmocks.NewMockStore(ctrl)
+	service := setupSyncService(
+		ctrl,
+		mockClient,
+		mockSyncState,
+		mockRepository,
+		mockPullRequest,
+		mockNotification,
+		mockUserStore,
+	)
 
-	// Pass sync context indicating this is an initial sync
 	syncCtx := SyncContext{
 		IsSyncConfigured: true,
 		IsInitialSync:    true,
-		SinceTimestamp:   nil, // All time
+		SinceTimestamp:   nil,
 	}
 
 	threads, err := service.FetchNotificationsToSync(context.Background(), syncCtx)
@@ -111,18 +121,12 @@ func TestFetchNotificationsToSync_InitialSync(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, threads, 1)
 	require.Equal(t, "notif-1", threads[0].ID)
-	require.NoError(t, mock.ExpectationsWereMet())
 }
 
 // TestFetchNotificationsToSync_WithExistingState tests fetching with existing sync state
-// (initial sync already completed, using pre-computed SinceTimestamp)
 func TestFetchNotificationsToSync_WithExistingState(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-
-	dbConn, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer dbConn.Close()
 
 	latestNotification := time.Date(2024, 1, 14, 10, 0, 0, 0, time.UTC)
 	notifications := []types.NotificationThread{
@@ -145,13 +149,24 @@ func TestFetchNotificationsToSync_WithExistingState(t *testing.T) {
 			return notifications, nil
 		})
 
-	// FetchNotificationsToSync is a pure function - no DB calls expected
-	service := setupSyncService(t, dbConn, mockClient)
+	mockSyncState := syncstatemocks.NewMockSyncStateService(ctrl)
+	mockRepository := repositorymocks.NewMockRepositoryService(ctrl)
+	mockPullRequest := pullrequestmocks.NewMockPullRequestService(ctrl)
+	mockNotification := notificationmocks.NewMockNotificationService(ctrl)
+	mockUserStore := dbmocks.NewMockStore(ctrl)
+	service := setupSyncService(
+		ctrl,
+		mockClient,
+		mockSyncState,
+		mockRepository,
+		mockPullRequest,
+		mockNotification,
+		mockUserStore,
+	)
 
-	// Pass sync context with pre-computed SinceTimestamp (as would come from GetSyncContext)
 	syncCtx := SyncContext{
 		IsSyncConfigured: true,
-		IsInitialSync:    false, // Initial sync already completed
+		IsInitialSync:    false,
 		SinceTimestamp:   &latestNotification,
 	}
 
@@ -162,29 +177,33 @@ func TestFetchNotificationsToSync_WithExistingState(t *testing.T) {
 	require.Equal(t, "notif-2", threads[0].ID)
 	require.NotNil(t, capturedSince)
 	require.Equal(t, latestNotification, *capturedSince)
-	require.NoError(t, mock.ExpectationsWereMet())
 }
 
 // TestFetchNotificationsToSync_EmptyResults tests when GitHub returns no new notifications
-// FetchNotificationsToSync is now a pure function - it doesn't update sync state.
 func TestFetchNotificationsToSync_EmptyResults(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-
-	dbConn, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer dbConn.Close()
 
 	mockClient := githubmocks.NewMockClient(ctrl)
 	mockClient.EXPECT().
 		FetchNotifications(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return([]types.NotificationThread{}, nil)
 
-	// FetchNotificationsToSync is a pure function - no DB calls expected
-	service := setupSyncService(t, dbConn, mockClient)
+	mockSyncState := syncstatemocks.NewMockSyncStateService(ctrl)
+	mockRepository := repositorymocks.NewMockRepositoryService(ctrl)
+	mockPullRequest := pullrequestmocks.NewMockPullRequestService(ctrl)
+	mockNotification := notificationmocks.NewMockNotificationService(ctrl)
+	mockUserStore := dbmocks.NewMockStore(ctrl)
+	service := setupSyncService(
+		ctrl,
+		mockClient,
+		mockSyncState,
+		mockRepository,
+		mockPullRequest,
+		mockNotification,
+		mockUserStore,
+	)
 
-	// Non-initial sync with empty results - no state updates expected
-	// (state management is now the job's responsibility)
 	syncCtx := SyncContext{
 		IsSyncConfigured: true,
 		IsInitialSync:    false,
@@ -194,7 +213,6 @@ func TestFetchNotificationsToSync_EmptyResults(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Len(t, threads, 0)
-	require.NoError(t, mock.ExpectationsWereMet())
 }
 
 // TestFetchNotificationsToSync_ClientError tests handling of GitHub client errors
@@ -202,17 +220,25 @@ func TestFetchNotificationsToSync_ClientError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	dbConn, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer dbConn.Close()
-
 	mockClient := githubmocks.NewMockClient(ctrl)
 	mockClient.EXPECT().
 		FetchNotifications(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(nil, errors.New("API error"))
 
-	// FetchNotificationsToSync is a pure function - no DB calls expected
-	service := setupSyncService(t, dbConn, mockClient)
+	mockSyncState := syncstatemocks.NewMockSyncStateService(ctrl)
+	mockRepository := repositorymocks.NewMockRepositoryService(ctrl)
+	mockPullRequest := pullrequestmocks.NewMockPullRequestService(ctrl)
+	mockNotification := notificationmocks.NewMockNotificationService(ctrl)
+	mockUserStore := dbmocks.NewMockStore(ctrl)
+	service := setupSyncService(
+		ctrl,
+		mockClient,
+		mockSyncState,
+		mockRepository,
+		mockPullRequest,
+		mockNotification,
+		mockUserStore,
+	)
 
 	syncCtx := SyncContext{
 		IsSyncConfigured: true,
@@ -224,73 +250,80 @@ func TestFetchNotificationsToSync_ClientError(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "fetch notifications")
 	require.Nil(t, threads)
-	require.NoError(t, mock.ExpectationsWereMet())
 }
 
 // TestUpdateSyncStateAfterProcessing_Success tests successful sync state update
 func TestUpdateSyncStateAfterProcessing_Success(t *testing.T) {
-	dbConn, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer dbConn.Close()
-
-	latestUpdate := time.Date(2024, 1, 15, 10, 30, 0, 0, time.UTC)
-
-	// UpsertSyncState expects 6 args: userID + 5 params
-	mock.ExpectQuery(`INSERT INTO sync_state`).
-		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
-		WillReturnRows(sqlmock.NewRows([]string{
-			"id", "user_id", "last_successful_poll", "last_notification_etag", "created_at", "updated_at",
-			"latest_notification_at", "initial_sync_completed_at", "oldest_notification_synced_at",
-		}).AddRow(1, "test-user-id", time.Now(), sql.NullString{}, time.Now(), time.Now(),
-			latestUpdate, sql.NullTime{}, sql.NullTime{}))
-
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockClient := githubmocks.NewMockClient(ctrl)
-	service := setupSyncService(t, dbConn, mockClient)
+	latestUpdate := time.Date(2024, 1, 15, 10, 30, 0, 0, time.UTC)
 
-	err = service.UpdateSyncStateAfterProcessing(context.Background(), "test-user-id", latestUpdate)
+	mockClient := githubmocks.NewMockClient(ctrl)
+	mockSyncState := syncstatemocks.NewMockSyncStateService(ctrl)
+	mockRepository := repositorymocks.NewMockRepositoryService(ctrl)
+	mockPullRequest := pullrequestmocks.NewMockPullRequestService(ctrl)
+	mockNotification := notificationmocks.NewMockNotificationService(ctrl)
+	mockUserStore := dbmocks.NewMockStore(ctrl)
+
+	mockSyncState.EXPECT().
+		UpsertSyncStateWithInitialSync(gomock.Any(), "test-user-id", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(models.SyncState{}, nil)
+
+	service := setupSyncService(
+		ctrl,
+		mockClient,
+		mockSyncState,
+		mockRepository,
+		mockPullRequest,
+		mockNotification,
+		mockUserStore,
+	)
+
+	err := service.UpdateSyncStateAfterProcessing(
+		context.Background(),
+		"test-user-id",
+		latestUpdate,
+	)
 
 	require.NoError(t, err)
-	require.NoError(t, mock.ExpectationsWereMet())
 }
 
 // TestUpdateSyncStateAfterProcessing_ZeroTime tests update with zero time
 func TestUpdateSyncStateAfterProcessing_ZeroTime(t *testing.T) {
-	dbConn, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer dbConn.Close()
-
-	// UpsertSyncState expects 6 args: userID + 5 params
-	mock.ExpectQuery(`INSERT INTO sync_state`).
-		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
-		WillReturnRows(sqlmock.NewRows([]string{
-			"id", "user_id", "last_successful_poll", "last_notification_etag", "created_at", "updated_at",
-			"latest_notification_at", "initial_sync_completed_at", "oldest_notification_synced_at",
-		}).AddRow(1, "test-user-id", time.Now(), sql.NullString{}, time.Now(), time.Now(),
-			sql.NullTime{}, sql.NullTime{}, sql.NullTime{}))
-
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	mockClient := githubmocks.NewMockClient(ctrl)
-	service := setupSyncService(t, dbConn, mockClient)
+	mockSyncState := syncstatemocks.NewMockSyncStateService(ctrl)
+	mockRepository := repositorymocks.NewMockRepositoryService(ctrl)
+	mockPullRequest := pullrequestmocks.NewMockPullRequestService(ctrl)
+	mockNotification := notificationmocks.NewMockNotificationService(ctrl)
+	mockUserStore := dbmocks.NewMockStore(ctrl)
 
-	err = service.UpdateSyncStateAfterProcessing(context.Background(), "test-user-id", time.Time{})
+	mockSyncState.EXPECT().
+		UpsertSyncStateWithInitialSync(gomock.Any(), "test-user-id", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(models.SyncState{}, nil)
+
+	service := setupSyncService(
+		ctrl,
+		mockClient,
+		mockSyncState,
+		mockRepository,
+		mockPullRequest,
+		mockNotification,
+		mockUserStore,
+	)
+
+	err := service.UpdateSyncStateAfterProcessing(context.Background(), "test-user-id", time.Time{})
 
 	require.NoError(t, err)
-	require.NoError(t, mock.ExpectationsWereMet())
 }
 
 // TestProcessNotification_RepositoryError tests repository upsert failure
-// Note: Success cases for ProcessNotification are tested via handler-level tests
-// in backend/internal/jobs/handlers/process_notification_test.go which test
-// the full integration through MockSyncOperations.
 func TestProcessNotification_RepositoryError(t *testing.T) {
-	dbConn, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer dbConn.Close()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
 	thread := types.NotificationThread{
 		ID: "notif-123",
@@ -306,48 +339,324 @@ func TestProcessNotification_RepositoryError(t *testing.T) {
 		UpdatedAt: time.Date(2024, 1, 15, 10, 0, 0, 0, time.UTC),
 	}
 
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
 	mockClient := githubmocks.NewMockClient(ctrl)
+	mockSyncState := syncstatemocks.NewMockSyncStateService(ctrl)
+	mockRepository := repositorymocks.NewMockRepositoryService(ctrl)
+	mockPullRequest := pullrequestmocks.NewMockPullRequestService(ctrl)
+	mockNotification := notificationmocks.NewMockNotificationService(ctrl)
+	mockUserStore := dbmocks.NewMockStore(ctrl)
 
-	// Repository upsert fails
-	mock.ExpectQuery(`INSERT INTO repositories`).
-		WillReturnError(errors.New("database error"))
+	mockRepository.EXPECT().
+		UpsertRepository(gomock.Any(), "test-user-id", gomock.Any()).
+		Return(db.Repository{}, errors.New("database error"))
 
-	service := setupSyncService(t, dbConn, mockClient)
+	service := setupSyncService(
+		ctrl,
+		mockClient,
+		mockSyncState,
+		mockRepository,
+		mockPullRequest,
+		mockNotification,
+		mockUserStore,
+	)
 
-	err = service.ProcessNotification(context.Background(), "test-user-id", thread)
+	err := service.ProcessNotification(context.Background(), "test-user-id", thread)
 
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "upsert repository")
-	require.NoError(t, mock.ExpectationsWereMet())
 }
 
 // TestRefreshSubjectData_NotificationNotFound tests error when notification doesn't exist
-// Note: Success cases for RefreshSubjectData are tested via the API handler
-// which calls the sync service through the HTTP endpoint.
 func TestRefreshSubjectData_NotificationNotFound(t *testing.T) {
-	dbConn, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer dbConn.Close()
-
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	mockClient := githubmocks.NewMockClient(ctrl)
+	mockSyncState := syncstatemocks.NewMockSyncStateService(ctrl)
+	mockRepository := repositorymocks.NewMockRepositoryService(ctrl)
+	mockPullRequest := pullrequestmocks.NewMockPullRequestService(ctrl)
+	mockNotification := notificationmocks.NewMockNotificationService(ctrl)
+	mockUserStore := dbmocks.NewMockStore(ctrl)
 
-	mock.ExpectQuery(`SELECT (.+) FROM notifications WHERE user_id = (.+) AND github_id = (.+)`).
-		WithArgs("test-user-id", "nonexistent").
-		WillReturnError(sql.ErrNoRows)
+	mockNotification.EXPECT().
+		GetByGithubID(gomock.Any(), "test-user-id", "nonexistent").
+		Return(db.Notification{}, sql.ErrNoRows)
 
-	service := setupSyncService(t, dbConn, mockClient)
+	service := setupSyncService(
+		ctrl,
+		mockClient,
+		mockSyncState,
+		mockRepository,
+		mockPullRequest,
+		mockNotification,
+		mockUserStore,
+	)
 
-	err = service.RefreshSubjectData(context.Background(), "test-user-id", "nonexistent")
+	_, err := service.RefreshSubjectData(context.Background(), "test-user-id", "nonexistent")
 
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "get notification")
-	require.NoError(t, mock.ExpectationsWereMet())
+	require.Equal(t, sql.ErrNoRows, err)
+}
+
+// TestProcessNotification_RetriableSubjectFetchError tests that retriable errors cause ProcessNotification to fail
+func TestProcessNotification_RetriableSubjectFetchError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	thread := types.NotificationThread{
+		ID: "notif-123",
+		Repository: types.RepositorySnapshot{
+			ID:       789,
+			FullName: "owner/test-repo",
+			Name:     "test-repo",
+		},
+		Subject: types.NotificationSubject{
+			Title: "Test Issue",
+			Type:  "Issue",
+			URL:   "https://api.github.com/repos/owner/test-repo/issues/1",
+		},
+		UpdatedAt: time.Date(2024, 1, 15, 10, 0, 0, 0, time.UTC),
+	}
+
+	mockClient := githubmocks.NewMockClient(ctrl)
+	mockSyncState := syncstatemocks.NewMockSyncStateService(ctrl)
+	mockRepository := repositorymocks.NewMockRepositoryService(ctrl)
+	mockPullRequest := pullrequestmocks.NewMockPullRequestService(ctrl)
+	mockNotification := notificationmocks.NewMockNotificationService(ctrl)
+	mockUserStore := dbmocks.NewMockStore(ctrl)
+
+	mockRepository.EXPECT().
+		UpsertRepository(gomock.Any(), "test-user-id", gomock.Any()).
+		Return(db.Repository{ID: 1}, nil)
+
+	mockClient.EXPECT().
+		FetchSubjectRaw(gomock.Any(), "https://api.github.com/repos/owner/test-repo/issues/1").
+		Return(nil, errors.New("github: subject status 500: internal server error"))
+
+	service := setupSyncService(
+		ctrl,
+		mockClient,
+		mockSyncState,
+		mockRepository,
+		mockPullRequest,
+		mockNotification,
+		mockUserStore,
+	)
+
+	err := service.ProcessNotification(context.Background(), "test-user-id", thread)
+
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "fetch subject")
+}
+
+// TestProcessNotification_NonRetriableSubjectFetchError tests that non-retriable errors allow processing to continue
+func TestProcessNotification_NonRetriableSubjectFetchError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	thread := types.NotificationThread{
+		ID: "notif-123",
+		Repository: types.RepositorySnapshot{
+			ID:       789,
+			FullName: "owner/test-repo",
+			Name:     "test-repo",
+		},
+		Subject: types.NotificationSubject{
+			Title: "Test Issue",
+			Type:  "Issue",
+			URL:   "https://api.github.com/repos/owner/test-repo/issues/1",
+		},
+		UpdatedAt: time.Date(2024, 1, 15, 10, 0, 0, 0, time.UTC),
+	}
+
+	mockClient := githubmocks.NewMockClient(ctrl)
+	mockSyncState := syncstatemocks.NewMockSyncStateService(ctrl)
+	mockRepository := repositorymocks.NewMockRepositoryService(ctrl)
+	mockPullRequest := pullrequestmocks.NewMockPullRequestService(ctrl)
+	mockNotification := notificationmocks.NewMockNotificationService(ctrl)
+	mockUserStore := dbmocks.NewMockStore(ctrl)
+
+	mockRepository.EXPECT().
+		UpsertRepository(gomock.Any(), "test-user-id", gomock.Any()).
+		Return(db.Repository{ID: 1}, nil)
+
+	mockClient.EXPECT().
+		FetchSubjectRaw(gomock.Any(), "https://api.github.com/repos/owner/test-repo/issues/1").
+		Return(nil, errors.New("github: subject status 403: forbidden"))
+
+	mockNotification.EXPECT().
+		UpsertNotification(gomock.Any(), "test-user-id", gomock.Any()).
+		Return(db.Notification{ID: 1, GithubID: "notif-123"}, nil)
+
+	service := setupSyncService(
+		ctrl,
+		mockClient,
+		mockSyncState,
+		mockRepository,
+		mockPullRequest,
+		mockNotification,
+		mockUserStore,
+	)
+
+	err := service.ProcessNotification(context.Background(), "test-user-id", thread)
+
+	require.NoError(t, err)
+}
+
+// TestRefreshSubjectData_ExtractsAuthor tests that RefreshSubjectData extracts and saves author information
+func TestRefreshSubjectData_ExtractsAuthor(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockClient := githubmocks.NewMockClient(ctrl)
+	mockSyncState := syncstatemocks.NewMockSyncStateService(ctrl)
+	mockRepository := repositorymocks.NewMockRepositoryService(ctrl)
+	mockPullRequest := pullrequestmocks.NewMockPullRequestService(ctrl)
+	mockNotification := notificationmocks.NewMockNotificationService(ctrl)
+	mockUserStore := dbmocks.NewMockStore(ctrl)
+
+	notif := db.Notification{
+		ID:           1,
+		UserID:       "test-user-id",
+		GithubID:     "notif-123",
+		RepositoryID: 1,
+		SubjectType:  "Issue", // Not a PullRequest, so GetRepositoryByID won't be called
+		SubjectURL: sql.NullString{
+			String: "https://api.github.com/repos/owner/test-repo/issues/1",
+			Valid:  true,
+		},
+		SubjectFetchedAt: sql.NullTime{Valid: false},
+		AuthorLogin:      sql.NullString{Valid: false},
+	}
+	mockNotification.EXPECT().
+		GetByGithubID(gomock.Any(), "test-user-id", "notif-123").
+		Return(notif, nil)
+
+	subjectJSON := `{"id": 1, "number": 42, "title": "Test Issue", "user": {"login": "testuser", "id": 12345}}`
+	mockClient.EXPECT().
+		FetchSubjectRaw(gomock.Any(), "https://api.github.com/repos/owner/test-repo/issues/1").
+		Return([]byte(subjectJSON), nil)
+
+	mockNotification.EXPECT().
+		UpdateNotificationSubject(gomock.Any(), "test-user-id", gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ string, params db.UpdateNotificationSubjectParams) error {
+			require.True(t, params.AuthorLogin.Valid)
+			require.Equal(t, "testuser", params.AuthorLogin.String)
+			require.True(t, params.AuthorID.Valid)
+			require.Equal(t, int64(12345), params.AuthorID.Int64)
+			return nil
+		})
+
+	service := setupSyncService(
+		ctrl,
+		mockClient,
+		mockSyncState,
+		mockRepository,
+		mockPullRequest,
+		mockNotification,
+		mockUserStore,
+	)
+
+	wasMissing, err := service.RefreshSubjectData(context.Background(), "test-user-id", "notif-123")
+
+	require.NoError(t, err)
+	require.True(t, wasMissing)
+}
+
+// TestRefreshSubjectData_WasMissing tests the wasMissing return value
+func TestRefreshSubjectData_WasMissing(t *testing.T) {
+	subjectJSON := `{"id": 1, "number": 42, "title": "Test Issue", "user": {"login": "testuser", "id": 12345}}`
+
+	tests := []struct {
+		name            string
+		subjectFetched  sql.NullTime
+		authorLogin     sql.NullString
+		expectedMissing bool
+	}{
+		{
+			name:            "both missing returns true",
+			subjectFetched:  sql.NullTime{Valid: false},
+			authorLogin:     sql.NullString{Valid: false},
+			expectedMissing: true,
+		},
+		{
+			name:            "subjectFetched missing returns true",
+			subjectFetched:  sql.NullTime{Valid: false},
+			authorLogin:     sql.NullString{String: "testuser", Valid: true},
+			expectedMissing: true,
+		},
+		{
+			name:            "authorLogin missing returns true",
+			subjectFetched:  sql.NullTime{Time: time.Now(), Valid: true},
+			authorLogin:     sql.NullString{Valid: false},
+			expectedMissing: true,
+		},
+		{
+			name:            "both present returns false",
+			subjectFetched:  sql.NullTime{Time: time.Now(), Valid: true},
+			authorLogin:     sql.NullString{String: "testuser", Valid: true},
+			expectedMissing: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockClient := githubmocks.NewMockClient(ctrl)
+			mockSyncState := syncstatemocks.NewMockSyncStateService(ctrl)
+			mockRepository := repositorymocks.NewMockRepositoryService(ctrl)
+			mockPullRequest := pullrequestmocks.NewMockPullRequestService(ctrl)
+			mockNotification := notificationmocks.NewMockNotificationService(ctrl)
+			mockUserStore := dbmocks.NewMockStore(ctrl)
+
+			notif := db.Notification{
+				ID:           1,
+				UserID:       "test-user-id",
+				GithubID:     "notif-123",
+				RepositoryID: 1,
+				SubjectType:  "Issue", // Not a PullRequest, so GetRepositoryByID won't be called
+				SubjectURL: sql.NullString{
+					String: "https://api.github.com/repos/owner/test-repo/issues/1",
+					Valid:  true,
+				},
+				SubjectFetchedAt: tt.subjectFetched,
+				AuthorLogin:      tt.authorLogin,
+			}
+			mockNotification.EXPECT().
+				GetByGithubID(gomock.Any(), "test-user-id", "notif-123").
+				Return(notif, nil)
+
+			mockClient.EXPECT().
+				FetchSubjectRaw(gomock.Any(), "https://api.github.com/repos/owner/test-repo/issues/1").
+				Return([]byte(subjectJSON), nil)
+
+			// GetRepositoryByID not called for Issue type
+			mockNotification.EXPECT().
+				UpdateNotificationSubject(gomock.Any(), "test-user-id", gomock.Any()).
+				Return(nil)
+
+			service := setupSyncService(
+				ctrl,
+				mockClient,
+				mockSyncState,
+				mockRepository,
+				mockPullRequest,
+				mockNotification,
+				mockUserStore,
+			)
+
+			wasMissing, err := service.RefreshSubjectData(
+				context.Background(),
+				"test-user-id",
+				"notif-123",
+			)
+
+			require.NoError(t, err)
+			require.Equal(t, tt.expectedMissing, wasMissing)
+		})
+	}
 }
 
 // ======================================
@@ -361,7 +670,6 @@ func intPtr(i int) *int {
 
 // TestCalculateSyncSinceDate tests the calculateSyncSinceDate helper
 func TestCalculateSyncSinceDate(t *testing.T) {
-	// Get current time for comparison
 	now := time.Now().UTC()
 
 	tests := []struct {
@@ -395,12 +703,8 @@ func TestCalculateSyncSinceDate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := calculateSyncSinceDate(tt.days)
 
-			// Allow 1 second tolerance for test execution time
 			diff := now.Sub(result)
-			require.InDelta(t, tt.expectedDiff.Seconds(), diff.Seconds(), 1.0,
-				"expected %v, got diff of %v", tt.expectedDiff, diff)
-
-			// Verify result is in UTC
+			require.InDelta(t, tt.expectedDiff.Seconds(), diff.Seconds(), 1.0)
 			require.Equal(t, time.UTC, result.Location())
 		})
 	}
@@ -408,13 +712,12 @@ func TestCalculateSyncSinceDate(t *testing.T) {
 
 // TestApplyInitialSyncLimitsFromContext tests the applyInitialSyncLimitsFromContext helper
 func TestApplyInitialSyncLimitsFromContext(t *testing.T) {
-	// Create test notification threads
 	createThreads := func(count int, allUnread bool) []types.NotificationThread {
 		threads := make([]types.NotificationThread, count)
 		for i := 0; i < count; i++ {
 			threads[i] = types.NotificationThread{
 				ID:     string(rune('A' + i)),
-				Unread: allUnread || i%2 == 0, // Alternate unread if allUnread=false
+				Unread: allUnread || i%2 == 0,
 			}
 		}
 		return threads
@@ -558,53 +861,75 @@ func TestApplyInitialSyncLimitsFromContext(t *testing.T) {
 func TestGetSyncContext(t *testing.T) {
 	tests := []struct {
 		name            string
-		setupMock       func(sqlmock.Sqlmock)
+		setupMocks      func(*gomock.Controller) (db.Store, syncstate.SyncStateService)
 		expectedContext SyncContext
 		expectError     bool
 	}{
 		{
 			name: "initial sync with days configured",
-			setupMock: func(mock sqlmock.Sqlmock) {
-				// GetUser returns user with sync settings (30 days, 100 max count, unread only)
+			setupMocks: func(ctrl *gomock.Controller) (db.Store, syncstate.SyncStateService) {
+				mockUserStore := dbmocks.NewMockStore(ctrl)
 				syncSettingsJSON := `{"initialSyncDays": 30, "initialSyncMaxCount": 100, "initialSyncUnreadOnly": true, "setupCompleted": true}`
-				userRows := sqlmock.NewRows([]string{
-					"id", "github_user_id", "github_username", "github_token_encrypted", "created_at", "updated_at", "sync_settings", "retention_settings", "muted_until", "update_settings",
-				}).AddRow(1, sql.NullString{}, sql.NullString{}, sql.NullString{}, time.Now(), time.Now(), []byte(syncSettingsJSON), sql.NullString{}, sql.NullTime{}, sql.NullString{})
-				mock.ExpectQuery(`SELECT (.+) FROM users`).WillReturnRows(userRows)
+				user := db.User{
+					ID: 1,
+					SyncSettings: db.NullRawMessage{
+						RawMessage: json.RawMessage(syncSettingsJSON),
+						Valid:      true,
+					},
+				}
+				mockUserStore.EXPECT().
+					GetUser(gomock.Any()).
+					Return(user, nil)
 
-				// GetSyncState returns empty state (no initial sync completed)
-				syncStateRows := sqlmock.NewRows([]string{
-					"id", "user_id", "last_successful_poll", "last_notification_etag", "created_at", "updated_at",
-					"latest_notification_at", "initial_sync_completed_at", "oldest_notification_synced_at",
-				}).AddRow(1, "test-user-id", time.Now(), sql.NullString{}, time.Now(), time.Now(), sql.NullTime{}, sql.NullTime{}, sql.NullTime{})
-				mock.ExpectQuery(`SELECT (.+) FROM sync_state`).WillReturnRows(syncStateRows)
+				mockSyncState := syncstatemocks.NewMockSyncStateService(ctrl)
+				mockSyncState.EXPECT().
+					GetSyncState(gomock.Any(), "test-user-id").
+					Return(models.SyncState{
+						InitialSyncCompletedAt: sql.NullTime{Valid: false},
+					}, nil)
+
+				return mockUserStore, mockSyncState
 			},
 			expectedContext: SyncContext{
+				UserID:           "test-user-id",
 				IsSyncConfigured: true,
 				IsInitialSync:    true,
 				MaxCount:         intPtr(100),
 				UnreadOnly:       true,
-				// SinceTimestamp will be set but we can't predict exact value (uses time.Now())
 			},
 			expectError: false,
 		},
 		{
 			name: "initial sync with all-time (nil days)",
-			setupMock: func(mock sqlmock.Sqlmock) {
-				// GetUser returns user with sync settings (no days limit)
+			setupMocks: func(ctrl *gomock.Controller) (db.Store, syncstate.SyncStateService) {
+				mockUserStore := dbmocks.NewMockStore(ctrl)
 				syncSettingsJSON := `{"initialSyncMaxCount": 500, "setupCompleted": true}`
-				userRows := sqlmock.NewRows([]string{
-					"id", "github_user_id", "github_username", "github_token_encrypted", "created_at", "updated_at", "sync_settings", "retention_settings", "muted_until", "update_settings",
-				}).AddRow(1, sql.NullString{}, sql.NullString{}, sql.NullString{}, time.Now(), time.Now(), []byte(syncSettingsJSON), sql.NullString{}, sql.NullTime{}, sql.NullString{})
-				mock.ExpectQuery(`SELECT (.+) FROM users`).WillReturnRows(userRows)
+				user := db.User{
+					ID: 1,
+					SyncSettings: db.NullRawMessage{
+						RawMessage: json.RawMessage(syncSettingsJSON),
+						Valid:      true,
+					},
+				}
+				mockUserStore.EXPECT().
+					GetUser(gomock.Any()).
+					Return(user, nil)
 
-				// GetSyncState returns empty state (no initial sync completed)
-				mock.ExpectQuery(`SELECT (.+) FROM sync_state`).WillReturnError(sql.ErrNoRows)
+				mockSyncState := syncstatemocks.NewMockSyncStateService(ctrl)
+				// GetSyncState returns empty state when no rows found (handled gracefully)
+				mockSyncState.EXPECT().
+					GetSyncState(gomock.Any(), "test-user-id").
+					Return(models.SyncState{
+						InitialSyncCompletedAt: sql.NullTime{Valid: false},
+					}, nil)
+
+				return mockUserStore, mockSyncState
 			},
 			expectedContext: SyncContext{
+				UserID:           "test-user-id",
 				IsSyncConfigured: true,
 				IsInitialSync:    true,
-				SinceTimestamp:   nil, // All time
+				SinceTimestamp:   nil,
 				MaxCount:         intPtr(500),
 				UnreadOnly:       false,
 			},
@@ -612,88 +937,123 @@ func TestGetSyncContext(t *testing.T) {
 		},
 		{
 			name: "regular sync (initial sync already completed)",
-			setupMock: func(mock sqlmock.Sqlmock) {
-				// GetUser returns user with sync settings
+			setupMocks: func(ctrl *gomock.Controller) (db.Store, syncstate.SyncStateService) {
+				mockUserStore := dbmocks.NewMockStore(ctrl)
 				syncSettingsJSON := `{"initialSyncDays": 30, "setupCompleted": true}`
-				userRows := sqlmock.NewRows([]string{
-					"id", "github_user_id", "github_username", "github_token_encrypted", "created_at", "updated_at", "sync_settings", "retention_settings", "muted_until", "update_settings",
-				}).AddRow(1, sql.NullString{}, sql.NullString{}, sql.NullString{}, time.Now(), time.Now(), []byte(syncSettingsJSON), sql.NullString{}, sql.NullTime{}, sql.NullString{})
-				mock.ExpectQuery(`SELECT (.+) FROM users`).WillReturnRows(userRows)
+				user := db.User{
+					ID: 1,
+					SyncSettings: db.NullRawMessage{
+						RawMessage: json.RawMessage(syncSettingsJSON),
+						Valid:      true,
+					},
+				}
+				mockUserStore.EXPECT().
+					GetUser(gomock.Any()).
+					Return(user, nil)
 
-				// GetSyncState returns state with initial sync completed
+				mockSyncState := syncstatemocks.NewMockSyncStateService(ctrl)
 				completedAt := time.Date(2024, 1, 10, 12, 0, 0, 0, time.UTC)
 				latestNotification := time.Date(2024, 1, 14, 10, 0, 0, 0, time.UTC)
-				syncStateRows := sqlmock.NewRows([]string{
-					"id", "user_id", "last_successful_poll", "last_notification_etag", "created_at", "updated_at",
-					"latest_notification_at", "initial_sync_completed_at", "oldest_notification_synced_at",
-				}).AddRow(
-					1, "test-user-id", time.Now(), sql.NullString{}, time.Now(), time.Now(),
-					sql.NullTime{
-						Valid: true,
-						Time:  latestNotification,
-					}, sql.NullTime{Valid: true, Time: completedAt}, sql.NullTime{},
-				)
-				mock.ExpectQuery(`SELECT (.+) FROM sync_state`).WillReturnRows(syncStateRows)
+				mockSyncState.EXPECT().
+					GetSyncState(gomock.Any(), "test-user-id").
+					Return(models.SyncState{
+						LatestNotificationAt:   sql.NullTime{Valid: true, Time: latestNotification},
+						InitialSyncCompletedAt: sql.NullTime{Valid: true, Time: completedAt},
+					}, nil)
+
+				return mockUserStore, mockSyncState
 			},
 			expectedContext: SyncContext{
+				UserID:           "test-user-id",
 				IsSyncConfigured: true,
 				IsInitialSync:    false,
-				// SinceTimestamp should be set to latestNotification
-				UnreadOnly: false,
+				SinceTimestamp:   timePtr(time.Date(2024, 1, 14, 10, 0, 0, 0, time.UTC)),
+				UnreadOnly:       false,
 			},
 			expectError: false,
 		},
 		{
 			name: "sync not configured (no user settings)",
-			setupMock: func(mock sqlmock.Sqlmock) {
-				// GetUser returns user with null sync settings
-				userRows := sqlmock.NewRows([]string{
-					"id", "github_user_id", "github_username", "github_token_encrypted", "created_at", "updated_at", "sync_settings", "retention_settings", "muted_until", "update_settings",
-				}).AddRow(1, sql.NullString{}, sql.NullString{}, sql.NullString{}, time.Now(), time.Now(), nil, sql.NullString{}, sql.NullTime{}, sql.NullString{})
-				mock.ExpectQuery(`SELECT (.+) FROM users`).WillReturnRows(userRows)
+			setupMocks: func(ctrl *gomock.Controller) (db.Store, syncstate.SyncStateService) {
+				mockUserStore := dbmocks.NewMockStore(ctrl)
+				user := db.User{
+					ID:           1,
+					SyncSettings: db.NullRawMessage{Valid: false},
+				}
+				mockUserStore.EXPECT().
+					GetUser(gomock.Any()).
+					Return(user, nil)
+
+				mockSyncState := syncstatemocks.NewMockSyncStateService(ctrl)
+				return mockUserStore, mockSyncState
 			},
 			expectedContext: SyncContext{
+				UserID:           "test-user-id",
 				IsSyncConfigured: false,
 			},
 			expectError: false,
 		},
 		{
 			name: "sync not configured (setup not completed)",
-			setupMock: func(mock sqlmock.Sqlmock) {
-				// GetUser returns user with sync settings where setup is not completed
+			setupMocks: func(ctrl *gomock.Controller) (db.Store, syncstate.SyncStateService) {
+				mockUserStore := dbmocks.NewMockStore(ctrl)
 				syncSettingsJSON := `{"initialSyncDays": 30, "setupCompleted": false}`
-				userRows := sqlmock.NewRows([]string{
-					"id", "github_user_id", "github_username", "github_token_encrypted", "created_at", "updated_at", "sync_settings", "retention_settings", "muted_until", "update_settings",
-				}).AddRow(1, sql.NullString{}, sql.NullString{}, sql.NullString{}, time.Now(), time.Now(), []byte(syncSettingsJSON), sql.NullString{}, sql.NullTime{}, sql.NullString{})
-				mock.ExpectQuery(`SELECT (.+) FROM users`).WillReturnRows(userRows)
+				user := db.User{
+					ID: 1,
+					SyncSettings: db.NullRawMessage{
+						RawMessage: json.RawMessage(syncSettingsJSON),
+						Valid:      true,
+					},
+				}
+				mockUserStore.EXPECT().
+					GetUser(gomock.Any()).
+					Return(user, nil)
+
+				mockSyncState := syncstatemocks.NewMockSyncStateService(ctrl)
+				return mockUserStore, mockSyncState
 			},
 			expectedContext: SyncContext{
+				UserID:           "test-user-id",
 				IsSyncConfigured: false,
 			},
 			expectError: false,
 		},
 		{
 			name: "user retrieval error",
-			setupMock: func(mock sqlmock.Sqlmock) {
-				mock.ExpectQuery(`SELECT (.+) FROM users`).
-					WillReturnError(errors.New("database error"))
+			setupMocks: func(ctrl *gomock.Controller) (db.Store, syncstate.SyncStateService) {
+				mockUserStore := dbmocks.NewMockStore(ctrl)
+				mockUserStore.EXPECT().
+					GetUser(gomock.Any()).
+					Return(db.User{}, errors.New("database error"))
+
+				mockSyncState := syncstatemocks.NewMockSyncStateService(ctrl)
+				return mockUserStore, mockSyncState
 			},
 			expectedContext: SyncContext{},
 			expectError:     true,
 		},
 		{
 			name: "sync state retrieval error",
-			setupMock: func(mock sqlmock.Sqlmock) {
-				// GetUser returns user with sync settings
+			setupMocks: func(ctrl *gomock.Controller) (db.Store, syncstate.SyncStateService) {
+				mockUserStore := dbmocks.NewMockStore(ctrl)
 				syncSettingsJSON := `{"initialSyncDays": 30, "setupCompleted": true}`
-				userRows := sqlmock.NewRows([]string{
-					"id", "github_user_id", "github_username", "github_token_encrypted", "created_at", "updated_at", "sync_settings", "retention_settings", "muted_until", "update_settings",
-				}).AddRow(1, sql.NullString{}, sql.NullString{}, sql.NullString{}, time.Now(), time.Now(), []byte(syncSettingsJSON), sql.NullString{}, sql.NullTime{}, sql.NullString{})
-				mock.ExpectQuery(`SELECT (.+) FROM users`).WillReturnRows(userRows)
+				user := db.User{
+					ID: 1,
+					SyncSettings: db.NullRawMessage{
+						RawMessage: json.RawMessage(syncSettingsJSON),
+						Valid:      true,
+					},
+				}
+				mockUserStore.EXPECT().
+					GetUser(gomock.Any()).
+					Return(user, nil)
 
-				// GetSyncState returns error
-				mock.ExpectQuery(`SELECT (.+) FROM sync_state`).
-					WillReturnError(errors.New("database error"))
+				mockSyncState := syncstatemocks.NewMockSyncStateService(ctrl)
+				mockSyncState.EXPECT().
+					GetSyncState(gomock.Any(), "test-user-id").
+					Return(models.SyncState{}, errors.New("database error"))
+
+				return mockUserStore, mockSyncState
 			},
 			expectedContext: SyncContext{},
 			expectError:     true,
@@ -705,14 +1065,21 @@ func TestGetSyncContext(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			dbConn, mock, err := sqlmock.New()
-			require.NoError(t, err)
-			defer dbConn.Close()
-
-			tt.setupMock(mock)
-
+			mockUserStore, mockSyncState := tt.setupMocks(ctrl)
 			mockClient := githubmocks.NewMockClient(ctrl)
-			service := setupSyncService(t, dbConn, mockClient)
+			mockRepository := repositorymocks.NewMockRepositoryService(ctrl)
+			mockPullRequest := pullrequestmocks.NewMockPullRequestService(ctrl)
+			mockNotification := notificationmocks.NewMockNotificationService(ctrl)
+
+			service := setupSyncService(
+				ctrl,
+				mockClient,
+				mockSyncState,
+				mockRepository,
+				mockPullRequest,
+				mockNotification,
+				mockUserStore,
+			)
 
 			result, err := service.GetSyncContext(context.Background(), "test-user-id")
 
@@ -720,22 +1087,23 @@ func TestGetSyncContext(t *testing.T) {
 				require.Error(t, err)
 			} else {
 				require.NoError(t, err)
+				require.Equal(t, tt.expectedContext.UserID, result.UserID)
 				require.Equal(t, tt.expectedContext.IsSyncConfigured, result.IsSyncConfigured)
 				require.Equal(t, tt.expectedContext.IsInitialSync, result.IsInitialSync)
 				require.Equal(t, tt.expectedContext.UnreadOnly, result.UnreadOnly)
 
-				// Check MaxCount if expected
 				if tt.expectedContext.MaxCount != nil {
 					require.NotNil(t, result.MaxCount)
 					require.Equal(t, *tt.expectedContext.MaxCount, *result.MaxCount)
 				}
 
-				// For initial sync with nil days, SinceTimestamp should be nil
-				if tt.expectedContext.IsSyncConfigured && tt.expectedContext.IsInitialSync && tt.expectedContext.SinceTimestamp == nil && tt.name == "initial sync with all-time (nil days)" {
+				if tt.expectedContext.SinceTimestamp != nil {
+					require.NotNil(t, result.SinceTimestamp)
+					require.Equal(t, tt.expectedContext.SinceTimestamp.Unix(), result.SinceTimestamp.Unix())
+				} else if tt.name == "initial sync with all-time (nil days)" {
 					require.Nil(t, result.SinceTimestamp)
 				}
 			}
-			require.NoError(t, mock.ExpectationsWereMet())
 		})
 	}
 }
@@ -744,66 +1112,64 @@ func TestGetSyncContext(t *testing.T) {
 func TestIsInitialSyncComplete(t *testing.T) {
 	tests := []struct {
 		name           string
-		setupMock      func(sqlmock.Sqlmock)
+		setupMocks     func(*gomock.Controller) syncstate.SyncStateService
 		expectedResult bool
 		expectError    bool
 	}{
 		{
 			name: "initial sync completed returns true",
-			setupMock: func(mock sqlmock.Sqlmock) {
+			setupMocks: func(ctrl *gomock.Controller) syncstate.SyncStateService {
+				mockSyncState := syncstatemocks.NewMockSyncStateService(ctrl)
 				completedAt := time.Date(2024, 1, 15, 10, 0, 0, 0, time.UTC)
-				rows := sqlmock.NewRows([]string{
-					"id", "user_id", "last_successful_poll", "last_notification_etag", "created_at", "updated_at",
-					"latest_notification_at", "initial_sync_completed_at", "oldest_notification_synced_at",
-				}).AddRow(
-					1, "test-user-id", time.Now(), sql.NullString{}, time.Now(), time.Now(),
-					sql.NullTime{
-						Valid: true,
-						Time:  time.Now(),
-					}, sql.NullTime{Valid: true, Time: completedAt}, sql.NullTime{},
-				)
-				mock.ExpectQuery(`SELECT (.+) FROM sync_state`).WillReturnRows(rows)
+				mockSyncState.EXPECT().
+					GetSyncState(gomock.Any(), "test-user-id").
+					Return(models.SyncState{
+						LatestNotificationAt:   sql.NullTime{Valid: true, Time: time.Now()},
+						InitialSyncCompletedAt: sql.NullTime{Valid: true, Time: completedAt},
+					}, nil)
+				return mockSyncState
 			},
 			expectedResult: true,
 			expectError:    false,
 		},
 		{
 			name: "initial sync not completed returns false",
-			setupMock: func(mock sqlmock.Sqlmock) {
-				rows := sqlmock.NewRows([]string{
-					"id", "user_id", "last_successful_poll", "last_notification_etag", "created_at", "updated_at",
-					"latest_notification_at", "initial_sync_completed_at", "oldest_notification_synced_at",
-				}).AddRow(
-					1, "test-user-id", time.Now(), sql.NullString{}, time.Now(), time.Now(),
-					sql.NullTime{
-						Valid: true,
-						Time:  time.Now(),
-					}, sql.NullTime{Valid: false}, sql.NullTime{},
-				)
-				mock.ExpectQuery(`SELECT (.+) FROM sync_state`).WillReturnRows(rows)
+			setupMocks: func(ctrl *gomock.Controller) syncstate.SyncStateService {
+				mockSyncState := syncstatemocks.NewMockSyncStateService(ctrl)
+				mockSyncState.EXPECT().
+					GetSyncState(gomock.Any(), "test-user-id").
+					Return(models.SyncState{
+						LatestNotificationAt:   sql.NullTime{Valid: true, Time: time.Now()},
+						InitialSyncCompletedAt: sql.NullTime{Valid: false},
+					}, nil)
+				return mockSyncState
 			},
 			expectedResult: false,
 			expectError:    false,
 		},
 		{
 			name: "database error returns error",
-			setupMock: func(mock sqlmock.Sqlmock) {
-				mock.ExpectQuery(`SELECT (.+) FROM sync_state`).
-					WillReturnError(errors.New("database error"))
+			setupMocks: func(ctrl *gomock.Controller) syncstate.SyncStateService {
+				mockSyncState := syncstatemocks.NewMockSyncStateService(ctrl)
+				mockSyncState.EXPECT().
+					GetSyncState(gomock.Any(), "test-user-id").
+					Return(models.SyncState{}, errors.New("database error"))
+				return mockSyncState
 			},
 			expectedResult: false,
 			expectError:    true,
 		},
 		{
-			name: "no sync state exists returns false (handled as empty state)",
-			setupMock: func(mock sqlmock.Sqlmock) {
-				// When no sync state exists, GetSyncState returns sql.ErrNoRows
-				// which is handled by returning an empty SyncState (not an error)
-				mock.ExpectQuery(`SELECT (.+) FROM sync_state`).
-					WillReturnError(sql.ErrNoRows)
+			name: "no sync state exists returns false",
+			setupMocks: func(ctrl *gomock.Controller) syncstate.SyncStateService {
+				mockSyncState := syncstatemocks.NewMockSyncStateService(ctrl)
+				mockSyncState.EXPECT().
+					GetSyncState(gomock.Any(), "test-user-id").
+					Return(models.SyncState{}, sql.ErrNoRows)
+				return mockSyncState
 			},
 			expectedResult: false,
-			expectError:    false, // sql.ErrNoRows is handled gracefully
+			expectError:    true,
 		},
 	}
 
@@ -812,14 +1178,22 @@ func TestIsInitialSyncComplete(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			dbConn, mock, err := sqlmock.New()
-			require.NoError(t, err)
-			defer dbConn.Close()
-
-			tt.setupMock(mock)
-
+			mockSyncState := tt.setupMocks(ctrl)
 			mockClient := githubmocks.NewMockClient(ctrl)
-			service := setupSyncService(t, dbConn, mockClient)
+			mockRepository := repositorymocks.NewMockRepositoryService(ctrl)
+			mockPullRequest := pullrequestmocks.NewMockPullRequestService(ctrl)
+			mockNotification := notificationmocks.NewMockNotificationService(ctrl)
+			mockUserStore := dbmocks.NewMockStore(ctrl)
+
+			service := setupSyncService(
+				ctrl,
+				mockClient,
+				mockSyncState,
+				mockRepository,
+				mockPullRequest,
+				mockNotification,
+				mockUserStore,
+			)
 
 			result, err := service.IsInitialSyncComplete(context.Background(), "test-user-id")
 
@@ -829,7 +1203,11 @@ func TestIsInitialSyncComplete(t *testing.T) {
 				require.NoError(t, err)
 				require.Equal(t, tt.expectedResult, result)
 			}
-			require.NoError(t, mock.ExpectationsWereMet())
 		})
 	}
+}
+
+// timePtr is a helper function to create a pointer to a time.Time
+func timePtr(t time.Time) *time.Time {
+	return &t
 }

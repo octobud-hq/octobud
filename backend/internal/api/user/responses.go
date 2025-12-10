@@ -117,3 +117,9 @@ type UpdateCheckResponse struct {
 type VersionResponse struct {
 	Version string `json:"version"`
 }
+
+// RestartResponse represents the response from restarting the application
+type RestartResponse struct {
+	Status  string `json:"status"`
+	Message string `json:"message,omitempty"`
+}

@@ -195,6 +195,10 @@ func (s *Service) FetchOlderNotificationsToSync(
 
 // UpdateSyncStateAfterProcessing updates the sync state after notifications have been processed.
 // This should be called after all notification jobs have been queued or processed.
+//
+// It always updates LastSuccessfulPoll to the current time (indicating a successful poll occurred).
+// If latestUpdate is not zero, it also updates LatestNotificationAt to that time.
+// If latestUpdate is zero, LatestNotificationAt remains unchanged (useful when no new notifications were found).
 func (s *Service) UpdateSyncStateAfterProcessing(
 	ctx context.Context,
 	userID string,
@@ -203,7 +207,11 @@ func (s *Service) UpdateSyncStateAfterProcessing(
 	return s.UpdateSyncStateAfterProcessingWithInitialSync(ctx, userID, latestUpdate, nil, nil)
 }
 
-// UpdateSyncStateAfterProcessingWithInitialSync updates the sync state with initial sync tracking
+// UpdateSyncStateAfterProcessingWithInitialSync updates the sync state with initial sync tracking.
+//
+// It always updates LastSuccessfulPoll to the current time (indicating a successful poll occurred).
+// If latestUpdate is not zero, it also updates LatestNotificationAt to that time.
+// If latestUpdate is zero, LatestNotificationAt remains unchanged (useful when no new notifications were found).
 func (s *Service) UpdateSyncStateAfterProcessingWithInitialSync(
 	ctx context.Context,
 	userID string,
@@ -221,8 +229,8 @@ func (s *Service) UpdateSyncStateAfterProcessingWithInitialSync(
 	if _, err := s.syncStateService.UpsertSyncStateWithInitialSync(
 		ctx,
 		userID,
-		&now,
-		latestNotification,
+		&now,               // Always update LastSuccessfulPoll to current time
+		latestNotification, // Only update LatestNotificationAt if we have new notifications
 		initialSyncCompletedAt,
 		oldestNotificationSyncedAt,
 	); err != nil {
@@ -302,9 +310,17 @@ func (s *Service) ProcessNotification(
 		fetched := s.clock().UTC()
 		subjectFetchedAt = models.SQLNullTime(&fetched)
 	} else if err != nil {
-		// Log but don't fail - subject fetch is optional
+		// Check if error is retriable - if so, return error to trigger job retry
+		if github.IsRetriableError(err) {
+			s.logger.Warn("failed to fetch subject data (retriable error, will retry)",
+				zap.String("githubID", thread.ID),
+				zap.String("subjectURL", thread.Subject.URL),
+				zap.Error(err))
+			return errors.Join(ErrFailedToFetchSubject, err)
+		}
+		// Non-retriable error - log but don't fail, continue without subject data
 		//nolint:lll // Long warning message with multiple zap fields
-		s.logger.Warn("failed to fetch subject data (continuing without it)", zap.String("githubID", thread.ID), zap.String("subjectURL", thread.Subject.URL), zap.Error(err))
+		s.logger.Warn("failed to fetch subject data (non-retriable, continuing without it)", zap.String("githubID", thread.ID), zap.String("subjectURL", thread.Subject.URL), zap.Error(err))
 	}
 
 	// Process pull request metadata if subject is a PullRequest
@@ -426,8 +442,9 @@ func (s *Service) upsertPullRequestFromSubject(
 	return &pr, nil
 }
 
-// RefreshSubjectData fetches fresh subject data from GitHub and updates the notification
-func (s *Service) RefreshSubjectData(ctx context.Context, userID, githubID string) error {
+// RefreshSubjectData fetches fresh subject data from GitHub and updates the notification.
+// Returns (wasMissing, error) where wasMissing indicates if subject data was previously missing.
+func (s *Service) RefreshSubjectData(ctx context.Context, userID, githubID string) (bool, error) {
 	// Get the notification
 	notification, err := s.notificationService.GetByGithubID(ctx, userID, githubID)
 	if err != nil {
@@ -436,8 +453,11 @@ func (s *Service) RefreshSubjectData(ctx context.Context, userID, githubID strin
 			zap.String("githubID", githubID),
 			zap.Error(err),
 		)
-		return err
+		return false, err
 	}
+
+	// Check if subject data was previously missing
+	wasMissing := !notification.SubjectFetchedAt.Valid || !notification.AuthorLogin.Valid
 
 	// Skip refresh for CI activity and Discussions (no API endpoint available)
 	normalizedType := strings.ToLower(strings.ReplaceAll(notification.SubjectType, "_", ""))
@@ -448,12 +468,12 @@ func (s *Service) RefreshSubjectData(ctx context.Context, userID, githubID strin
 			zap.String("githubID", githubID),
 			zap.String("subjectType", notification.SubjectType),
 		)
-		return ErrNotificationMissingSubjectURL // Return same error as missing URL for consistency
+		return wasMissing, ErrNotificationMissingSubjectURL // Return same error as missing URL for consistency
 	}
 
 	if !notification.SubjectURL.Valid || notification.SubjectURL.String == "" {
 		s.logger.Warn("notification has no subject URL", zap.String("githubID", githubID))
-		return ErrNotificationMissingSubjectURL
+		return wasMissing, ErrNotificationMissingSubjectURL
 	}
 
 	// Fetch fresh subject data
@@ -465,7 +485,7 @@ func (s *Service) RefreshSubjectData(ctx context.Context, userID, githubID strin
 			zap.String("subjectURL", notification.SubjectURL.String),
 			zap.Error(err),
 		)
-		return errors.Join(ErrFailedToFetchSubject, err)
+		return wasMissing, errors.Join(ErrFailedToFetchSubject, err)
 	}
 
 	// Update the notification with fresh subject data
@@ -490,7 +510,7 @@ func (s *Service) RefreshSubjectData(ctx context.Context, userID, githubID strin
 				zap.Int64("repositoryID", notification.RepositoryID),
 				zap.Error(repoErr),
 			)
-			return errors.Join(ErrFailedToGetRepository, repoErr)
+			return wasMissing, errors.Join(ErrFailedToGetRepository, repoErr)
 		}
 
 		if pr, prErr := s.upsertPullRequestFromSubject(ctx, userID, repo.ID, subjectPayload.RawMessage); prErr == nil &&
@@ -507,12 +527,15 @@ func (s *Service) RefreshSubjectData(ctx context.Context, userID, githubID strin
 		}
 	}
 
-	// Extract subject metadata from fresh subject data
+	// Extract author and subject metadata from fresh subject data
+	var authorLogin sql.NullString
+	var authorID sql.NullInt64
 	var subjectNumber sql.NullInt32
 	var subjectState sql.NullString
 	var subjectMerged sql.NullBool
 	var subjectStateReason sql.NullString
 	if subjectPayload.Valid {
+		authorLogin, authorID = github.ExtractAuthorFromSubject(subjectPayload.RawMessage)
 		subjectNumber = github.ExtractSubjectNumber(subjectPayload.RawMessage)
 		subjectState = github.ExtractSubjectState(subjectPayload.RawMessage)
 		subjectMerged = github.ExtractSubjectMerged(subjectPayload.RawMessage)
@@ -532,6 +555,8 @@ func (s *Service) RefreshSubjectData(ctx context.Context, userID, githubID strin
 			SubjectState:       subjectState,
 			SubjectMerged:      subjectMerged,
 			SubjectStateReason: subjectStateReason,
+			AuthorLogin:        authorLogin,
+			AuthorID:           authorID,
 		},
 	)
 	if err != nil {
@@ -540,10 +565,10 @@ func (s *Service) RefreshSubjectData(ctx context.Context, userID, githubID strin
 			zap.String("githubID", githubID),
 			zap.Error(err),
 		)
-		return err
+		return wasMissing, err
 	}
 
-	return nil
+	return wasMissing, nil
 }
 
 // ProcessNotificationData processes a notification from JSON data.

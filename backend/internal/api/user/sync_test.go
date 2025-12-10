@@ -34,33 +34,9 @@ import (
 	authmocks "github.com/octobud-hq/octobud/backend/internal/core/auth/mocks"
 	syncstatemocks "github.com/octobud-hq/octobud/backend/internal/core/syncstate/mocks"
 	"github.com/octobud-hq/octobud/backend/internal/jobs"
+	jobsmocks "github.com/octobud-hq/octobud/backend/internal/jobs/mocks"
 	"github.com/octobud-hq/octobud/backend/internal/models"
 )
-
-// mockScheduler is a simple mock for jobs.Scheduler
-type mockScheduler struct {
-	enqueueSyncOlderFn func(ctx context.Context, args jobs.SyncOlderNotificationsArgs) error
-}
-
-func (m *mockScheduler) Start(_ context.Context) error { return nil }
-func (m *mockScheduler) Stop(_ context.Context) error  { return nil }
-func (m *mockScheduler) EnqueueSyncNotifications(_ context.Context, _ string) error {
-	return nil
-}
-func (m *mockScheduler) EnqueueProcessNotification(_ context.Context, _ string, _ []byte) error {
-	return nil
-}
-func (m *mockScheduler) EnqueueApplyRule(_ context.Context, _, _ string) error { return nil }
-
-func (m *mockScheduler) EnqueueSyncOlder(
-	ctx context.Context,
-	args jobs.SyncOlderNotificationsArgs,
-) error {
-	if m.enqueueSyncOlderFn != nil {
-		return m.enqueueSyncOlderFn(ctx, args)
-	}
-	return nil
-}
 
 func setupTestHandler(ctrl *gomock.Controller) (*Handler, *authmocks.MockAuthService) {
 	logger := zap.NewNop()
@@ -463,16 +439,19 @@ func TestHandler_HandleSyncOlder(t *testing.T) {
 					}, nil)
 				h.syncStateSvc = mockSyncState
 
-				h.scheduler = &mockScheduler{
-					enqueueSyncOlderFn: func(_ context.Context, args jobs.SyncOlderNotificationsArgs) error {
+				mockScheduler := jobsmocks.NewMockScheduler(ctrl)
+				mockScheduler.EXPECT().
+					EnqueueSyncOlder(gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, args jobs.SyncOlderNotificationsArgs) error {
 						require.Equal(t, 30, args.Days)
 						require.Equal(t, oldestTime, args.UntilTime)
 						require.NotNil(t, args.MaxCount)
 						require.Equal(t, 100, *args.MaxCount)
 						require.False(t, args.UnreadOnly)
 						return nil
-					},
-				}
+					}).
+					Times(1)
+				h.scheduler = mockScheduler
 			},
 			expectedStatus: http.StatusAccepted,
 		},
@@ -488,13 +467,16 @@ func TestHandler_HandleSyncOlder(t *testing.T) {
 				h.syncStateSvc = mockSyncState
 
 				expectedUntilTime := time.Date(2024, 2, 1, 12, 0, 0, 0, time.UTC)
-				h.scheduler = &mockScheduler{
-					enqueueSyncOlderFn: func(_ context.Context, args jobs.SyncOlderNotificationsArgs) error {
+				mockScheduler := jobsmocks.NewMockScheduler(ctrl)
+				mockScheduler.EXPECT().
+					EnqueueSyncOlder(gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, args jobs.SyncOlderNotificationsArgs) error {
 						require.Equal(t, 30, args.Days)
 						require.Equal(t, expectedUntilTime, args.UntilTime)
 						return nil
-					},
-				}
+					}).
+					Times(1)
+				h.scheduler = mockScheduler
 			},
 			expectedStatus: http.StatusAccepted,
 		},
@@ -507,7 +489,8 @@ func TestHandler_HandleSyncOlder(t *testing.T) {
 			setupHandler: func(h *Handler, ctrl *gomock.Controller) {
 				mockSyncState := syncstatemocks.NewMockSyncStateService(ctrl)
 				h.syncStateSvc = mockSyncState
-				h.scheduler = &mockScheduler{}
+				mockScheduler := jobsmocks.NewMockScheduler(ctrl)
+				h.scheduler = mockScheduler
 			},
 			expectedStatus: http.StatusBadRequest,
 			expectedBody: func(t *testing.T, w *httptest.ResponseRecorder) {
@@ -531,7 +514,12 @@ func TestHandler_HandleSyncOlder(t *testing.T) {
 						OldestNotificationSyncedAt: sql.NullTime{Time: oldestTime, Valid: true},
 					}, nil)
 				h.syncStateSvc = mockSyncState
-				h.scheduler = &mockScheduler{}
+				mockScheduler := jobsmocks.NewMockScheduler(ctrl)
+				mockScheduler.EXPECT().
+					EnqueueSyncOlder(gomock.Any(), gomock.Any()).
+					Return(nil).
+					Times(1)
+				h.scheduler = mockScheduler
 			},
 			expectedStatus: http.StatusAccepted,
 		},
@@ -629,7 +617,8 @@ func TestHandler_HandleSyncOlder(t *testing.T) {
 						OldestNotificationSyncedAt: sql.NullTime{Valid: false},
 					}, nil)
 				h.syncStateSvc = mockSyncState
-				h.scheduler = &mockScheduler{}
+				mockScheduler := jobsmocks.NewMockScheduler(ctrl)
+				h.scheduler = mockScheduler
 			},
 			expectedStatus: http.StatusBadRequest,
 			expectedBody: func(t *testing.T, w *httptest.ResponseRecorder) {
@@ -650,7 +639,8 @@ func TestHandler_HandleSyncOlder(t *testing.T) {
 					GetSyncState(gomock.Any(), "test-user-id").
 					Return(models.SyncState{}, errors.New("database error"))
 				h.syncStateSvc = mockSyncState
-				h.scheduler = &mockScheduler{}
+				mockScheduler := jobsmocks.NewMockScheduler(ctrl)
+				h.scheduler = mockScheduler
 			},
 			expectedStatus: http.StatusInternalServerError,
 		},
@@ -668,11 +658,12 @@ func TestHandler_HandleSyncOlder(t *testing.T) {
 						OldestNotificationSyncedAt: sql.NullTime{Time: oldestTime, Valid: true},
 					}, nil)
 				h.syncStateSvc = mockSyncState
-				h.scheduler = &mockScheduler{
-					enqueueSyncOlderFn: func(_ context.Context, _ jobs.SyncOlderNotificationsArgs) error {
-						return errors.New("queue error")
-					},
-				}
+				mockScheduler := jobsmocks.NewMockScheduler(ctrl)
+				mockScheduler.EXPECT().
+					EnqueueSyncOlder(gomock.Any(), gomock.Any()).
+					Return(errors.New("queue error")).
+					Times(1)
+				h.scheduler = mockScheduler
 			},
 			expectedStatus: http.StatusInternalServerError,
 		},

@@ -17,7 +17,10 @@ package user
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -228,6 +231,81 @@ func (h *Handler) HandleCheckForUpdates(w http.ResponseWriter, r *http.Request) 
 func (h *Handler) HandleGetVersion(w http.ResponseWriter, r *http.Request) {
 	response := VersionResponse{
 		Version: version.Get(),
+	}
+
+	helpers.WriteJSON(w, http.StatusOK, response)
+}
+
+// HandleGetInstalledVersion handles GET /api/user/installed-version
+// Returns the version of the installed app bundle (from Info.plist on macOS)
+func (h *Handler) HandleGetInstalledVersion(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	var installedVersion string
+	var err error
+
+	if h.osActionsSvc != nil {
+		installedVersion, err = h.osActionsSvc.GetInstalledAppVersion(ctx)
+		if err != nil {
+			h.logger.Warn("failed to get installed app version, falling back to running version",
+				zap.Error(err),
+			)
+			// If we can't read it, return the running version as fallback
+			installedVersion = version.Get()
+		}
+	} else {
+		// If OS actions service is not available, fall back to running version
+		installedVersion = version.Get()
+	}
+
+	response := VersionResponse{
+		Version: installedVersion,
+	}
+
+	helpers.WriteJSON(w, http.StatusOK, response)
+}
+
+// HandleRestart handles POST /api/user/restart
+// Restarts the application (macOS only)
+func (h *Handler) HandleRestart(w http.ResponseWriter, r *http.Request) {
+	if h.osActionsSvc == nil {
+		helpers.WriteError(w, http.StatusServiceUnavailable, "App restart service not available")
+		return
+	}
+
+	// Extract baseURL from request (Origin or Referer header)
+	// This allows us to find and refresh existing tabs after restart
+	baseURL := r.Header.Get("Origin")
+	if baseURL == "" {
+		baseURL = r.Header.Get("Referer")
+		// If Referer is a full URL, extract just the origin
+		if baseURL != "" {
+			if parsedURL, err := url.Parse(baseURL); err == nil {
+				baseURL = fmt.Sprintf("%s://%s", parsedURL.Scheme, parsedURL.Host)
+			}
+		}
+	}
+
+	// Use OS actions service to restart the app
+	ctx := r.Context()
+	if err := h.osActionsSvc.RestartApp(ctx, baseURL); err != nil {
+		// Check if it's a platform not supported error
+		if strings.Contains(err.Error(), "not supported") {
+			helpers.WriteError(
+				w,
+				http.StatusNotImplemented,
+				"Restart not supported on this platform",
+			)
+			return
+		}
+		h.logger.Error("failed to restart app", zap.Error(err))
+		helpers.WriteError(w, http.StatusInternalServerError, "Failed to restart")
+		return
+	}
+
+	response := RestartResponse{
+		Status:  "restarting",
+		Message: "Octobud will restart shortly",
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, response)

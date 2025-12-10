@@ -43,6 +43,9 @@ type Scheduler interface {
 
 	// EnqueueSyncOlder enqueues a job to sync older notifications
 	EnqueueSyncOlder(ctx context.Context, args SyncOlderNotificationsArgs) error
+
+	// EnqueueApplyRulesToNotification enqueues a job to apply all enabled rules to a single notification
+	EnqueueApplyRulesToNotification(ctx context.Context, userID string, githubID string) error
 }
 
 // JobHandler defines the interface for handling different job types

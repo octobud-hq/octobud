@@ -19,6 +19,8 @@ import {
 	checkForUpdates,
 	getUpdateSettings,
 	updateUpdateSettings,
+	getVersion,
+	getInstalledVersion,
 	type UpdateSettings,
 	type UpdateCheckResponse,
 } from "$lib/api/user";
@@ -34,10 +36,13 @@ export function createUpdateStore() {
 	const error = writable<string | null>(null);
 	const settings = writable<UpdateSettings | null>(null);
 	const lastCheckedAt = writable<Date | null>(null);
+	const restartNeeded = writable<boolean>(false);
+	const installedVersion = writable<string | null>(null);
 
 	// Polling interval ID
 	let pollIntervalId: ReturnType<typeof setInterval> | null = null;
 	let pollTimeoutId: ReturnType<typeof setTimeout> | null = null;
+	let restartCheckIntervalId: ReturnType<typeof setInterval> | null = null;
 
 	// Derived store for whether an update is available
 	const updateAvailable = derived(updateInfo, ($updateInfo) => {
@@ -210,11 +215,53 @@ export function createUpdateStore() {
 	}
 
 	/**
+	 * Check if restart is needed by comparing running version with installed version
+	 */
+	async function checkRestartNeeded(): Promise<void> {
+		try {
+			const [runningVersion, installed] = await Promise.all([getVersion(), getInstalledVersion()]);
+
+			// Compare versions (strip 'v' prefix if present)
+			const running = runningVersion.version.replace(/^v/, "");
+			const installedVer = installed.version.replace(/^v/, "");
+
+			if (running !== installedVer) {
+				restartNeeded.set(true);
+				installedVersion.set(installedVer);
+			} else {
+				restartNeeded.set(false);
+				installedVersion.set(null);
+			}
+		} catch (err) {
+			console.error("Failed to check restart needed:", err);
+			// Silently fail - don't show banner if check fails
+			restartNeeded.set(false);
+			installedVersion.set(null);
+		}
+	}
+
+	/**
+	 * Dismiss restart banner for the current session
+	 */
+	function dismissRestartBanner(): void {
+		restartNeeded.set(false);
+	}
+
+	/**
 	 * Initialize the store - load settings and start polling
 	 */
 	async function initialize(): Promise<void> {
 		await loadSettings();
 		startPolling();
+		// Check for restart needed on startup
+		await checkRestartNeeded();
+		// Set up periodic check for version mismatch (every 5 minutes)
+		restartCheckIntervalId = setInterval(
+			() => {
+				void checkRestartNeeded();
+			},
+			5 * 60 * 1000
+		);
 	}
 
 	/**
@@ -222,6 +269,10 @@ export function createUpdateStore() {
 	 */
 	function destroy(): void {
 		stopPolling();
+		if (restartCheckIntervalId !== null) {
+			clearInterval(restartCheckIntervalId);
+			restartCheckIntervalId = null;
+		}
 	}
 
 	return {
@@ -232,6 +283,8 @@ export function createUpdateStore() {
 		error: error as Readable<string | null>,
 		settings: settings as Readable<UpdateSettings | null>,
 		lastCheckedAt: lastCheckedAt as Readable<Date | null>,
+		restartNeeded: restartNeeded as Readable<boolean>,
+		installedVersion: installedVersion as Readable<string | null>,
 
 		// Derived stores
 		updateAvailable: updateAvailable as Readable<boolean>,
@@ -244,6 +297,8 @@ export function createUpdateStore() {
 		clearDismissed,
 		startPolling,
 		stopPolling,
+		checkRestartNeeded,
+		dismissRestartBanner,
 		initialize,
 		destroy,
 	};

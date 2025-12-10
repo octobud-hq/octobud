@@ -133,11 +133,12 @@ func (mr *MockSyncOperationsMockRecorder) ProcessNotificationData(ctx, userID, d
 }
 
 // RefreshSubjectData mocks base method.
-func (m *MockSyncOperations) RefreshSubjectData(ctx context.Context, userID, githubID string) error {
+func (m *MockSyncOperations) RefreshSubjectData(ctx context.Context, userID, githubID string) (bool, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "RefreshSubjectData", ctx, userID, githubID)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // RefreshSubjectData indicates an expected call of RefreshSubjectData.

@@ -34,6 +34,7 @@ import (
 	"github.com/octobud-hq/octobud/backend/internal/core/update"
 	"github.com/octobud-hq/octobud/backend/internal/db"
 	"github.com/octobud-hq/octobud/backend/internal/jobs"
+	"github.com/octobud-hq/octobud/backend/internal/osactions"
 )
 
 // Handler handles user-related HTTP routes
@@ -45,6 +46,7 @@ type Handler struct {
 	syncStateSvc  syncstate.SyncStateService // For sync state operations
 	tokenManager  TokenManagerInterface      // For GitHub token management
 	updateService *update.Service            // For update checking
+	osActionsSvc  osactions.Service          // For OS-specific actions (restart, browser tabs, etc.)
 }
 
 // New creates a new user handler
@@ -101,6 +103,12 @@ func (h *Handler) WithUpdateService(service *update.Service) *Handler {
 	return h
 }
 
+// WithOSActionsService sets the OS actions service for platform-specific operations
+func (h *Handler) WithOSActionsService(service osactions.Service) *Handler {
+	h.osActionsSvc = service
+	return h
+}
+
 // Register registers user routes on the provided router.
 func (h *Handler) Register(r chi.Router) {
 	r.Route("/user", func(r chi.Router) {
@@ -136,6 +144,8 @@ func (h *Handler) Register(r chi.Router) {
 		r.Put("/update-settings", h.HandleUpdateUpdateSettings)
 		r.Get("/update-check", h.HandleCheckForUpdates)
 		r.Get("/version", h.HandleGetVersion)
+		r.Get("/installed-version", h.HandleGetInstalledVersion)
+		r.Post("/restart", h.HandleRestart)
 	})
 }
 

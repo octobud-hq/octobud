@@ -111,7 +111,14 @@ func (h *SyncNotificationsHandler) Handle(ctx context.Context, userID string) (*
 
 	if len(threads) == 0 {
 		h.logger.Debug("no new notifications found")
-		return nil, nil
+		// Return a result with zero LatestUpdate so we can still update LastSuccessfulPoll
+		// even when there are no new notifications
+		return &SyncResult{
+			UserID:        userID,
+			Threads:       []types.NotificationThread{},
+			LatestUpdate:  time.Time{}, // Zero time indicates no new notifications
+			IsInitialSync: syncCtx.IsInitialSync,
+		}, nil
 	}
 
 	h.logger.Info("processing notifications", zap.Int("count", len(threads)))
@@ -185,8 +192,10 @@ func (h *SyncNotificationsHandler) Handle(ctx context.Context, userID string) (*
 
 // UpdateSyncState updates the sync state after processing.
 // This is separated so callers can decide how/when to update state.
+// Even when there are no new notifications (LatestUpdate is zero), we still update
+// LastSuccessfulPoll to reflect that a successful poll occurred.
 func (h *SyncNotificationsHandler) UpdateSyncState(ctx context.Context, result *SyncResult) error {
-	if result == nil || result.LatestUpdate.IsZero() {
+	if result == nil {
 		return nil
 	}
 
@@ -201,5 +210,9 @@ func (h *SyncNotificationsHandler) UpdateSyncState(ctx context.Context, result *
 		)
 	}
 
+	// Update sync state even if LatestUpdate is zero.
+	// UpdateSyncStateAfterProcessing always updates LastSuccessfulPoll to the current time,
+	// and only updates LatestNotificationAt if LatestUpdate is non-zero.
+	// This ensures LastSuccessfulPoll reflects when the poll occurred, not when the last notification was received.
 	return h.syncService.UpdateSyncStateAfterProcessing(ctx, result.UserID, result.LatestUpdate)
 }
