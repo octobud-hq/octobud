@@ -32,9 +32,14 @@ import (
 
 const (
 	defaultPerPage    = 50
+	minPerPage        = 10 // Minimum page size for retries
 	githubAPIBase     = "https://api.github.com"
 	githubGraphQLBase = "https://api.github.com/graphql"
 )
+
+// retryPageSizes defines the page sizes to try when encountering 502/504 errors.
+// These are progressively smaller to help with timeout issues.
+var retryPageSizes = []int{25, 15, minPerPage}
 
 // clientImpl wraps calls to the GitHub API for interacting with the Notifications API.
 type clientImpl struct {
@@ -129,11 +134,101 @@ func (c *clientImpl) GetAuthHeaders() map[string]string {
 	}
 }
 
+// isGatewayError checks if a status code is a gateway error (502 or 504).
+func isGatewayError(statusCode int) bool {
+	return statusCode == http.StatusBadGateway || statusCode == http.StatusGatewayTimeout
+}
+
+// fetchNotificationPage attempts to fetch a single page of notifications.
+// If a gateway error (502/504) occurs and retryPageSize > 0, it retries with the smaller page size.
+func (c *clientImpl) fetchNotificationPage(
+	ctx context.Context,
+	page, perPage int,
+	fetchAll bool,
+	since, before *time.Time,
+) ([]types.NotificationThread, error) {
+	// Build URL with query parameters
+	url := fmt.Sprintf(
+		"%s/notifications?all=%t&per_page=%d&page=%d",
+		c.baseURL,
+		fetchAll,
+		perPage,
+		page,
+	)
+	if since != nil {
+		url += "&since=" + since.UTC().Format(time.RFC3339)
+	}
+	if before != nil {
+		url += "&before=" + before.UTC().Format(time.RFC3339)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, http.NoBody)
+	if err != nil {
+		return nil, fmt.Errorf("github: create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("github: fetch notifications page %d: %w", page, err)
+	}
+
+	payload, err := io.ReadAll(resp.Body)
+	if closeErr := resp.Body.Close(); closeErr != nil {
+		// Error closing response body - log if we had a logger, but can't return it
+		_ = closeErr
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("github: read response body page %d: %w", page, err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		// Check if this is a gateway error that we can retry with a smaller page size
+		if isGatewayError(resp.StatusCode) {
+			return nil, fmt.Errorf(
+				"github: API returned status %d (gateway error): %s",
+				resp.StatusCode,
+				string(payload),
+			)
+		}
+		return nil, fmt.Errorf(
+			"github: API returned status %d: %s",
+			resp.StatusCode,
+			string(payload),
+		)
+	}
+
+	if len(bytes.TrimSpace(payload)) == 0 {
+		return []types.NotificationThread{}, nil
+	}
+
+	var pageItems []types.NotificationThread
+	if err := json.Unmarshal(payload, &pageItems); err != nil {
+		return nil, fmt.Errorf("github: decode notifications page %d: %w", page, err)
+	}
+
+	// Add raw JSON to each notification
+	for i := range pageItems {
+		raw, err := json.Marshal(pageItems[i])
+		if err != nil {
+			return nil, fmt.Errorf("github: encode raw notification payload: %w", err)
+		}
+		pageItems[i].Raw = raw
+	}
+
+	return pageItems, nil
+}
+
 // FetchNotifications retrieves notification threads updated since the given instant.
 // When since is nil, GitHub returns the default notification window (typically 90 days).
 // When before is nil, no upper bound is applied.
 // When unreadOnly is false (the safe default), all=true is sent to GitHub to fetch all notifications.
 // When unreadOnly is true, all=false is sent to only fetch unread notifications.
+// If a 502/504 gateway error occurs, it will automatically retry with progressively smaller page sizes.
 func (c *clientImpl) FetchNotifications(
 	ctx context.Context,
 	since *time.Time,
@@ -156,76 +251,78 @@ func (c *clientImpl) FetchNotifications(
 	fetchAll := !unreadOnly
 
 	for {
-		// Build URL with query parameters
-		url := fmt.Sprintf(
-			"%s/notifications?all=%t&per_page=%d&page=%d",
-			c.baseURL,
-			fetchAll,
-			perPage,
-			page,
-		)
-		if since != nil {
-			url += "&since=" + since.UTC().Format(time.RFC3339)
-		}
-		if before != nil {
-			url += "&before=" + before.UTC().Format(time.RFC3339)
-		}
-
-		req, err := http.NewRequestWithContext(ctx, "GET", url, http.NoBody)
-		if err != nil {
-			return nil, fmt.Errorf("github: create request: %w", err)
-		}
-
-		req.Header.Set("Authorization", "Bearer "+c.token)
-		req.Header.Set("Accept", "application/vnd.github+json")
-		req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
-
-		resp, err := c.httpClient.Do(req)
-		if err != nil {
-			return nil, fmt.Errorf("github: fetch notifications page %d: %w", page, err)
-		}
-
-		payload, err := io.ReadAll(resp.Body)
-		if closeErr := resp.Body.Close(); closeErr != nil {
-			// Error closing response body - log if we had a logger, but can't return it
-			_ = closeErr
-		}
-
-		if err != nil {
-			return nil, fmt.Errorf("github: read response body page %d: %w", page, err)
-		}
-
-		if resp.StatusCode != http.StatusOK {
-			return nil, fmt.Errorf(
-				"github: API returned status %d: %s",
-				resp.StatusCode,
-				string(payload),
-			)
-		}
-
-		if len(bytes.TrimSpace(payload)) == 0 {
-			break
-		}
-
 		var pageItems []types.NotificationThread
-		if err := json.Unmarshal(payload, &pageItems); err != nil {
-			return nil, fmt.Errorf("github: decode notifications page %d: %w", page, err)
+		var err error
+
+		// Try fetching the page with current perPage size
+		currentPerPage := perPage
+		pageItems, err = c.fetchNotificationPage(ctx, page, currentPerPage, fetchAll, since, before)
+
+		// If we got a gateway error (502/504), try with progressively smaller page sizes
+		if err != nil && strings.Contains(err.Error(), "gateway error") {
+			// Calculate how many items we've already fetched
+			itemsFetched := len(allNotifications)
+
+			// Try all retry sizes in order until one works
+			for _, retrySize := range retryPageSizes {
+				// Only try sizes smaller than current
+				if retrySize >= currentPerPage {
+					continue
+				}
+				// Don't go below minimum
+				if retrySize < minPerPage {
+					break
+				}
+
+				// When changing per_page mid-pagination, we need to recalculate the page number
+				// to fetch the correct items. Page numbers are 1-indexed.
+				// Formula: newPage = ceil(itemsFetched / newPerPage) + 1
+				// Using integer arithmetic: newPage = (itemsFetched + newPerPage - 1) / newPerPage + 1
+				// But if itemsFetched is 0, we want page 1
+				retryPage := page
+				if itemsFetched > 0 {
+					retryPage = (itemsFetched+retrySize-1)/retrySize + 1
+					// Ensure we don't go backwards (shouldn't happen, but defensive)
+					if retryPage < page {
+						retryPage = page
+					}
+				}
+
+				// Try with this retry size and recalculated page
+				pageItems, err = c.fetchNotificationPage(
+					ctx,
+					retryPage,
+					retrySize,
+					fetchAll,
+					since,
+					before,
+				)
+				if err == nil {
+					// Success - use this size and update page for subsequent fetches
+					perPage = retrySize
+					page = retryPage
+					break
+				}
+				// If it's not a gateway error, stop retrying and return the error
+				if !strings.Contains(err.Error(), "gateway error") {
+					break
+				}
+				// Otherwise, it's still a gateway error, try next smaller size
+			}
+		}
+
+		// If we still have an error after all retries, return it
+		if err != nil {
+			return nil, err
 		}
 
 		if len(pageItems) == 0 {
 			break
 		}
 
-		for i := range pageItems {
-			raw, err := json.Marshal(pageItems[i])
-			if err != nil {
-				return nil, fmt.Errorf("github: encode raw notification payload: %w", err)
-			}
-			pageItems[i].Raw = raw
-		}
-
 		allNotifications = append(allNotifications, pageItems...)
 
+		// If we got fewer items than requested, we're done
 		if len(pageItems) < perPage {
 			break
 		}

@@ -18,8 +18,10 @@ package github
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 
@@ -305,6 +307,351 @@ func TestFetchNotifications(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestFetchNotifications_GatewayErrorRetry(t *testing.T) {
+	tests := []struct {
+		name            string
+		initialPerPage  int
+		gatewayStatus   int
+		gatewayResponse string
+		successResponse string
+		expectedPerPage int // Expected per_page on retry
+		expectedCount   int
+	}{
+		{
+			name:            "502 error retries with smaller page size",
+			initialPerPage:  50,
+			gatewayStatus:   http.StatusBadGateway,
+			gatewayResponse: `<html><body>502 Bad Gateway</body></html>`,
+			successResponse: `[{"id": "1", "reason": "mention", "updated_at": "2024-01-15T10:00:00Z"}]`,
+			expectedPerPage: 25, // Should retry with first retry size
+			expectedCount:   1,
+		},
+		{
+			name:            "504 error retries with smaller page size",
+			initialPerPage:  50,
+			gatewayStatus:   http.StatusGatewayTimeout,
+			gatewayResponse: `<html><body>504 Gateway Timeout</body></html>`,
+			successResponse: `[{"id": "1", "reason": "mention", "updated_at": "2024-01-15T10:00:00Z"}]`,
+			expectedPerPage: 25, // Should retry with first retry size
+			expectedCount:   1,
+		},
+		{
+			name:            "502 error with 25 per_page retries with 15",
+			initialPerPage:  25,
+			gatewayStatus:   http.StatusBadGateway,
+			gatewayResponse: `<html><body>502 Bad Gateway</body></html>`,
+			successResponse: `[{"id": "1", "reason": "mention", "updated_at": "2024-01-15T10:00:00Z"}]`,
+			expectedPerPage: 15, // Should retry with next retry size
+			expectedCount:   1,
+		},
+		{
+			name:            "504 error with 15 per_page retries with 10",
+			initialPerPage:  15,
+			gatewayStatus:   http.StatusGatewayTimeout,
+			gatewayResponse: `<html><body>504 Gateway Timeout</body></html>`,
+			successResponse: `[{"id": "1", "reason": "mention", "updated_at": "2024-01-15T10:00:00Z"}]`,
+			expectedPerPage: 10, // Should retry with minimum size
+			expectedCount:   1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			requestCount := 0
+			gatewayErrorReturned := false
+			server := httptest.NewServer(
+				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					requestCount++
+					require.Equal(t, "/notifications", r.URL.Path)
+
+					// Parse per_page from query
+					query := r.URL.Query()
+					perPageStr := query.Get("per_page")
+					require.NotEmpty(t, perPageStr, "per_page should be in query")
+					perPage, err := strconv.Atoi(perPageStr)
+					require.NoError(t, err)
+
+					// First request with initial per_page should return gateway error
+					if !gatewayErrorReturned && perPage == tt.initialPerPage {
+						gatewayErrorReturned = true
+						w.WriteHeader(tt.gatewayStatus)
+						_, writeErr := w.Write([]byte(tt.gatewayResponse))
+						assert.NoError(t, writeErr, "failed to write gateway error response")
+						return
+					}
+
+					// Subsequent requests should use retry page size
+					if gatewayErrorReturned {
+						require.Equal(t, tt.expectedPerPage, perPage,
+							"retry should use expected per_page size")
+					}
+
+					// Return success response
+					w.WriteHeader(http.StatusOK)
+					_, err = w.Write([]byte(tt.successResponse))
+					assert.NoError(t, err, "failed to write success response")
+				}),
+			)
+			defer server.Close()
+
+			client := newTestClient(server.URL)
+			client.token = testToken
+			client.perPage = tt.initialPerPage
+
+			notifications, err := client.FetchNotifications(
+				context.Background(),
+				nil,
+				nil,
+				false,
+			)
+
+			require.NoError(t, err, "should succeed after retry")
+			require.Len(t, notifications, tt.expectedCount)
+			require.GreaterOrEqual(
+				t,
+				requestCount,
+				2,
+				"should make at least 2 requests (initial + retry)",
+			)
+		})
+	}
+}
+
+func TestFetchNotifications_GatewayErrorProgressiveRetry(t *testing.T) {
+	// Test that we try all retry sizes progressively (25, 15, 10) until one works
+	requestCount := 0
+	perPageAttempts := []int{}
+	server := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			requestCount++
+			query := r.URL.Query()
+			perPageStr := query.Get("per_page")
+			perPage, err := strconv.Atoi(perPageStr)
+			require.NoError(t, err)
+			perPageAttempts = append(perPageAttempts, perPage)
+
+			// Return gateway error for 50 and 25, success for 15
+			if perPage >= 25 {
+				w.WriteHeader(http.StatusBadGateway)
+				_, err = fmt.Fprintf(
+					w,
+					`<html><body>502 Bad Gateway (per_page=%d)</body></html>`,
+					perPage,
+				)
+				assert.NoError(t, err)
+				return
+			}
+
+			// Success with 15
+			w.WriteHeader(http.StatusOK)
+			_, err = w.Write(
+				[]byte(`[{"id": "1", "reason": "mention", "updated_at": "2024-01-15T10:00:00Z"}]`),
+			)
+			assert.NoError(t, err)
+		}),
+	)
+	defer server.Close()
+
+	client := newTestClient(server.URL)
+	client.token = testToken
+	client.perPage = 50 // Start with large size
+
+	notifications, err := client.FetchNotifications(
+		context.Background(),
+		nil,
+		nil,
+		false,
+	)
+
+	require.NoError(t, err, "should succeed after progressive retries")
+	require.Len(t, notifications, 1)
+	require.GreaterOrEqual(t, requestCount, 3, "should try 50, then 25, then 15")
+	// Should have tried: 50 (fail), 25 (fail), 15 (success)
+	require.Contains(t, perPageAttempts, 50, "should have tried 50")
+	require.Contains(t, perPageAttempts, 25, "should have tried 25")
+	require.Contains(t, perPageAttempts, 15, "should have tried 15")
+}
+
+func TestFetchNotifications_GatewayErrorRetryFailsAtMinimum(t *testing.T) {
+	// Test that if we're already at minimum page size and get a gateway error,
+	// we return the error instead of retrying forever
+	requestCount := 0
+	server := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			requestCount++
+			query := r.URL.Query()
+			perPageStr := query.Get("per_page")
+			perPage, err := strconv.Atoi(perPageStr)
+			require.NoError(t, err)
+
+			// Always return gateway error, even at minimum size
+			w.WriteHeader(http.StatusBadGateway)
+			_, err = fmt.Fprintf(
+				w,
+				`<html><body>502 Bad Gateway (per_page=%d)</body></html>`,
+				perPage,
+			)
+			assert.NoError(t, err)
+		}),
+	)
+	defer server.Close()
+
+	client := newTestClient(server.URL)
+	client.token = testToken
+	client.perPage = 10 // Start at minimum
+
+	notifications, err := client.FetchNotifications(
+		context.Background(),
+		nil,
+		nil,
+		false,
+	)
+
+	require.Error(t, err, "should return error when already at minimum")
+	require.Contains(t, err.Error(), "502", "error should mention gateway error")
+	require.Nil(t, notifications)
+	require.Equal(t, 1, requestCount, "should only make one request when already at minimum")
+}
+
+func TestFetchNotifications_GatewayErrorMidPagination(t *testing.T) {
+	// Test that if we encounter a gateway error mid-pagination (e.g., page 3
+	// after successful pages 1 and 2), we correctly recalculate the page number
+	// when retrying with a smaller per_page size to avoid skipping or duplicating items.
+	requestCount := 0
+	perPageAttempts := []int{}
+	pageAttempts := []int{}
+
+	server := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			requestCount++
+			query := r.URL.Query()
+			perPageStr := query.Get("per_page")
+			pageStr := query.Get("page")
+
+			perPage, err := strconv.Atoi(perPageStr)
+			require.NoError(t, err)
+			page, err := strconv.Atoi(pageStr)
+			require.NoError(t, err)
+
+			perPageAttempts = append(perPageAttempts, perPage)
+			pageAttempts = append(pageAttempts, page)
+
+			// Page 1 and 2 succeed with per_page=50
+			if page == 1 && perPage == 50 {
+				// Return 50 items for page 1 (items 1-50)
+				items := make([]string, 50)
+				for i := 0; i < 50; i++ {
+					items[i] = `{"id": "` + strconv.Itoa(
+						i+1,
+					) + `", "reason": "mention", "updated_at": "2024-01-15T10:00:00Z"}`
+				}
+				w.WriteHeader(http.StatusOK)
+				w.Write([]byte("[" + items[0]))
+				for i := 1; i < 50; i++ {
+					w.Write([]byte("," + items[i]))
+				}
+				w.Write([]byte("]"))
+				return
+			}
+
+			if page == 2 && perPage == 50 {
+				// Return 50 items for page 2 (items 51-100)
+				items := make([]string, 50)
+				for i := 0; i < 50; i++ {
+					items[i] = `{"id": "` + strconv.Itoa(
+						i+51,
+					) + `", "reason": "mention", "updated_at": "2024-01-15T10:00:00Z"}`
+				}
+				w.WriteHeader(http.StatusOK)
+				w.Write([]byte("[" + items[0]))
+				for i := 1; i < 50; i++ {
+					w.Write([]byte("," + items[i]))
+				}
+				w.Write([]byte("]"))
+				return
+			}
+
+			// Page 3 with per_page=50 fails
+			if page == 3 && perPage == 50 {
+				w.WriteHeader(http.StatusBadGateway)
+				w.Write([]byte(`<html><body>502 Bad Gateway</body></html>`))
+				return
+			}
+
+			// Retry should recalculate page number: with 100 items already fetched (50+50),
+			// and per_page=25, we need page 5 to get items 101-125
+			// Calculation: (100 + 25 - 1) / 25 + 1 = 124 / 25 + 1 = 4 + 1 = 5
+			if page == 5 && perPage == 25 {
+				// Return items 101-125
+				items := make([]string, 25)
+				for i := 0; i < 25; i++ {
+					items[i] = `{"id": "` + strconv.Itoa(
+						i+101,
+					) + `", "reason": "mention", "updated_at": "2024-01-15T10:00:00Z"}`
+				}
+				w.WriteHeader(http.StatusOK)
+				w.Write([]byte("[" + items[0]))
+				for i := 1; i < 25; i++ {
+					w.Write([]byte("," + items[i]))
+				}
+				w.Write([]byte("]"))
+				return
+			}
+
+			if page == 6 && perPage == 25 {
+				// Return items 126-150 (last page with fewer items)
+				items := make([]string, 25)
+				for i := 0; i < 25; i++ {
+					items[i] = `{"id": "` + strconv.Itoa(
+						i+126,
+					) + `", "reason": "mention", "updated_at": "2024-01-15T10:00:00Z"}`
+				}
+				w.WriteHeader(http.StatusOK)
+				w.Write([]byte("[" + items[0]))
+				for i := 1; i < 25; i++ {
+					w.Write([]byte("," + items[i]))
+				}
+				w.Write([]byte("]"))
+				return
+			}
+
+			// Unknown case - return empty (end of pagination)
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("[]"))
+		}),
+	)
+	defer server.Close()
+
+	client := newTestClient(server.URL)
+	client.token = testToken
+	client.perPage = 50
+
+	notifications, err := client.FetchNotifications(
+		context.Background(),
+		nil,
+		nil,
+		false,
+	)
+
+	require.NoError(t, err)
+	require.Len(t, notifications, 150, "should fetch all 150 items without skipping or duplicating")
+
+	// Verify we got items 1-150 in order
+	for i, notif := range notifications {
+		expectedID := strconv.Itoa(i + 1)
+		require.Equal(t, expectedID, notif.ID, "item %d should have ID %s", i+1, expectedID)
+	}
+
+	// Verify pagination attempts
+	// Should try: page 1 (per_page=50), page 2 (per_page=50), page 3 (per_page=50 fails),
+	// then retry page 5 (per_page=25), page 6 (per_page=25)
+	require.Contains(t, pageAttempts, 1, "should request page 1")
+	require.Contains(t, pageAttempts, 2, "should request page 2")
+	require.Contains(t, pageAttempts, 3, "should request page 3 (which fails)")
+	require.Contains(t, pageAttempts, 5, "should recalculate to page 5 after changing per_page")
+	require.Contains(t, perPageAttempts, 25, "should retry with per_page=25")
 }
 
 func TestFetchNotifications_Pagination(t *testing.T) {

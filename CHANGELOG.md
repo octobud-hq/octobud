@@ -5,6 +5,18 @@ All notable changes to Octobud will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.6]
+
+### Added
+
+- Add progressive page size shrinking when syncing notifications to address an issue where
+some users randomly can't fetch more than 10-15 notifications without getting 502/504 errors.
+
+### Changed
+### Deprecated
+### Removed
+### Fixed
+
 ## [0.1.5]
 
 ### Added
