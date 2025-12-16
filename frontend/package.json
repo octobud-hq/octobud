@@ -48,7 +48,7 @@
     },
     "dependencies": {
         "@floating-ui/dom": "^1.5.4",
-        "@primer/octicons": "^19.21.0",
+        "@primer/octicons": "^19.21.1",
         "dompurify": "^3.3.0",
         "highlight.js": "^11.11.1",
         "marked": "^17.0.1"
