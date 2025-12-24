@@ -113,7 +113,28 @@ export function updateFaviconBadge(count: number): void {
 	};
 
 	img.onerror = () => {
-		console.warn("Failed to load favicon for badge rendering");
+		// Fallback: create badge without original favicon
+		// Draw a simple colored background
+		ctx.fillStyle = "#6366f1"; // indigo-500
+		ctx.fillRect(0, 0, FAVICON_SIZE, FAVICON_SIZE);
+
+		// Draw badge background (red circle)
+		const badgeX = FAVICON_SIZE - BADGE_SIZE / 2;
+		const badgeY = BADGE_SIZE / 2;
+		ctx.fillStyle = "#dc2626"; // red-600
+		ctx.beginPath();
+		ctx.arc(badgeX, badgeY, BADGE_SIZE / 2, 0, 2 * Math.PI);
+		ctx.fill();
+
+		// Draw badge text
+		ctx.fillStyle = "#ffffff";
+		ctx.font = `bold ${BADGE_FONT_SIZE}px Arial, sans-serif`;
+		ctx.textAlign = "center";
+		ctx.textBaseline = "middle";
+		ctx.fillText(badgeText, badgeX, badgeY);
+
+		// Update the favicon
+		updateFaviconHref(canvas.toDataURL("image/png"));
 	};
 
 	// Start loading the image

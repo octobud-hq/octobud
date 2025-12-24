@@ -456,6 +456,9 @@
 		if (browser) {
 			document.body.classList.remove("loading");
 
+			// Initialize favicon for badge rendering
+			initializeFavicon();
+
 			// Set up navigation event source for tray menu navigation
 			navEventSource = new NavigationEventSource({
 				onNavigate: (url: string) => {
@@ -747,11 +750,6 @@
 	// ============================================================================
 	// FAVICON BADGE
 	// ============================================================================
-
-	// Initialize favicon on mount
-	if (browser) {
-		initializeFavicon();
-	}
 
 	// Update favicon badge whenever unread count changes
 	$: if (browser && !isLoginRoute && !isSetupRoute) {
