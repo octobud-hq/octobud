@@ -87,6 +87,11 @@
 	import { getSWHealthStore } from "$lib/stores/swHealthStore";
 	import { setupServiceWorkerHandlers } from "$lib/utils/serviceWorkerMessageHandler";
 	import { NavigationEventSource } from "$lib/api/navigation";
+	import {
+		initializeFavicon,
+		updateFaviconBadge,
+		restoreOriginalFavicon,
+	} from "$lib/utils/faviconBadge";
 
 	// Props
 	export let data: LayoutData;
@@ -455,6 +460,9 @@
 		if (browser) {
 			document.body.classList.remove("loading");
 
+			// Initialize favicon for badge rendering
+			initializeFavicon();
+
 			// Set up navigation event source for tray menu navigation
 			navEventSource = new NavigationEventSource({
 				onNavigate: (url: string) => {
@@ -742,6 +750,26 @@
 				const unreadCount = inboxView?.unreadCount ?? 0;
 				return unreadCount > 0 ? `Octobud (${unreadCount})` : "Octobud";
 			})();
+
+	// ============================================================================
+	// FAVICON BADGE
+	// ============================================================================
+
+	// Get the favicon badge setting
+	const notificationSettingsStore = browser ? getNotificationSettingsStore() : null;
+	const faviconBadgeEnabledStore = notificationSettingsStore?.faviconBadgeEnabled;
+
+	// Update favicon badge whenever unread count changes or setting changes
+	$: if (browser && !isLoginRoute && !isSetupRoute) {
+		const unreadCount = inboxView?.unreadCount ?? 0;
+		const badgeEnabled = faviconBadgeEnabledStore ? $faviconBadgeEnabledStore : true;
+
+		if (badgeEnabled) {
+			updateFaviconBadge(unreadCount);
+		} else {
+			restoreOriginalFavicon();
+		}
+	}
 
 	// ============================================================================
 	// ROUTE-SPECIFIC LOGIC
