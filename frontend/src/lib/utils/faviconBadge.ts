@@ -19,8 +19,10 @@
  */
 
 const FAVICON_SIZE = 32;
-const BADGE_SIZE = 24;
-const BADGE_FONT_SIZE = 20; // Font size with 2px padding (24 - 4 = 20)
+const BADGE_HEIGHT = 20;
+const BADGE_FONT_SIZE = 18; // Font size with 2px padding (24 - 4 = 20)
+const BADGE_TEXT_PADDING = 2;
+const BADGE_CHARACTER_WIDTH = 10;  // Approx pixels per character
 
 let originalFavicon: string | null = null;
 let currentBadgeCount: number | null = null;
@@ -30,9 +32,6 @@ let currentBadgeCount: number | null = null;
  * Returns empty string for 0, the count for 1-50, or "50+" for >50.
  */
 export function getBadgeText(count: number): string {
-	if (count <= 0) {
-		return "";
-	}
 	if (count <= 50) {
 		return count.toString();
 	}
@@ -78,12 +77,23 @@ export function updateFaviconBadge(count: number): void {
 		return;
 	}
 
+	const fontFamily = window.getComputedStyle(document.getElementsByTagName('body')[0])["fontFamily"];
+
 	// Create canvas for drawing
 	const canvas = document.createElement("canvas");
 	canvas.width = FAVICON_SIZE;
 	canvas.height = FAVICON_SIZE;
 	const ctx = canvas.getContext("2d");
 	if (!ctx) return;
+
+	// Set font properties before measuring text
+	ctx.font = `${BADGE_FONT_SIZE}px ${fontFamily}`;
+	ctx.textAlign = "center";
+	ctx.textBaseline = "middle";
+	ctx.letterSpacing = "-1px";
+
+	// Find the badge width as the minimum of (text width + padding) and the favicon size 
+	const badgeWidth = Math.min(FAVICON_SIZE, Math.ceil(ctx.measureText(badgeText).width + BADGE_TEXT_PADDING));
 
 	// Load the original favicon image
 	const img = new Image();
@@ -93,49 +103,27 @@ export function updateFaviconBadge(count: number): void {
 		// Draw the original favicon
 		ctx.drawImage(img, 0, 0, FAVICON_SIZE, FAVICON_SIZE);
 
-		// Draw badge background (white circle)
-		const badgeX = FAVICON_SIZE - BADGE_SIZE / 2;
-		const badgeY = BADGE_SIZE / 2;
+		// Draw badge background (white rounded rectangle)
+		const badgeX = FAVICON_SIZE - badgeWidth;
+		const badgeY = FAVICON_SIZE - BADGE_HEIGHT;
 		ctx.fillStyle = "#ffffff"; // white
-		ctx.beginPath();
-		ctx.arc(badgeX, badgeY, BADGE_SIZE / 2, 0, 2 * Math.PI);
+		ctx.roundRect(badgeX, badgeY, badgeWidth, BADGE_HEIGHT, 5);
 		ctx.fill();
 
 		// Draw badge text
 		ctx.fillStyle = "#000000"; // black
-		ctx.font = `bold ${BADGE_FONT_SIZE}px Arial, sans-serif`;
-		ctx.textAlign = "center";
-		ctx.textBaseline = "middle";
-		ctx.fillText(badgeText, badgeX, badgeY);
+
+		// Find the text X and Y locations based on the badge X and Y, width and height, and padding offsets
+		const textX = badgeX + (badgeWidth / 2) - (BADGE_TEXT_PADDING / 2);
+		const textY = badgeY + (BADGE_HEIGHT / 2) + (BADGE_TEXT_PADDING / 2)
+		ctx.fillText(badgeText, textX, textY);
 
 		// Update the favicon
 		updateFaviconHref(canvas.toDataURL("image/png"));
 	};
 
-	img.onerror = () => {
-		// Fallback: create badge without original favicon
-		// Draw a simple colored background
-		ctx.fillStyle = "#6366f1"; // indigo-500
-		ctx.fillRect(0, 0, FAVICON_SIZE, FAVICON_SIZE);
-
-		// Draw badge background (white circle)
-		const badgeX = FAVICON_SIZE - BADGE_SIZE / 2;
-		const badgeY = BADGE_SIZE / 2;
-		ctx.fillStyle = "#ffffff"; // white
-		ctx.beginPath();
-		ctx.arc(badgeX, badgeY, BADGE_SIZE / 2, 0, 2 * Math.PI);
-		ctx.fill();
-
-		// Draw badge text
-		ctx.fillStyle = "#000000"; // black
-		ctx.font = `bold ${BADGE_FONT_SIZE}px Arial, sans-serif`;
-		ctx.textAlign = "center";
-		ctx.textBaseline = "middle";
-		ctx.fillText(badgeText, badgeX, badgeY);
-
-		// Update the favicon
-		updateFaviconHref(canvas.toDataURL("image/png"));
-	};
+	// Fallback: restore the original favicon
+	img.onerror = () => restoreOriginalFavicon;
 
 	// Start loading the image
 	if (originalFavicon) {
