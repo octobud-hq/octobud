@@ -122,7 +122,9 @@
 		notification.subjectRaw,
 		notification.isRead,
 		notification.subjectState,
-		notification.subjectMerged
+		notification.subjectMerged,
+		notification.subjectTitle,
+		notification.reason
 	);
 	$: statusBarColor = getStatusBarColor(notification.isRead);
 	$: reasonLabel = normalizeReason(notification.reason);

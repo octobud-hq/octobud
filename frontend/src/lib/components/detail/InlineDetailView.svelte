@@ -17,7 +17,11 @@
 	import type { Notification, NotificationDetail } from "$lib/api/types";
 	import { fade } from "svelte/transition";
 	import { onDestroy, getContext, onMount } from "svelte";
-	import { normalizeReason, parseSubjectMetadata } from "$lib/utils/notificationHelpers";
+	import {
+		normalizeReason,
+		parseSubjectMetadata,
+		formatSubjectTypeLabel,
+	} from "$lib/utils/notificationHelpers";
 	import { formatRelativeShort } from "$lib/utils/time";
 	import { getNotificationIcon } from "$lib/utils/notificationIcons";
 	import { getNotificationChip } from "$lib/utils/notificationChips";
@@ -177,29 +181,7 @@
 
 	$: subjectTypeLabel = (() => {
 		const type = detail?.notification.subjectType || notification.subjectType || "Notification";
-		const normalizedType = type.toLowerCase().replace(/[-_\s]/g, "");
-		switch (normalizedType) {
-			case "pullrequest":
-			case "pr":
-				return "Pull Request";
-			case "issue":
-				return "Issue";
-			case "discussion":
-				return "Discussion";
-			case "commit":
-				return "Commit";
-			case "release":
-				return "Release";
-			case "checkrun":
-			case "checksuite":
-			case "workflowrun":
-				return "CI Activity";
-			case "repositoryvulnerabilityalert":
-			case "securityalert":
-				return "Security Alert";
-			default:
-				return type;
-		}
+		return formatSubjectTypeLabel(type);
 	})();
 
 	// Get notification type configuration
@@ -210,20 +192,27 @@
 			: null;
 
 	// Icon and status bar color from shared util
+	// Always use full color in detail view header (alwaysFullColor: true)
 	$: iconConfig = detail
 		? getNotificationIcon(
 				detail.notification.subjectType,
 				detail.notification.subjectRaw,
 				detail.notification.isRead,
 				detail.notification.subjectState,
-				detail.notification.subjectMerged
+				detail.notification.subjectMerged,
+				detail.notification.subjectTitle,
+				detail.notification.reason,
+				true // alwaysFullColor - detail view header should always show full color
 			)
 		: getNotificationIcon(
 				notification.subjectType,
 				notification.subjectRaw,
 				notification.isRead,
 				notification.subjectState,
-				notification.subjectMerged
+				notification.subjectMerged,
+				notification.subjectTitle,
+				notification.reason,
+				true // alwaysFullColor - detail view header should always show full color
 			);
 
 	// Chip configuration for PRs and Issues
@@ -295,6 +284,9 @@
 	$: isPullRequest =
 		detail?.notification.subjectType === "pull_request" ||
 		notification.subjectType === "pull_request";
+
+	$: isRelease =
+		detail?.notification.subjectType === "release" || notification.subjectType === "release";
 
 	$: filesUrl = isPullRequest && githubUrl ? `${githubUrl}/files` : null;
 
@@ -392,6 +384,7 @@
 			? getIconPath("issue-opened")
 			: getIconPath("comment-discussion");
 	const fileDiffIconPath = getIconPath("file-diff");
+	const tagIconPath = getIconPath("tag");
 
 	// Check if this is a CI activity notification (CheckRun/CheckSuite)
 	$: isCIActivity = checkIsCIActivity(detail?.notification.subjectType || notification.subjectType);
@@ -677,6 +670,42 @@
 										/>
 									</svg>
 								</a>
+							{:else if isRelease}
+								<!-- Release: View Release button -->
+								<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
+								<a
+									class="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 px-2.5 py-1.5 text-sm font-light text-gray-700 dark:text-gray-200 transition hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-800 dark:hover:text-gray-200"
+									href={githubUrl}
+									target="_blank"
+									rel="noreferrer"
+								>
+									<!-- Tag/Release icon -->
+									<svg
+										class="h-4 w-4"
+										viewBox="0 0 16 16"
+										fill="currentColor"
+										xmlns="http://www.w3.org/2000/svg"
+									>
+										<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+										{@html tagIconPath}
+									</svg>
+									<span>View Release</span>
+									<!-- External link icon -->
+									<svg
+										class="h-4 w-4"
+										viewBox="0 0 24 24"
+										fill="none"
+										xmlns="http://www.w3.org/2000/svg"
+									>
+										<path
+											d="M10.0002 5H8.2002C7.08009 5 6.51962 5 6.0918 5.21799C5.71547 5.40973 5.40973 5.71547 5.21799 6.0918C5 6.51962 5 7.08009 5 8.2002V15.8002C5 16.9203 5 17.4801 5.21799 17.9079C5.40973 18.2842 5.71547 18.5905 6.0918 18.7822C6.5192 19 7.07899 19 8.19691 19H15.8031C16.921 19 17.48 19 17.9074 18.7822C18.2837 18.5905 18.5905 18.2839 18.7822 17.9076C19 17.4802 19 16.921 19 15.8031V14M20 9V4M20 4H15M20 4L13 11"
+											stroke="currentColor"
+											stroke-width="2"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+										/>
+									</svg>
+								</a>
 							{:else}
 								<!-- Other types: Conversation button -->
 								<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
@@ -769,6 +798,35 @@
 							<p class="text-sm text-gray-600 dark:text-gray-400">
 								This is a CI/CD workflow notification. View the full details on GitHub Actions.
 							</p>
+						</div>
+					{:else if isRelease}
+						<!-- Release: Custom release body view -->
+						<div class="mt-6">
+							<div
+								class={`border border-gray-200 dark:border-gray-800 rounded-lg p-6 leading-relaxed text-gray-900 dark:text-gray-200 ${showLoadingSkeleton ? "shimmer" : ""}`}
+							>
+								{#if showLoadingSkeleton}
+									<!-- Empty during loading -->
+								{:else if !detail}
+									<!-- Waiting for detail to load -->
+									<p class="text-sm text-gray-600 dark:text-gray-400 italic">Loading...</p>
+								{:else if detail.subject?.body && hasVisibleContent(detail.subject.body)}
+									<div
+										class="prose dark:prose-invert prose-sm max-w-none prose-p:text-gray-700 dark:prose-p:text-gray-300 prose-headings:text-gray-900 dark:prose-headings:text-gray-300 prose-headings:font-semibold prose-a:text-indigo-600 dark:prose-a:text-indigo-300 prose-a:no-underline hover:prose-a:text-indigo-700 dark:hover:prose-a:text-indigo-200 hover:prose-a:underline prose-strong:text-gray-900 dark:prose-strong:text-gray-300 prose-strong:font-semibold prose-code:text-gray-800 dark:prose-code:text-gray-300 prose-code:bg-gray-100 dark:prose-code:bg-gray-900 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:before:content-[''] prose-code:after:content-[''] prose-pre:text-gray-800 dark:prose-pre:text-gray-300 prose-pre:bg-gray-100 dark:prose-pre:bg-[#161b22] prose-blockquote:text-gray-600 dark:prose-blockquote:text-gray-400 prose-ul:text-gray-700 dark:prose-ul:text-gray-300 prose-ol:text-gray-700 dark:prose-ol:text-gray-300 prose-li:text-gray-700 dark:prose-li:text-gray-300"
+										in:fade={{ duration: 200 }}
+									>
+										<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+										{@html renderMarkdown(detail.subject.body)}
+									</div>
+								{:else}
+									<p
+										class="text-sm text-gray-600 dark:text-gray-400 italic"
+										in:fade={{ duration: 200 }}
+									>
+										{typeConfig?.emptyContentMessage || "No release notes provided."}
+									</p>
+								{/if}
+							</div>
 						</div>
 					{:else}
 						<!-- GitHub-style Comment Header + Content -->

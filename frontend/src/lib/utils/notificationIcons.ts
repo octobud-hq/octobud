@@ -14,6 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import octicons from "@primer/octicons";
+import { formatSubjectTypeLabel } from "./notificationHelpers";
 
 export interface NotificationIconConfig {
 	path: string;
@@ -34,13 +35,24 @@ function getIconPath(iconName: string): string {
 /**
  * Determines the appropriate icon, color, and label for a notification
  * based on its type and state.
+ * @param subjectType - The type of the subject (e.g., "pullrequest", "issue", "discussion", "commit", "release", "checkrun", "checksuite", "workflowrun")
+ * @param subjectRaw - The raw subject data from the API
+ * @param isRead - Whether the notification has been read
+ * @param subjectState - The state of the subject (e.g., "open", "closed", "merged", "draft")
+ * @param subjectMerged - Whether the subject has been merged
+ * @param subjectTitle - The title of the subject
+ * @param reason - The reason for the notification
+ * @param alwaysFullColor - If true, always use full color regardless of read status (for detail view headers)
  */
 export function getNotificationIcon(
 	subjectType: string,
 	subjectRaw?: unknown,
 	isRead: boolean = false,
 	subjectState?: string,
-	subjectMerged?: boolean
+	subjectMerged?: boolean,
+	subjectTitle?: string,
+	reason?: string,
+	alwaysFullColor: boolean = false
 ): NotificationIconConfig {
 	const normalizedType = subjectType.toLowerCase().replace(/[-_\s]/g, "");
 
@@ -53,7 +65,11 @@ export function getNotificationIcon(
 	// Helper to get color class based on read status
 	// In light mode, keep same color for read/unread (no opacity changes)
 	// In dark mode, apply opacity to read items
+	// If alwaysFullColor is true, always return full color (for detail view headers)
 	const getColorClass = (fullColor: string, dimmedColor: string): string => {
+		if (alwaysFullColor) {
+			return fullColor;
+		}
 		if (isRead) {
 			// Extract light mode color from fullColor (e.g., "text-green-500")
 			// and dark mode dimmed color from dimmedColor (e.g., "dark:text-green-400/50")
@@ -159,10 +175,41 @@ export function getNotificationIcon(
 		normalizedType === "checksuite" ||
 		normalizedType === "workflowrun"
 	) {
+		// Format the actual subject type for the label
+		const formattedLabel = formatSubjectTypeLabel(subjectType);
+
+		// Check if the title contains "Failed" (case-insensitive) to show red icon
+		const isFailed = subjectTitle && subjectTitle.toLowerCase().includes("failed");
+
+		if (isFailed) {
+			return {
+				path: getIconPath("play"),
+				colorClass: getColorClass(
+					"text-red-500 dark:text-red-400",
+					"text-red-400/60 dark:text-red-400/50"
+				),
+				label: formattedLabel,
+			};
+		}
+
+		// Check for approval_requested reason - show orange/amber icon to indicate action needed
+		const normalizedReason = reason?.toLowerCase().replace(/[-_\s]/g, "");
+		if (normalizedReason === "approvalrequested") {
+			return {
+				path: getIconPath("play"),
+				colorClass: getColorClass(
+					"text-orange-500 dark:text-orange-400",
+					"text-orange-400/60 dark:text-orange-400/50"
+				),
+				label: formattedLabel,
+			};
+		}
+
+		// Default: gray play icon for successful/pending CI
 		return {
 			path: getIconPath("play"),
 			colorClass: "text-gray-500 dark:text-gray-400",
-			label: "CI Activity",
+			label: formattedLabel,
 		};
 	}
 

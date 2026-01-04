@@ -283,7 +283,7 @@ jobs:
             
             ### macOS
             
-            - **Apple Silicon (M1/M2/M3)**: [Octobud-${{ steps.version.outputs.VERSION }}-macos-arm64.pkg](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION_TAG }}/Octobud-${{ steps.version.outputs.VERSION }}-macos-arm64.pkg)
+            - **Apple Silicon (M1/M2/M3/M4/M5+)**: [Octobud-${{ steps.version.outputs.VERSION }}-macos-arm64.pkg](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION_TAG }}/Octobud-${{ steps.version.outputs.VERSION }}-macos-arm64.pkg)
             - **Intel**: [Octobud-${{ steps.version.outputs.VERSION }}-macos-amd64.pkg](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION_TAG }}/Octobud-${{ steps.version.outputs.VERSION }}-macos-amd64.pkg)
             
             ### Checksums
@@ -292,7 +292,7 @@ jobs:
             
             ## Auto-Update
             
-            Octobud will automatically check for updates. To manually check, go to Settings → About.
+            Octobud will automatically check for updates. To manually check, go to Settings → Updates.
           files: |
             dist/Octobud-${{ steps.version.outputs.VERSION }}-macos-*.pkg
             dist/checksums.txt

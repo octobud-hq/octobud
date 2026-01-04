@@ -223,7 +223,7 @@ Each release includes:
 
 | Platform | File | Description |
 |----------|------|-------------|
-| macOS (Apple Silicon) | `Octobud-X.Y.Z-macos-arm64.pkg` | Signed installer for M1/M2/M3 Macs |
+| macOS (Apple Silicon) | `Octobud-X.Y.Z-macos-arm64.pkg` | Signed installer for M1/M2/M3/M4/M5+ Macs |
 | macOS (Intel) | `Octobud-X.Y.Z-macos-amd64.pkg` | Signed installer for Intel Macs |
 | All | `checksums.txt` | SHA-256 checksums for all files |
 

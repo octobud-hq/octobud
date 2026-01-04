@@ -162,3 +162,64 @@ export const mailClosedIcon = {
  * Check icon path for done state
  */
 export const checkIconPath = "m4.5 12.75 4.5 4.5 10.5-10.5";
+
+/**
+ * Format subject type names (handles snake_case, camelCase, etc.)
+ * This is a helper used by formatSubjectTypeLabel
+ */
+function formatTypeName(type: string): string {
+	// Handle snake_case: check_run -> Check Run
+	if (type.includes("_")) {
+		return type
+			.split("_")
+			.map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+			.join(" ");
+	}
+	// Handle camelCase: checkRun -> Check Run
+	if (/[a-z][A-Z]/.test(type)) {
+		return type
+			.replace(/([a-z])([A-Z])/g, "$1 $2")
+			.split(" ")
+			.map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+			.join(" ");
+	}
+	// Default: capitalize first letter
+	return type.charAt(0).toUpperCase() + type.slice(1).toLowerCase();
+}
+
+/**
+ * Format subject type for display in badges and labels
+ * Handles known types with specific formatting, and formats unknown types nicely
+ * @param type - The raw subject type (e.g., "pull_request", "check_run", "CheckRun")
+ * @returns Formatted label (e.g., "Pull Request", "Check Run")
+ */
+export function formatSubjectTypeLabel(type: string): string {
+	if (!type) return "Notification";
+
+	// Handle known types with specific formatting
+	const normalizedType = type.toLowerCase().replace(/[-_\s]/g, "");
+	switch (normalizedType) {
+		case "pullrequest":
+		case "pr":
+			return "Pull Request";
+		case "issue":
+			return "Issue";
+		case "discussion":
+			return "Discussion";
+		case "commit":
+			return "Commit";
+		case "release":
+			return "Release";
+		case "repositoryvulnerabilityalert":
+		case "securityalert":
+			return "Security Alert";
+		case "checkrun":
+		case "checksuite":
+		case "workflowrun":
+			// Show actual type: "CheckRun" or "check_run" -> "Check Run"
+			return formatTypeName(type);
+		default:
+			// For unknown types, try to format nicely
+			return formatTypeName(type);
+	}
+}
