@@ -28,13 +28,45 @@ let currentBadgeCount: number | null = null;
 
 /**
  * Get the badge text to display based on count.
- * Returns empty string for 0, the count for 1-50, or "50+" for >50.
+ * Returns "0" for 0, the count as a string for 1-50, or "50+" for >50.
  */
 export function getBadgeText(count: number): string {
 	if (count <= 50) {
 		return count.toString();
 	}
 	return "50+";
+}
+
+/**
+ * Draw a rounded rectangle on the canvas context.
+ * Uses roundRect() if available (Chrome 99+, Firefox 112+, Safari 16+),
+ * otherwise falls back to path-based drawing for older browsers.
+ */
+function drawRoundedRect(
+	ctx: CanvasRenderingContext2D,
+	x: number,
+	y: number,
+	width: number,
+	height: number,
+	radius: number
+): void {
+	if (typeof ctx.roundRect === "function") {
+		// Modern browsers: use native roundRect (supported in Chrome 99+, Firefox 112+, Safari 16+)
+		ctx.roundRect(x, y, width, height, radius);
+	} else {
+		// Fallback for older browsers: draw rounded rectangle using path API
+		ctx.beginPath();
+		ctx.moveTo(x + radius, y);
+		ctx.lineTo(x + width - radius, y);
+		ctx.arcTo(x + width, y, x + width, y + radius, radius);
+		ctx.lineTo(x + width, y + height - radius);
+		ctx.arcTo(x + width, y + height, x + width - radius, y + height, radius);
+		ctx.lineTo(x + radius, y + height);
+		ctx.arcTo(x, y + height, x, y + height - radius, radius);
+		ctx.lineTo(x, y + radius);
+		ctx.arcTo(x, y, x + radius, y, radius);
+		ctx.closePath();
+	}
 }
 
 /**
@@ -68,17 +100,17 @@ export function updateFaviconBadge(count: number): void {
 		initializeFavicon();
 	}
 
-	const badgeText = getBadgeText(count);
-
-	// If no badge needed, restore original favicon
-	if (badgeText === "") {
-		restoreOriginalFavicon();
+	// If no favicon was found, we can't draw a badge
+	if (!originalFavicon) {
 		return;
 	}
 
-	const fontFamily = window.getComputedStyle(document.getElementsByTagName("body")[0])[
-		"fontFamily"
-	];
+	const badgeText = getBadgeText(count);
+
+	const bodyElement = document.getElementsByTagName("body")[0];
+	const fontFamily = bodyElement
+		? window.getComputedStyle(bodyElement)["fontFamily"]
+		: "system-ui, -apple-system, sans-serif";
 
 	// Create canvas for drawing
 	const canvas = document.createElement("canvas");
@@ -111,15 +143,14 @@ export function updateFaviconBadge(count: number): void {
 		const badgeX = FAVICON_SIZE - badgeWidth;
 		const badgeY = FAVICON_SIZE - BADGE_HEIGHT;
 		ctx.fillStyle = "#ffffff"; // white
-		ctx.roundRect(badgeX, badgeY, badgeWidth, BADGE_HEIGHT, 5);
+		drawRoundedRect(ctx, badgeX, badgeY, badgeWidth, BADGE_HEIGHT, 5);
 		ctx.fill();
 
-		// Draw badge text
+		// Draw badge text (centered in the badge)
 		ctx.fillStyle = "#000000"; // black
-
-		// Find the text X and Y locations based on the badge X and Y, width and height, and padding offsets
-		const textX = badgeX + badgeWidth / 2 - BADGE_TEXT_PADDING / 2;
-		const textY = badgeY + BADGE_HEIGHT / 2 + BADGE_TEXT_PADDING / 2;
+		// With textAlign="center" and textBaseline="middle", text is centered at (textX, textY)
+		const textX = badgeX + badgeWidth / 2;
+		const textY = badgeY + BADGE_HEIGHT / 2;
 		ctx.fillText(badgeText, textX, textY);
 
 		// Update the favicon
@@ -127,12 +158,10 @@ export function updateFaviconBadge(count: number): void {
 	};
 
 	// Fallback: restore the original favicon
-	img.onerror = () => restoreOriginalFavicon;
+	img.onerror = () => restoreOriginalFavicon();
 
 	// Start loading the image
-	if (originalFavicon) {
-		img.src = originalFavicon;
-	}
+	img.src = originalFavicon;
 }
 
 /**

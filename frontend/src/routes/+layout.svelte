@@ -23,7 +23,7 @@
 
 	// Framework & Core
 	import { getContext, onDestroy, onMount, setContext } from "svelte";
-	import { get } from "svelte/store";
+	import { get, derived, readable } from "svelte/store";
 	import { browser } from "$app/environment";
 	import { goto, afterNavigate } from "$app/navigation";
 	import { resolve } from "$app/paths";
@@ -759,11 +759,20 @@
 	const notificationSettingsStore = browser ? getNotificationSettingsStore() : null;
 	const faviconBadgeEnabledStore = notificationSettingsStore?.faviconBadgeEnabled;
 
-	// Update favicon badge whenever unread count changes or setting changes
-	$: if (browser && !isLoginRoute && !isSetupRoute) {
-		const unreadCount = inboxView?.unreadCount ?? 0;
-		const badgeEnabled = faviconBadgeEnabledStore ? $faviconBadgeEnabledStore : true;
+	// Create a store that defaults to true when the badge enabled store doesn't exist
+	const badgeEnabledStore = faviconBadgeEnabledStore ?? readable(true);
 
+	// Derived store that only reacts to unreadCount and badgeEnabled changes
+	const faviconBadgeState = derived([views, badgeEnabledStore], ([$views, $badgeEnabled]) => {
+		const systemViewsBySlug = new Map($views.filter((v) => v.systemView).map((v) => [v.slug, v]));
+		const inboxView = systemViewsBySlug.get("inbox");
+		const unreadCount = inboxView?.unreadCount ?? 0;
+		return { unreadCount, badgeEnabled: $badgeEnabled };
+	});
+
+	// Update favicon badge only when relevant values change
+	$: if (browser && !isLoginRoute && !isSetupRoute) {
+		const { unreadCount, badgeEnabled } = $faviconBadgeState;
 		if (badgeEnabled) {
 			updateFaviconBadge(unreadCount);
 		} else {
