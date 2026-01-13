@@ -26,7 +26,7 @@
 	import { getMuteStatus, setMute, clearMute, type MuteStatus } from "$lib/api/user";
 
 	const settingsStore = getNotificationSettingsStore();
-	const { notificationsEnabled } = settingsStore;
+	const { notificationsEnabled, faviconBadgeEnabled } = settingsStore;
 
 	let isSupported = false;
 	let permission: NotificationPermission = "default";
@@ -181,6 +181,15 @@
 	}
 
 	$: canEnable = permission !== "denied";
+
+	function handleFaviconBadgeToggle(enabled: boolean) {
+		settingsStore.setFaviconBadgeEnabled(enabled);
+		if (enabled) {
+			toastStore.success("Unread count badge in tab header enabled");
+		} else {
+			toastStore.success("Unread count badge in tab header disabled");
+		}
+	}
 </script>
 
 <div class="space-y-4">
@@ -222,6 +231,31 @@
 			/>
 			<div
 				class="relative w-9 h-5 bg-gray-300 dark:bg-gray-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600 peer-disabled:opacity-50"
+			></div>
+		</label>
+	</div>
+
+	<!-- Favicon Badge Toggle -->
+	<div class="flex items-center justify-between py-3 border-t border-gray-200 dark:border-gray-800">
+		<div class="flex-1">
+			<div class="flex items-center gap-2">
+				<span class="text-md font-medium text-gray-900 dark:text-gray-100">
+					Show unread notification count in tab header
+				</span>
+			</div>
+			<p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
+				Display a badge on the browser tab favicon showing the number of unread notifications.
+			</p>
+		</div>
+		<label class="relative flex items-center cursor-pointer">
+			<input
+				type="checkbox"
+				checked={$faviconBadgeEnabled}
+				on:change={(e) => handleFaviconBadgeToggle(e.currentTarget.checked)}
+				class="sr-only peer"
+			/>
+			<div
+				class="relative w-9 h-5 bg-gray-300 dark:bg-gray-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"
 			></div>
 		</label>
 	</div>

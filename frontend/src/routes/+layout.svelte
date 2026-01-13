@@ -23,7 +23,7 @@
 
 	// Framework & Core
 	import { getContext, onDestroy, onMount, setContext } from "svelte";
-	import { get } from "svelte/store";
+	import { get, derived, readable } from "svelte/store";
 	import { browser } from "$app/environment";
 	import { goto, afterNavigate } from "$app/navigation";
 	import { resolve } from "$app/paths";
@@ -87,6 +87,11 @@
 	import { getSWHealthStore } from "$lib/stores/swHealthStore";
 	import { setupServiceWorkerHandlers } from "$lib/utils/serviceWorkerMessageHandler";
 	import { NavigationEventSource } from "$lib/api/navigation";
+	import {
+		initializeFavicon,
+		updateFaviconBadge,
+		restoreOriginalFavicon,
+	} from "$lib/utils/faviconBadge";
 
 	// Props
 	export let data: LayoutData;
@@ -455,6 +460,9 @@
 		if (browser) {
 			document.body.classList.remove("loading");
 
+			// Initialize favicon for badge rendering
+			initializeFavicon();
+
 			// Set up navigation event source for tray menu navigation
 			navEventSource = new NavigationEventSource({
 				onNavigate: (url: string) => {
@@ -742,6 +750,35 @@
 				const unreadCount = inboxView?.unreadCount ?? 0;
 				return unreadCount > 0 ? `Octobud (${unreadCount})` : "Octobud";
 			})();
+
+	// ============================================================================
+	// FAVICON BADGE
+	// ============================================================================
+
+	// Get the favicon badge setting
+	const notificationSettingsStore = browser ? getNotificationSettingsStore() : null;
+	const faviconBadgeEnabledStore = notificationSettingsStore?.faviconBadgeEnabled;
+
+	// Create a store that defaults to true when the badge enabled store doesn't exist
+	const badgeEnabledStore = faviconBadgeEnabledStore ?? readable(true);
+
+	// Derived store that only reacts to unreadCount and badgeEnabled changes
+	const faviconBadgeState = derived([views, badgeEnabledStore], ([$views, $badgeEnabled]) => {
+		const systemViewsBySlug = new Map($views.filter((v) => v.systemView).map((v) => [v.slug, v]));
+		const inboxView = systemViewsBySlug.get("inbox");
+		const unreadCount = inboxView?.unreadCount ?? 0;
+		return { unreadCount, badgeEnabled: $badgeEnabled };
+	});
+
+	// Update favicon badge only when relevant values change
+	$: if (browser && !isLoginRoute && !isSetupRoute) {
+		const { unreadCount, badgeEnabled } = $faviconBadgeState;
+		if (badgeEnabled) {
+			updateFaviconBadge(unreadCount);
+		} else {
+			restoreOriginalFavicon();
+		}
+	}
 
 	// ============================================================================
 	// ROUTE-SPECIFIC LOGIC
