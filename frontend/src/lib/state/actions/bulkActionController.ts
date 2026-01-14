@@ -15,6 +15,7 @@
 
 import { get } from "svelte/store";
 import { tick } from "svelte";
+import type { Notification } from "$lib/api/types";
 import type { BulkActions } from "../interfaces/bulkActions";
 import {
 	bulkMarkNotificationsRead,
@@ -32,6 +33,12 @@ import {
 	bulkRemoveTag as apiBulkRemoveTag,
 } from "$lib/api/notifications";
 import { toastStore } from "$lib/stores/toastStore";
+import { undoStore } from "$lib/stores/undoStore";
+import {
+	createUndoableAction,
+	toRecentActionNotification,
+	type UndoableActionType,
+} from "$lib/undo/types";
 import type { NotificationStore } from "../../stores/notificationStore";
 import type { PaginationStore } from "../../stores/paginationStore";
 import type { SelectionStore } from "../../stores/selectionStore";
@@ -77,8 +84,21 @@ export function createBulkActionController(
 		performAction: (ids: string[], query?: string) => Promise<number>;
 		successToast: (count: number) => string;
 		errorToast: string;
+		/** Configuration for making this action undoable (only for ID-based operations) */
+		undoConfig?: {
+			/** The action type for undo purposes */
+			actionType: UndoableActionType;
+			/** Function to perform the inverse operation */
+			createPerformUndo: (ids: string[], notifications: Notification[]) => () => Promise<void>;
+			/** Optional metadata (e.g., tagId, snoozedUntil) */
+			metadata?: {
+				tagId?: string;
+				tagName?: string;
+				snoozedUntil?: string | null;
+			};
+		};
 	}): Promise<void> {
-		const { actionName, performAction, successToast, errorToast } = params;
+		const { actionName, performAction, successToast, errorToast, undoConfig } = params;
 
 		// Determine operation mode and parameters
 		const mode = get(selectionStore.selectAllMode);
@@ -92,20 +112,38 @@ export function createBulkActionController(
 
 		if (count === 0) return;
 
-		// Check for confirmation if needed (> 50 items)
-		const DEFAULT_PAGE_SIZE = 50;
-		if (count > DEFAULT_PAGE_SIZE && options.requestBulkConfirmation) {
+		// Check for confirmation if needed:
+		// - Always confirm for query-based operations (they are NOT undoable)
+		// - Confirm for > 30 items for ID-based operations
+		const DEFAULT_PAGE_SIZE = 30;
+		const needsConfirmation = useQuery || count > DEFAULT_PAGE_SIZE;
+		if (needsConfirmation && options.requestBulkConfirmation) {
 			const actionNameForConfirmation =
 				actionName === "assignTag"
 					? "assign tag"
 					: actionName === "removeTag"
 						? "remove tag"
 						: actionName;
-			const confirmed = await options.requestBulkConfirmation(actionNameForConfirmation, count);
+			const confirmed = await options.requestBulkConfirmation(
+				actionNameForConfirmation,
+				count,
+				useQuery
+			);
 			if (!confirmed) return;
 		}
 
 		uiStore.bulkUpdating.set(true);
+
+		// Capture affected notifications BEFORE the action (for undo history display)
+		// Only do this for ID-based operations (not query-based)
+		let affectedNotifications: Notification[] = [];
+		if (!useQuery && undoConfig) {
+			const pageData = get(notificationStore.pageData);
+			affectedNotifications = pageData.items.filter((item) => {
+				const key = item.githubId ?? item.id;
+				return key && ids.includes(key);
+			});
+		}
 
 		try {
 			// Check if action will dismiss using first item's hints
@@ -157,10 +195,30 @@ export function createBulkActionController(
 				selectionStore.clearSelection();
 			}
 
-			// Show success toast
-			setTimeout(() => {
-				toastStore.success(successToast(actualCount || count));
-			}, 0);
+			// Show success toast with undo support for ID-based operations
+			const toastMessage = successToast(actualCount || count);
+
+			if (!useQuery && undoConfig && affectedNotifications.length > 0) {
+				// Create undoable action and push to undo store (shows toast with undo button)
+				// Use toRecentActionNotification to store only essential fields for lighter storage
+				const undoableAction = createUndoableAction({
+					type: undoConfig.actionType,
+					notifications: affectedNotifications.map(toRecentActionNotification),
+					metadata: undoConfig.metadata,
+					performUndo: undoConfig.createPerformUndo(ids, affectedNotifications),
+				});
+				// Use setTimeout to ensure the UI has updated before showing the toast.
+				// This prevents visual jank from the toast appearing before the list refreshes.
+				setTimeout(() => {
+					undoStore.pushAction(undoableAction);
+				}, 0);
+			} else {
+				// Query-based operations or no undo config - show regular toast
+				// setTimeout used for consistency with undo flow
+				setTimeout(() => {
+					toastStore.success(toastMessage);
+				}, 0);
+			}
 		} catch (err) {
 			console.error(errorToast, err);
 			toastStore.error(errorToast);
@@ -175,6 +233,14 @@ export function createBulkActionController(
 			performAction: (ids, query) => bulkMarkNotificationsRead(ids, query),
 			successToast: (count) => `Marked ${count} notification${count === 1 ? "" : "s"} as read`,
 			errorToast: "Failed to mark notifications as read",
+			undoConfig: {
+				actionType: "markRead",
+				createPerformUndo: (ids) => async () => {
+					await bulkMarkNotificationsUnread(ids);
+					await options.onRefresh?.();
+					await options.onRefreshViewCounts?.();
+				},
+			},
 		});
 	}
 
@@ -184,6 +250,14 @@ export function createBulkActionController(
 			performAction: (ids, query) => bulkMarkNotificationsUnread(ids, query),
 			successToast: (count) => `Marked ${count} notification${count === 1 ? "" : "s"} as unread`,
 			errorToast: "Failed to mark notifications as unread",
+			undoConfig: {
+				actionType: "markUnread",
+				createPerformUndo: (ids) => async () => {
+					await bulkMarkNotificationsRead(ids);
+					await options.onRefresh?.();
+					await options.onRefreshViewCounts?.();
+				},
+			},
 		});
 	}
 
@@ -193,6 +267,14 @@ export function createBulkActionController(
 			performAction: (ids, query) => bulkArchiveNotifications(ids, query),
 			successToast: (count) => `Archived ${count} notification${count === 1 ? "" : "s"}`,
 			errorToast: "Failed to archive notifications",
+			undoConfig: {
+				actionType: "archive",
+				createPerformUndo: (ids) => async () => {
+					await bulkUnarchiveNotifications(ids);
+					await options.onRefresh?.();
+					await options.onRefreshViewCounts?.();
+				},
+			},
 		});
 	}
 
@@ -202,6 +284,14 @@ export function createBulkActionController(
 			performAction: (ids, query) => bulkUnarchiveNotifications(ids, query),
 			successToast: (count) => `Unarchived ${count} notification${count === 1 ? "" : "s"}`,
 			errorToast: "Failed to unarchive notifications",
+			undoConfig: {
+				actionType: "unarchive",
+				createPerformUndo: (ids) => async () => {
+					await bulkArchiveNotifications(ids);
+					await options.onRefresh?.();
+					await options.onRefreshViewCounts?.();
+				},
+			},
 		});
 	}
 
@@ -211,6 +301,14 @@ export function createBulkActionController(
 			performAction: (ids, query) => bulkMuteNotifications(ids, query),
 			successToast: (count) => `Muted ${count} notification${count === 1 ? "" : "s"}`,
 			errorToast: "Failed to mute notifications",
+			undoConfig: {
+				actionType: "mute",
+				createPerformUndo: (ids) => async () => {
+					await bulkUnmuteNotifications(ids);
+					await options.onRefresh?.();
+					await options.onRefreshViewCounts?.();
+				},
+			},
 		});
 	}
 
@@ -220,6 +318,14 @@ export function createBulkActionController(
 			performAction: (ids, query) => bulkUnmuteNotifications(ids, query),
 			successToast: (count) => `Unmuted ${count} notification${count === 1 ? "" : "s"}`,
 			errorToast: "Failed to unmute notifications",
+			undoConfig: {
+				actionType: "unmute",
+				createPerformUndo: (ids) => async () => {
+					await bulkMuteNotifications(ids);
+					await options.onRefresh?.();
+					await options.onRefreshViewCounts?.();
+				},
+			},
 		});
 	}
 
@@ -229,6 +335,15 @@ export function createBulkActionController(
 			performAction: (ids, query) => bulkSnoozeNotifications(ids, snoozedUntil, query),
 			successToast: (count) => `Snoozed ${count} notification${count === 1 ? "" : "s"}`,
 			errorToast: "Failed to snooze notifications",
+			undoConfig: {
+				actionType: "snooze",
+				metadata: { snoozedUntil },
+				createPerformUndo: (ids) => async () => {
+					await bulkUnsnoozeNotifications(ids);
+					await options.onRefresh?.();
+					await options.onRefreshViewCounts?.();
+				},
+			},
 		});
 	}
 
@@ -238,6 +353,8 @@ export function createBulkActionController(
 			performAction: (ids, query) => bulkUnsnoozeNotifications(ids, query),
 			successToast: (count) => `Unsnoozed ${count} notification${count === 1 ? "" : "s"}`,
 			errorToast: "Failed to unsnooze notifications",
+			// Note: unsnooze can't be easily undone as we don't know the original snoozedUntil values
+			// So we don't provide undoConfig for bulk unsnooze
 		});
 	}
 
@@ -247,6 +364,14 @@ export function createBulkActionController(
 			performAction: (ids, query) => bulkStarNotifications(ids, query),
 			successToast: (count) => `Starred ${count} notification${count === 1 ? "" : "s"}`,
 			errorToast: "Failed to star notifications",
+			undoConfig: {
+				actionType: "star",
+				createPerformUndo: (ids) => async () => {
+					await bulkUnstarNotifications(ids);
+					await options.onRefresh?.();
+					await options.onRefreshViewCounts?.();
+				},
+			},
 		});
 	}
 
@@ -256,6 +381,14 @@ export function createBulkActionController(
 			performAction: (ids, query) => bulkUnstarNotifications(ids, query),
 			successToast: (count) => `Unstarred ${count} notification${count === 1 ? "" : "s"}`,
 			errorToast: "Failed to unstar notifications",
+			undoConfig: {
+				actionType: "unstar",
+				createPerformUndo: (ids) => async () => {
+					await bulkStarNotifications(ids);
+					await options.onRefresh?.();
+					await options.onRefreshViewCounts?.();
+				},
+			},
 		});
 	}
 
@@ -265,24 +398,44 @@ export function createBulkActionController(
 			performAction: (ids, query) => bulkUnfilterNotifications(ids, query),
 			successToast: (count) => `Moved ${count} notification${count === 1 ? "" : "s"} to inbox`,
 			errorToast: "Failed to move notifications to inbox",
+			// Note: unfilter can't be easily undone as we don't know the original filter state
+			// So we don't provide undoConfig for bulk unfilter
 		});
 	}
 
-	async function bulkAssignTag(tagId: string): Promise<void> {
+	async function bulkAssignTag(tagId: string, tagName?: string): Promise<void> {
 		await handleBulkAction({
 			actionName: "assignTag",
 			performAction: (ids, query) => apiBulkAssignTag(ids, tagId, query),
 			successToast: (count) => `Applied tag to ${count} notification${count === 1 ? "" : "s"}`,
 			errorToast: "Failed to apply tag to notifications",
+			undoConfig: {
+				actionType: "assignTag",
+				metadata: { tagId, tagName },
+				createPerformUndo: (ids) => async () => {
+					await apiBulkRemoveTag(ids, tagId);
+					await options.onRefresh?.();
+					await options.onRefreshViewCounts?.();
+				},
+			},
 		});
 	}
 
-	async function bulkRemoveTag(tagId: string): Promise<void> {
+	async function bulkRemoveTag(tagId: string, tagName?: string): Promise<void> {
 		await handleBulkAction({
 			actionName: "removeTag",
 			performAction: (ids, query) => apiBulkRemoveTag(ids, tagId, query),
 			successToast: (count) => `Removed tag from ${count} notification${count === 1 ? "" : "s"}`,
 			errorToast: "Failed to remove tag from notifications",
+			undoConfig: {
+				actionType: "removeTag",
+				metadata: { tagId, tagName },
+				createPerformUndo: (ids) => async () => {
+					await apiBulkAssignTag(ids, tagId);
+					await options.onRefresh?.();
+					await options.onRefreshViewCounts?.();
+				},
+			},
 		});
 	}
 

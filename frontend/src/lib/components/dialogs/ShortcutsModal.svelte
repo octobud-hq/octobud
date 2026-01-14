@@ -44,12 +44,21 @@
 				{ keys: ["⇧G"], description: "Jump to last notification" },
 				{ keys: ["[", "]"], description: "Navigate pages" },
 				{ keys: ["⇧J", "⇧K"], description: "Navigate views" },
-
 				{
 					keys: ["/"],
 					description: "Focus query input",
 				},
 				{ keys: ["⌘B"], description: "Toggle sidebar" },
+				{
+					keys: ["⇧H"],
+					description: "Open recent actions history",
+					related: [
+						{ keys: ["J", "K"], description: "Navigate history items" },
+						{ keys: ["Enter"], description: "Undo focused action" },
+						{ keys: ["Space"], description: "Open notification detail" },
+						{ keys: ["Esc"], description: "Close history" },
+					],
+				},
 			],
 		},
 		{
@@ -90,6 +99,7 @@
 					description: "Allow back into inbox (if skipped inbox due to rule)",
 				},
 				{ keys: ["O"], description: "Open in GitHub" },
+				{ keys: ["⌘Z"], description: "Undo last action (when toast visible)" },
 				{ keys: ["H"], description: "Toggle keyboard shortcuts" },
 			],
 		},

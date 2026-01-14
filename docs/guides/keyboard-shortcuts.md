@@ -20,6 +20,18 @@ Octobud is designed for keyboard-first navigation. Press `h` at any time to see 
 - **`[` / `]` (Navigate pages)**: Disabled when detail view is open in list mode (not split view)
 - **`Cmd + b`**: In multiselect mode, opens bulk command palette instead of toggling sidebar
 
+## Recent action history
+
+| Shortcut | Action |
+|----------|--------|
+| `Shift + h` | Open recent actions history |
+| `j` / `k` | Navigate history items (when history open) |
+| `Enter` | Undo focused action (when history open) |
+| `Space` | Open notification detail (when history open) |
+| `Escape` | Close history (when history open) |
+
+
+
 ## Command Palette
 
 | Shortcut | Action |
@@ -42,6 +54,7 @@ These shortcuts work on the currently focused notification and toggle the action
 | `t` | Open tag dropdown (or close if already open) |
 | `i` | Allow back into inbox (if skipped by rule) |
 | `o` | Open in GitHub |
+| `Cmd + z` | Undo last action (only when undo toast is visible) |
 | `h` | Toggle keyboard shortcuts |
 | `Escape` | Close dropdowns, clear selection, or exit multiselect |
 | `Space` | Toggle notification detail open/closed |
@@ -79,4 +92,5 @@ In multiselect mode, actions are explicit rather than toggles. Use the base key 
 5. **Stay in Keyboard** - Most workflows don't require the mouse at all
 6. **Single vs. Bulk Actions** - Actions toggle states on single notifications, while multiselect mode uses explicit actions (base key for action, Shift+key for reverse)
 7. **Escape Key** - Press Escape multiple times to exit multiselect mode: first clears selection, second exits multiselect
+8. **Undo Actions** - When you perform an action, a toast appears briefly with an undo option. Press `Cmd + z` while the toast is visible to undo. Use `Shift + h` to open the recent actions history and undo older actions
 

@@ -820,6 +820,24 @@
 			pageController.actions.toggleSidebar();
 			return true;
 		});
+		registerCommand("toggleHistoryDropdown", () => {
+			return layoutContext?.toggleHistoryDropdown() ?? false;
+		});
+		registerCommand("closeHistoryDropdown", () => {
+			return layoutContext?.closeHistoryDropdown() ?? false;
+		});
+		registerCommand("historyNavigateDown", () => {
+			return layoutContext?.historyNavigateDown() ?? false;
+		});
+		registerCommand("historyNavigateUp", () => {
+			return layoutContext?.historyNavigateUp() ?? false;
+		});
+		registerCommand("historyUndoFocused", () => {
+			return layoutContext?.historyUndoFocused() ?? false;
+		});
+		registerCommand("historyOpenFocusedNotification", () => {
+			return layoutContext?.historyOpenFocusedNotification() ?? false;
+		});
 
 		// Create command context with state getters
 		const commandContext: CommandContext = {
@@ -834,6 +852,7 @@
 			getBulkSnoozeDropdownOpen: () =>
 				notificationViewComponent?.getBulkSnoozeDropdownOpen() ?? false,
 			getBulkTagDropdownOpen: () => notificationViewComponent?.getBulkTagDropdownOpen() ?? false,
+			getHistoryDropdownOpen: () => layoutContext?.isHistoryDropdownOpen() ?? false,
 		};
 
 		const unregisterShortcuts = registerListShortcuts(commandContext);
@@ -849,6 +868,12 @@
 			"focusViewSearch",
 			"toggleFilterDropdown",
 			"toggleShortcutsModal",
+			"toggleHistoryDropdown",
+			"closeHistoryDropdown",
+			"historyNavigateDown",
+			"historyNavigateUp",
+			"historyUndoFocused",
+			"historyOpenFocusedNotification",
 			"focusNext",
 			"focusPrevious",
 			"focusFirst",

@@ -74,6 +74,14 @@ vi.mock("$lib/stores/toastStore", () => ({
 	toastStore: {
 		info: vi.fn(),
 		error: vi.fn(),
+		showWithUndo: vi.fn(),
+	},
+}));
+
+// Mock undo store
+vi.mock("$lib/stores/undoStore", () => ({
+	undoStore: {
+		pushAction: vi.fn(),
 	},
 }));
 
@@ -206,6 +214,7 @@ describe("NotificationActionController", () => {
 
 	describe("archive", () => {
 		it("archives unarchived notification", async () => {
+			const { undoStore } = await import("$lib/stores/undoStore");
 			const notification = createMockNotification({ archived: false });
 			const updated = { ...notification, archived: true };
 			vi.mocked(archiveNotification).mockResolvedValue(updated);
@@ -213,17 +222,20 @@ describe("NotificationActionController", () => {
 			await controller.archive(notification);
 
 			expect(archiveNotification).toHaveBeenCalledWith("gh-1");
-			expect(toastStore.info).toHaveBeenCalledWith("Archived");
+			// Now uses undo store instead of toast.info
+			expect(undoStore.pushAction).toHaveBeenCalled();
 		});
 
 		it("unarchives archived notification", async () => {
+			const { undoStore } = await import("$lib/stores/undoStore");
 			const notification = createMockNotification({ archived: true });
 			const updated = { ...notification, archived: false };
 			vi.mocked(unarchiveNotification).mockResolvedValue(updated);
 
 			await controller.archive(notification);
 
-			expect(toastStore.info).toHaveBeenCalledWith("Unarchived");
+			// Now uses undo store instead of toast.info
+			expect(undoStore.pushAction).toHaveBeenCalled();
 		});
 	});
 

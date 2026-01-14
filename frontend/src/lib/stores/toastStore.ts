@@ -22,6 +22,12 @@ export interface Toast {
 	message: string;
 	type: ToastType;
 	duration: number;
+	/** Whether this toast has an undo action */
+	undoable?: boolean;
+	/** Callback to execute when undo is clicked */
+	onUndo?: () => void;
+	/** Whether this toast has been morphed to "undone" state */
+	morphedToUndone?: boolean;
 }
 
 interface ToastStore {
@@ -36,6 +42,38 @@ function createToastStore() {
 	function show(message: string, type: ToastType = "info", duration = 3000) {
 		const id = `toast-${Date.now()}-${idCounter++}`;
 		const toast: Toast = { id, message, type, duration };
+
+		update((state) => ({
+			toasts: [...state.toasts, toast],
+		}));
+
+		if (duration > 0) {
+			setTimeout(() => {
+				dismiss(id);
+			}, duration);
+		}
+
+		return id;
+	}
+
+	/**
+	 * Show a toast with an undo button
+	 */
+	function showWithUndo(
+		message: string,
+		type: ToastType = "success",
+		duration = 7000,
+		onUndo: () => void
+	) {
+		const id = `toast-${Date.now()}-${idCounter++}`;
+		const toast: Toast = {
+			id,
+			message,
+			type,
+			duration,
+			undoable: true,
+			onUndo,
+		};
 
 		update((state) => ({
 			toasts: [...state.toasts, toast],
@@ -72,10 +110,36 @@ function createToastStore() {
 		return show(message, "error", duration);
 	}
 
+	/**
+	 * Morph an existing toast to show "Undone" state, then dismiss after a short delay
+	 */
+	function morphToUndone(id: string, duration = 1500) {
+		update((state) => ({
+			toasts: state.toasts.map((t) =>
+				t.id === id
+					? {
+							...t,
+							message: "Undone",
+							morphedToUndone: true,
+							undoable: false,
+							onUndo: undefined,
+						}
+					: t
+			),
+		}));
+
+		// Dismiss after the duration
+		setTimeout(() => {
+			dismiss(id);
+		}, duration);
+	}
+
 	return {
 		subscribe,
 		show,
+		showWithUndo,
 		dismiss,
+		morphToUndone,
 		success,
 		info,
 		warning,

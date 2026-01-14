@@ -34,6 +34,13 @@ type TimelineItem struct {
 	SHA             string
 	HTMLURL         string
 	Timestamp       time.Time // For sorting
+	// Event-specific metadata
+	RequestedReviewerLogin string // For review_requested
+	LabelName              string // For labeled/unlabeled
+	LabelColor             string // For labeled/unlabeled
+	MilestoneTitle         string // For milestoned/demilestoned
+	RenameFrom             string // For renamed
+	RenameTo               string // For renamed
 }
 
 // TimelineResult contains paginated timeline results.

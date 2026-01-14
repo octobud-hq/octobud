@@ -29,6 +29,6 @@ export interface NotificationActions {
 	star: (notification: Notification) => Promise<void>;
 	unstar: (notification: Notification) => Promise<void>;
 	unfilter: (notification: Notification) => Promise<void>;
-	assignTag: (githubId: string, tagId: string) => Promise<void>;
-	removeTag: (githubId: string, tagId: string) => Promise<void>;
+	assignTag: (githubId: string, tagId: string, tagName?: string) => Promise<void>;
+	removeTag: (githubId: string, tagId: string, tagName?: string) => Promise<void>;
 }

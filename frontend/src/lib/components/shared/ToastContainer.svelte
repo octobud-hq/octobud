@@ -17,8 +17,13 @@
 	import { toastStore } from "$lib/stores/toastStore";
 	import { fly, fade } from "svelte/transition";
 	import { quintOut } from "svelte/easing";
+	import { browser } from "$app/environment";
 
 	$: toasts = $toastStore.toasts;
+
+	// Detect platform for keyboard shortcut hint
+	$: isMac = browser && navigator.platform.toUpperCase().indexOf("MAC") >= 0;
+	$: undoShortcut = isMac ? "⌘Z" : "Ctrl+Z";
 
 	function getToastStyles(type: string) {
 		switch (type) {
@@ -47,10 +52,19 @@
 				return "M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z";
 		}
 	}
+
+	function handleUndo(toast: (typeof toasts)[0]) {
+		if (toast.onUndo) {
+			toast.onUndo();
+		}
+	}
+
+	// Checkmark icon path for "undone" state
+	const checkmarkPath = "M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z";
 </script>
 
 <div
-	class="pointer-events-none fixed right-4 top-4 z-[200] flex flex-col gap-3"
+	class="pointer-events-none fixed bottom-6 right-6 z-[200] flex flex-col gap-3"
 	aria-live="polite"
 	aria-atomic="true"
 >
@@ -58,32 +72,66 @@
 		<div
 			in:fly={{ duration: 300, x: 300, easing: quintOut }}
 			out:fade={{ duration: 200 }}
-			class={`pointer-events-auto flex items-center gap-3 rounded-xl border px-4 py-3 shadow-2xl backdrop-blur-sm ${getToastStyles(toast.type)}`}
+			class={`pointer-events-auto flex items-center justify-between gap-4 rounded-xl border px-4 py-3 shadow-2xl backdrop-blur-sm transition-all duration-300 ${toast.morphedToUndone ? "bg-emerald-500/90 text-white border-emerald-400" : getToastStyles(toast.type)}`}
 			role="alert"
 		>
-			<svg
-				class="h-5 w-5 flex-shrink-0"
-				fill="none"
-				stroke="currentColor"
-				viewBox="0 0 24 24"
-				aria-hidden="true"
-			>
-				<path
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					stroke-width="2"
-					d={getIconPath(toast.type)}
-				/>
-			</svg>
-			<span class="text-sm font-medium">{toast.message}</span>
-			<button
-				type="button"
-				class="ml-2 flex h-6 w-6 items-center justify-center rounded-lg transition hover:bg-white/20"
-				on:click={() => toastStore.dismiss(toast.id)}
-				aria-label="Dismiss notification"
-			>
-				<span class="text-lg leading-none" aria-hidden="true">×</span>
-			</button>
+			<!-- Left group: icon + message -->
+			<div class="flex items-center gap-3">
+				<svg
+					class="h-5 w-5 flex-shrink-0"
+					fill="none"
+					stroke="currentColor"
+					viewBox="0 0 24 24"
+					aria-hidden="true"
+				>
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d={toast.morphedToUndone ? checkmarkPath : getIconPath(toast.type)}
+					/>
+				</svg>
+				<span class="text-sm font-medium">{toast.message}</span>
+			</div>
+
+			<!-- Right group: undo button + close button -->
+			<div class="flex items-center gap-2">
+				{#if toast.undoable && toast.onUndo && !toast.morphedToUndone}
+					<!-- Undo button with keyboard hint -->
+					<button
+						type="button"
+						class="flex items-center gap-1.5 rounded-lg bg-white/20 px-3 py-1 text-xs font-medium transition hover:bg-white/30"
+						on:click={() => handleUndo(toast)}
+						aria-label="Undo action"
+					>
+						<svg
+							class="h-3.5 w-3.5"
+							fill="none"
+							stroke="currentColor"
+							viewBox="0 0 24 24"
+							aria-hidden="true"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"
+							/>
+						</svg>
+						<span>Undo</span>
+						<span class="opacity-60">{undoShortcut}</span>
+					</button>
+				{/if}
+
+				<button
+					type="button"
+					class="flex h-6 w-6 items-center justify-center rounded-lg transition hover:bg-white/20"
+					on:click={() => toastStore.dismiss(toast.id)}
+					aria-label="Dismiss notification"
+				>
+					<span class="text-lg leading-none" aria-hidden="true">×</span>
+				</button>
+			</div>
 		</div>
 	{/each}
 </div>

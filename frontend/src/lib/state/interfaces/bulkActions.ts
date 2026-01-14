@@ -29,8 +29,8 @@ export interface BulkActions {
 	bulkStar: () => Promise<void>;
 	bulkUnstar: () => Promise<void>;
 	bulkUnfilter: () => Promise<void>;
-	bulkAssignTag: (tagId: string) => Promise<void>;
-	bulkRemoveTag: (tagId: string) => Promise<void>;
+	bulkAssignTag: (tagId: string, tagName?: string) => Promise<void>;
+	bulkRemoveTag: (tagId: string, tagName?: string) => Promise<void>;
 	markAllRead: () => Promise<void>;
 	markAllUnread: () => Promise<void>;
 	markAllArchive: () => Promise<void>;

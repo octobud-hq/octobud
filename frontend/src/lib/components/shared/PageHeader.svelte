@@ -18,9 +18,12 @@
 	import { goto } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import CommandPalette from "../command_palette/CommandPalette.svelte";
+	import UndoHistoryDropdown from "./UndoHistoryDropdown.svelte";
 	import type { NotificationView, Tag } from "$lib/api/types";
+	import type { RecentActionNotification } from "$lib/undo/types";
 	import type { NotificationPageController } from "$lib/state/types";
 	import { githubUsername } from "$lib/stores/authStore";
+	import { undoStore } from "$lib/stores/undoStore";
 	import type { CommandPaletteComponent } from "$lib/types/components";
 	import { computeAvatarUrl, isRedirectAvatarUrl, resolveAvatarRedirect } from "$lib/utils/avatar";
 
@@ -47,9 +50,92 @@
 		return commandPaletteComponent;
 	}
 
+	// Expose history dropdown controls for keyboard shortcuts
+	export function isHistoryDropdownOpen(): boolean {
+		return historyDropdownOpen;
+	}
+
+	export function toggleHistoryDropdownExternal(): boolean {
+		toggleHistoryDropdown();
+		return true;
+	}
+
+	export function closeHistoryDropdownExternal(): boolean {
+		if (historyDropdownOpen) {
+			closeHistoryDropdown();
+			return true;
+		}
+		return false;
+	}
+
+	// History dropdown navigation methods (delegated to the component)
+	export function historyNavigateDown(): boolean {
+		return historyDropdownComponent?.navigateDown() ?? false;
+	}
+
+	export function historyNavigateUp(): boolean {
+		return historyDropdownComponent?.navigateUp() ?? false;
+	}
+
+	export function historyUndoFocused(): boolean {
+		return historyDropdownComponent?.undoFocused() ?? false;
+	}
+
+	export function historyOpenFocusedNotification(): boolean {
+		return historyDropdownComponent?.openFocusedNotification() ?? false;
+	}
+
 	let avatarDropdownOpen = false;
 	let avatarButtonElement: HTMLButtonElement;
 	let avatarDropdownElement: HTMLDivElement;
+
+	// Undo history dropdown state
+	let historyDropdownOpen = false;
+	let historyButtonElement: HTMLButtonElement;
+	let historyDropdownComponent: UndoHistoryDropdown | null = null;
+
+	// Animation state for history icon
+	let historyIconAnimating = false;
+	let previousHistoryLength = 0;
+	let historyAnimationTimeout: ReturnType<typeof setTimeout> | null = null;
+	const HISTORY_ICON_ANIMATION_DURATION = 600;
+
+	// Subscribe to history length changes for animation
+	// Animate when an item moves from toast to history (history.length increases)
+	$: historyLength = $undoStore.history.length;
+	$: {
+		if (historyLength > previousHistoryLength && previousHistoryLength >= 0) {
+			historyIconAnimating = true;
+			// Clear any existing timeout to prevent race conditions
+			if (historyAnimationTimeout) {
+				clearTimeout(historyAnimationTimeout);
+			}
+			historyAnimationTimeout = setTimeout(() => {
+				historyIconAnimating = false;
+				historyAnimationTimeout = null;
+			}, HISTORY_ICON_ANIMATION_DURATION);
+		}
+		previousHistoryLength = historyLength;
+	}
+
+	function toggleHistoryDropdown() {
+		historyDropdownOpen = !historyDropdownOpen;
+		// Close avatar dropdown if open
+		if (historyDropdownOpen) {
+			avatarDropdownOpen = false;
+		}
+	}
+
+	function closeHistoryDropdown() {
+		historyDropdownOpen = false;
+	}
+
+	function handleNavigateToNotification(notification: RecentActionNotification) {
+		// Always navigate to inbox with the notification detail open
+		// This provides consistent behavior regardless of current location (views, settings, etc.)
+		const notificationKey = notification.githubId ?? notification.id;
+		void goto(`/views/${defaultViewSlug}?id=${encodeURIComponent(notificationKey)}`);
+	}
 
 	function toggleAvatarDropdown() {
 		avatarDropdownOpen = !avatarDropdownOpen;
@@ -163,8 +249,44 @@
 			</button>
 		</div>
 
-		<!-- Right section: Avatar dropdown -->
+		<!-- Right section: History icon + Avatar dropdown -->
 		<div class="relative flex flex-shrink-0 items-center gap-2">
+			<!-- History dropdown button -->
+			<div class="relative">
+				<button
+					bind:this={historyButtonElement}
+					type="button"
+					class="flex h-9 w-9 items-center justify-center rounded-lg text-gray-700 transition hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600/70 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:text-gray-300 dark:hover:bg-gray-800 dark:focus-visible:ring-offset-gray-900 cursor-pointer {historyIconAnimating
+						? 'history-pulse'
+						: ''}"
+					on:click={toggleHistoryDropdown}
+					title="Recent actions"
+					aria-label="Recent actions"
+				>
+					<svg
+						class="h-5 w-5 transition-transform {historyIconAnimating
+							? 'scale-110 text-indigo-500 dark:text-indigo-400'
+							: ''}"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					>
+						<circle cx="12" cy="12" r="10" />
+						<polyline points="12 6 12 12 16 14" />
+					</svg>
+				</button>
+				<UndoHistoryDropdown
+					bind:this={historyDropdownComponent}
+					open={historyDropdownOpen}
+					onClose={closeHistoryDropdown}
+					onNavigateToNotification={handleNavigateToNotification}
+					triggerElement={historyButtonElement}
+				/>
+			</div>
+
 			<button
 				bind:this={avatarButtonElement}
 				type="button"
@@ -247,3 +369,21 @@
 		</div>
 	</div>
 </header>
+
+<style>
+	@keyframes history-pulse {
+		0% {
+			box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4);
+		}
+		70% {
+			box-shadow: 0 0 0 8px rgba(99, 102, 241, 0);
+		}
+		100% {
+			box-shadow: 0 0 0 0 rgba(99, 102, 241, 0);
+		}
+	}
+
+	:global(.history-pulse) {
+		animation: history-pulse 0.6s ease-out;
+	}
+</style>

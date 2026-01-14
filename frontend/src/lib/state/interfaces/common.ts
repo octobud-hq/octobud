@@ -36,6 +36,11 @@ export interface ControllerOptions {
 	onAfterRefresh?: () => Promise<void>;
 	onRefreshViewCounts?: () => Promise<void>;
 	navigateToUrl?: (url: string, options?: NavigateOptions) => Promise<void>;
-	requestBulkConfirmation?: (action: string, count: number) => Promise<boolean>;
+	/** Request confirmation for bulk action. isQueryBased indicates the action cannot be undone. */
+	requestBulkConfirmation?: (
+		action: string,
+		count: number,
+		isQueryBased?: boolean
+	) => Promise<boolean>;
 	getTags?: () => import("$lib/api/tags").Tag[];
 }

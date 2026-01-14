@@ -61,6 +61,7 @@
 
 	// Stores
 	import { toastStore } from "$lib/stores/toastStore";
+	import { undoStore } from "$lib/stores/undoStore";
 
 	// API & Types
 	import { fetchViews } from "$lib/api/views";
@@ -224,12 +225,13 @@
 					state: navOptions?.state,
 				});
 			},
-			requestBulkConfirmation: async (action: string, count: number) => {
+			requestBulkConfirmation: async (action: string, count: number, isQueryBased?: boolean) => {
 				return new Promise((resolve) => {
 					bulkConfirmResolve = resolve;
 					bulkConfirmDialogOpen = true;
 					bulkConfirmAction = action;
 					bulkConfirmCount = count;
+					bulkConfirmIsQueryBased = isQueryBased ?? false;
 				});
 			},
 			getTags: () => currentTags,
@@ -241,6 +243,13 @@
 
 	// Update the service worker message handler with the pageController reference
 	pageControllerRef = pageController;
+
+	// Initialize undo store with refresh callback
+	undoStore.setRefreshCallback(async () => {
+		await pageController.actions.refresh?.();
+		await pageController.actions.refreshViewCounts?.();
+	});
+	undoStore.initialize();
 
 	// Expose view dialog actions via context for child pages
 	setContext("viewDialogActions", {
@@ -256,6 +265,15 @@
 		isShortcutsModalOpen: null,
 		toggleShortcutsModal: null,
 		getCommandPalette: () => pageHeaderComponent?.getCommandPalette(),
+		// History dropdown methods
+		isHistoryDropdownOpen: () => pageHeaderComponent?.isHistoryDropdownOpen() ?? false,
+		toggleHistoryDropdown: () => pageHeaderComponent?.toggleHistoryDropdownExternal() ?? false,
+		closeHistoryDropdown: () => pageHeaderComponent?.closeHistoryDropdownExternal() ?? false,
+		historyNavigateDown: () => pageHeaderComponent?.historyNavigateDown() ?? false,
+		historyNavigateUp: () => pageHeaderComponent?.historyNavigateUp() ?? false,
+		historyUndoFocused: () => pageHeaderComponent?.historyUndoFocused() ?? false,
+		historyOpenFocusedNotification: () =>
+			pageHeaderComponent?.historyOpenFocusedNotification() ?? false,
 	});
 
 	// ============================================================================
@@ -282,6 +300,7 @@
 	let bulkConfirmDialogOpen = false;
 	let bulkConfirmAction = "";
 	let bulkConfirmCount = 0;
+	let bulkConfirmIsQueryBased = false;
 	let bulkConfirmResolve: ((confirmed: boolean) => void) | null = null;
 
 	// ============================================================================
@@ -963,6 +982,7 @@
 		open={bulkConfirmDialogOpen}
 		action={bulkConfirmAction}
 		count={bulkConfirmCount}
+		isQueryBased={bulkConfirmIsQueryBased}
 		onConfirm={handleBulkConfirm}
 		onCancel={handleBulkCancel}
 		confirming={$bulkUpdating}

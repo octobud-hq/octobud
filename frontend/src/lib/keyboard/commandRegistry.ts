@@ -34,6 +34,7 @@ export interface CommandContext {
 	getTagDropdownOpen?: () => boolean;
 	getBulkSnoozeDropdownOpen?: () => boolean;
 	getBulkTagDropdownOpen?: () => boolean;
+	getHistoryDropdownOpen?: () => boolean;
 	// For special handlers that need parameters
 	selectSnoozeOption?: (optionIndex: number) => boolean;
 }
