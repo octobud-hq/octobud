@@ -44,7 +44,7 @@
         "tslib": "^2.7.0",
         "typescript": "^5.6.3",
         "vite": "^7.3.0",
-        "vitest": "^3.1.4"
+        "vitest": "^4.0.17"
     },
     "dependencies": {
         "@floating-ui/dom": "^1.5.4",
