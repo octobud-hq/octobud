@@ -244,7 +244,11 @@
 	// Update the service worker message handler with the pageController reference
 	pageControllerRef = pageController;
 
-	// Initialize undo store with refresh callback
+	// Initialize undo store with refresh callback.
+	// Initialization happens here (rather than at store creation) because:
+	// 1. The refresh callback requires pageController which is only available in component context
+	// 2. localStorage access for loading persisted history should happen after hydration
+	// 3. The store has an internal guard (initialized flag) to ensure this only runs once
 	undoStore.setRefreshCallback(async () => {
 		await pageController.actions.refresh?.();
 		await pageController.actions.refreshViewCounts?.();

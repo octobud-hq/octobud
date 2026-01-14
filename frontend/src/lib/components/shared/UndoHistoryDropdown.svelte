@@ -30,6 +30,7 @@
 	export let triggerElement: HTMLElement | null = null;
 
 	let dropdownElement: HTMLDivElement | null = null;
+	let mounted = true; // Track mount state for async operations
 
 	// Keyboard navigation state
 	// -1 means no item focused (mouse mode), 0+ means keyboard navigation active
@@ -139,14 +140,18 @@
 			document.removeEventListener("click", handleClickOutside, true);
 			if (open) {
 				// Small delay to avoid closing immediately on the same click that opened it
+				// Check mounted state to prevent adding listener if component unmounts during timeout
 				setTimeout(() => {
-					document.addEventListener("click", handleClickOutside, true);
+					if (mounted && open) {
+						document.addEventListener("click", handleClickOutside, true);
+					}
 				}, 0);
 			}
 		}
 	}
 
 	onDestroy(() => {
+		mounted = false;
 		if (browser) {
 			document.removeEventListener("click", handleClickOutside, true);
 		}
