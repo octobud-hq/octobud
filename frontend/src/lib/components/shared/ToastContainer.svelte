@@ -22,8 +22,20 @@
 	$: toasts = $toastStore.toasts;
 
 	// Detect platform for keyboard shortcut hint
-	$: isMac = browser && navigator.platform.toUpperCase().indexOf("MAC") >= 0;
-	$: undoShortcut = isMac ? "⌘Z" : "Ctrl+Z";
+	// Use userAgentData.platform (modern) with fallback to userAgent string (widely supported)
+	// Not reactive since browser/navigator don't change at runtime
+	const isMac = (() => {
+		if (!browser) return false;
+		// Modern API (Chrome 90+, Edge 90+)
+		const userAgentData = (navigator as Navigator & { userAgentData?: { platform: string } })
+			.userAgentData;
+		if (userAgentData?.platform) {
+			return userAgentData.platform.toUpperCase().includes("MAC");
+		}
+		// Fallback to userAgent string (works everywhere)
+		return navigator.userAgent.toUpperCase().includes("MAC");
+	})();
+	const undoShortcut = isMac ? "⌘Z" : "Ctrl+Z";
 
 	function getToastStyles(type: string) {
 		switch (type) {

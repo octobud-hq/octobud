@@ -887,7 +887,7 @@ describe("UndoStore", () => {
 			expect(history[0].notifications[0].subjectTitle).toBe("Stored Notification");
 		});
 
-		it("setRefreshCallback rebuilds history with new callback", async () => {
+		it("setRefreshCallback stores callback for centralized refresh after undo", async () => {
 			// Reset first
 			undoStore._reset();
 
@@ -919,17 +919,19 @@ describe("UndoStore", () => {
 			// History should have the action
 			expect(get(undoStore.history)).toHaveLength(1);
 
-			// Set up a mock refresh callback - this should rebuild history
+			// Set up a mock refresh callback
 			const mockRefresh = vi.fn().mockResolvedValue(undefined);
 			undoStore.setRefreshCallback(mockRefresh);
 
-			// History should still have the action
+			// History should still have the action (no rebuild needed)
 			const history = get(undoStore.history);
 			expect(history).toHaveLength(1);
 
-			// The performUndo function should now include the refresh callback
-			expect(history[0].performUndo).toBeDefined();
-			expect(typeof history[0].performUndo).toBe("function");
+			// Undo from history should call the refresh callback
+			await undoStore.undoFromHistory("stored-action-1");
+
+			// The refresh callback should have been called centrally by the undo store
+			expect(mockRefresh).toHaveBeenCalled();
 		});
 
 		it("handles corrupted localStorage gracefully", () => {

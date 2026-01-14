@@ -194,21 +194,17 @@ async function executeInverseOperation(
 }
 
 /**
- * Create the performUndo function for an action based on its type and metadata
+ * Create the performUndo function for an action based on its type and metadata.
+ * Note: Refresh is handled centrally by the undo store after performUndo completes,
+ * so we don't need to call it here.
  */
 function createPerformUndo(
 	type: UndoableActionType,
 	notificationKeys: string[],
-	metadata?: UndoableActionMetadata,
-	onRefresh?: () => Promise<void>
+	metadata?: UndoableActionMetadata
 ): () => Promise<void> {
 	return async () => {
 		await executeInverseOperation(type, notificationKeys, metadata);
-
-		// Trigger refresh if provided
-		if (onRefresh) {
-			await onRefresh();
-		}
 	};
 }
 
@@ -230,10 +226,7 @@ function serializeAction(action: UndoableAction): SerializedUndoableAction {
 /**
  * Deserialize a stored action back to UndoableAction
  */
-function deserializeAction(
-	serialized: SerializedUndoableAction,
-	onRefresh?: () => Promise<void>
-): UndoableAction {
+function deserializeAction(serialized: SerializedUndoableAction): UndoableAction {
 	return {
 		id: serialized.id,
 		type: serialized.type,
@@ -244,8 +237,7 @@ function deserializeAction(
 		performUndo: createPerformUndo(
 			serialized.type,
 			serialized.notificationKeys,
-			serialized.metadata,
-			onRefresh
+			serialized.metadata
 		),
 	};
 }
@@ -253,7 +245,7 @@ function deserializeAction(
 /**
  * Load history from localStorage
  */
-function loadFromStorage(onRefresh?: () => Promise<void>): UndoableAction[] {
+function loadFromStorage(): UndoableAction[] {
 	if (typeof localStorage === "undefined") return [];
 
 	try {
@@ -261,7 +253,7 @@ function loadFromStorage(onRefresh?: () => Promise<void>): UndoableAction[] {
 		if (!stored) return [];
 
 		const serialized: SerializedUndoableAction[] = JSON.parse(stored);
-		return serialized.map((s) => deserializeAction(s, onRefresh));
+		return serialized.map((s) => deserializeAction(s));
 	} catch (error) {
 		console.error("Failed to load undo history from storage:", error);
 		return [];
@@ -303,7 +295,7 @@ function createUndoStore() {
 		if (initialized) return;
 		initialized = true;
 
-		const history = loadFromStorage(refreshCallback);
+		const history = loadFromStorage();
 		if (history.length > 0) {
 			update((state) => ({
 				...state,
@@ -313,23 +305,12 @@ function createUndoStore() {
 	}
 
 	/**
-	 * Set the refresh callback for undo operations
+	 * Set the refresh callback for undo operations.
+	 * This is called centrally after any undo operation completes,
+	 * so we don't need to inject it into individual performUndo functions.
 	 */
 	function setRefreshCallback(callback: () => Promise<void>) {
 		refreshCallback = callback;
-
-		// Re-initialize with the callback if we have stored history
-		if (typeof localStorage !== "undefined") {
-			const currentState = get({ subscribe });
-			if (currentState.history.length > 0) {
-				// Rebuild history with the refresh callback
-				const history = loadFromStorage(refreshCallback);
-				update((state) => ({
-					...state,
-					history,
-				}));
-			}
-		}
 	}
 
 	/**
@@ -469,6 +450,11 @@ function createUndoStore() {
 
 		try {
 			await action.performUndo();
+
+			// Centralized refresh after undo - this ensures UI is updated regardless of
+			// whether the action was freshly created or deserialized from localStorage
+			await refreshCallback?.();
+
 			// Morph the toast to show "Undone" state
 			if (currentToastId) {
 				toastStore.morphToUndone(currentToastId);
@@ -511,6 +497,10 @@ function createUndoStore() {
 
 		try {
 			await action.performUndo();
+
+			// Centralized refresh after undo - this ensures UI is updated regardless of
+			// whether the action was freshly created or deserialized from localStorage
+			await refreshCallback?.();
 
 			// Remove from history on success
 			update((s) => {

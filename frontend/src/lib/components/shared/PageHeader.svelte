@@ -14,7 +14,7 @@
 	// You should have received a copy of the GNU Affero General Public License
 	// along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-	import { getContext, onMount } from "svelte";
+	import { getContext, onMount, onDestroy } from "svelte";
 	import { goto } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import CommandPalette from "../command_palette/CommandPalette.svelte";
@@ -117,6 +117,13 @@
 		}
 		previousHistoryLength = historyLength;
 	}
+
+	// Cleanup timeout on component destroy to prevent memory leaks
+	onDestroy(() => {
+		if (historyAnimationTimeout) {
+			clearTimeout(historyAnimationTimeout);
+		}
+	});
 
 	function toggleHistoryDropdown() {
 		historyDropdownOpen = !historyDropdownOpen;

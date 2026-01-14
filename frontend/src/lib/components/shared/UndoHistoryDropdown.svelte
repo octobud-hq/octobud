@@ -15,7 +15,6 @@
 	// along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 	import { onDestroy, tick } from "svelte";
-	import { SvelteSet } from "svelte/reactivity";
 	import { fly } from "svelte/transition";
 	import { quintOut } from "svelte/easing";
 	import { browser } from "$app/environment";
@@ -123,7 +122,8 @@
 		});
 	} else {
 		// Clean up expanded states when dropdown closes
-		expandedActionIds = new SvelteSet();
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- SvelteSet requires runes mode; using Set with reassignment for legacy reactivity
+		expandedActionIds = new Set();
 	}
 
 	// Reset action item element references when actions change
@@ -190,7 +190,7 @@
 	}
 
 	// Expanded states for bulk actions
-	let expandedActionIds = new SvelteSet<string>();
+	let expandedActionIds = new Set<string>();
 
 	function toggleExpanded(actionId: string) {
 		if (expandedActionIds.has(actionId)) {
@@ -198,6 +198,8 @@
 		} else {
 			expandedActionIds.add(actionId);
 		}
+		// Reassign to trigger Svelte reactivity
+		expandedActionIds = expandedActionIds;
 	}
 
 	function handleNotificationClick(notification: RecentActionNotification) {
@@ -266,7 +268,6 @@
 				<ul class="divide-y divide-gray-100 dark:divide-gray-800">
 					{#each allActions as action, index (action.id)}
 						{@const isBulk = action.notifications.length > 1}
-						{@const isExpanded = expandedActionIds.has(action.id)}
 						{@const iconConfig = getActionIconConfig(action.type)}
 						{@const isFocused = focusedIndex >= 0 && index === focusedIndex}
 						<li
@@ -347,7 +348,9 @@
 										on:click={() => toggleExpanded(action.id)}
 									>
 										<svg
-											class="h-3 w-3 flex-shrink-0 text-gray-500 transition-transform dark:text-gray-400 {isExpanded
+											class="h-3 w-3 flex-shrink-0 text-gray-500 transition-transform dark:text-gray-400 {expandedActionIds.has(
+												action.id
+											)
 												? 'rotate-90'
 												: ''}"
 											fill="none"
@@ -366,7 +369,7 @@
 										</span>
 									</button>
 
-									{#if isExpanded}
+									{#if expandedActionIds.has(action.id)}
 										<div class="mt-2 space-y-1.5 pl-5">
 											{#each action.notifications.slice(0, 10) as notification (notification.id)}
 												{@const notifIcon = getNotificationIcon(

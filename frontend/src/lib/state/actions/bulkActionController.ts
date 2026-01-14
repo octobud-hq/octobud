@@ -114,9 +114,9 @@ export function createBulkActionController(
 
 		// Check for confirmation if needed:
 		// - Always confirm for query-based operations (they are NOT undoable)
-		// - Confirm for > 30 items for ID-based operations
-		const DEFAULT_PAGE_SIZE = 30;
-		const needsConfirmation = useQuery || count > DEFAULT_PAGE_SIZE;
+		// - Confirm for ID-based operations exceeding the threshold
+		const BULK_CONFIRMATION_THRESHOLD = 30;
+		const needsConfirmation = useQuery || count > BULK_CONFIRMATION_THRESHOLD;
 		if (needsConfirmation && options.requestBulkConfirmation) {
 			const actionNameForConfirmation =
 				actionName === "assignTag"
@@ -237,8 +237,6 @@ export function createBulkActionController(
 				actionType: "markRead",
 				createPerformUndo: (ids) => async () => {
 					await bulkMarkNotificationsUnread(ids);
-					await options.onRefresh?.();
-					await options.onRefreshViewCounts?.();
 				},
 			},
 		});
@@ -254,8 +252,6 @@ export function createBulkActionController(
 				actionType: "markUnread",
 				createPerformUndo: (ids) => async () => {
 					await bulkMarkNotificationsRead(ids);
-					await options.onRefresh?.();
-					await options.onRefreshViewCounts?.();
 				},
 			},
 		});
@@ -271,8 +267,6 @@ export function createBulkActionController(
 				actionType: "archive",
 				createPerformUndo: (ids) => async () => {
 					await bulkUnarchiveNotifications(ids);
-					await options.onRefresh?.();
-					await options.onRefreshViewCounts?.();
 				},
 			},
 		});
@@ -288,8 +282,6 @@ export function createBulkActionController(
 				actionType: "unarchive",
 				createPerformUndo: (ids) => async () => {
 					await bulkArchiveNotifications(ids);
-					await options.onRefresh?.();
-					await options.onRefreshViewCounts?.();
 				},
 			},
 		});
@@ -305,8 +297,6 @@ export function createBulkActionController(
 				actionType: "mute",
 				createPerformUndo: (ids) => async () => {
 					await bulkUnmuteNotifications(ids);
-					await options.onRefresh?.();
-					await options.onRefreshViewCounts?.();
 				},
 			},
 		});
@@ -322,8 +312,6 @@ export function createBulkActionController(
 				actionType: "unmute",
 				createPerformUndo: (ids) => async () => {
 					await bulkMuteNotifications(ids);
-					await options.onRefresh?.();
-					await options.onRefreshViewCounts?.();
 				},
 			},
 		});
@@ -340,8 +328,6 @@ export function createBulkActionController(
 				metadata: { snoozedUntil },
 				createPerformUndo: (ids) => async () => {
 					await bulkUnsnoozeNotifications(ids);
-					await options.onRefresh?.();
-					await options.onRefreshViewCounts?.();
 				},
 			},
 		});
@@ -368,8 +354,6 @@ export function createBulkActionController(
 				actionType: "star",
 				createPerformUndo: (ids) => async () => {
 					await bulkUnstarNotifications(ids);
-					await options.onRefresh?.();
-					await options.onRefreshViewCounts?.();
 				},
 			},
 		});
@@ -385,8 +369,6 @@ export function createBulkActionController(
 				actionType: "unstar",
 				createPerformUndo: (ids) => async () => {
 					await bulkStarNotifications(ids);
-					await options.onRefresh?.();
-					await options.onRefreshViewCounts?.();
 				},
 			},
 		});
@@ -414,8 +396,6 @@ export function createBulkActionController(
 				metadata: { tagId, tagName },
 				createPerformUndo: (ids) => async () => {
 					await apiBulkRemoveTag(ids, tagId);
-					await options.onRefresh?.();
-					await options.onRefreshViewCounts?.();
 				},
 			},
 		});
@@ -432,8 +412,6 @@ export function createBulkActionController(
 				metadata: { tagId, tagName },
 				createPerformUndo: (ids) => async () => {
 					await apiBulkAssignTag(ids, tagId);
-					await options.onRefresh?.();
-					await options.onRefreshViewCounts?.();
 				},
 			},
 		});

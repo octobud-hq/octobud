@@ -243,8 +243,6 @@ export function createNotificationActionController(
 							} else {
 								await unarchiveNotification(key);
 							}
-							await options.onRefresh?.();
-							await options.onRefreshViewCounts?.();
 						},
 					}
 				: undefined,
@@ -265,8 +263,6 @@ export function createNotificationActionController(
 						actionType: "mute",
 						performUndo: async () => {
 							await unmuteNotification(key);
-							await options.onRefresh?.();
-							await options.onRefreshViewCounts?.();
 						},
 					}
 				: undefined,
@@ -287,8 +283,6 @@ export function createNotificationActionController(
 						actionType: "unmute",
 						performUndo: async () => {
 							await muteNotification(key);
-							await options.onRefresh?.();
-							await options.onRefreshViewCounts?.();
 						},
 					}
 				: undefined,
@@ -314,8 +308,6 @@ export function createNotificationActionController(
 						metadata: { snoozedUntil: until },
 						performUndo: async () => {
 							await unsnoozeNotification(key);
-							await options.onRefresh?.();
-							await options.onRefreshViewCounts?.();
 						},
 					}
 				: undefined,
@@ -340,8 +332,6 @@ export function createNotificationActionController(
 							metadata: { snoozedUntil: previousSnoozedUntil },
 							performUndo: async () => {
 								await snoozeNotification(key, previousSnoozedUntil);
-								await options.onRefresh?.();
-								await options.onRefreshViewCounts?.();
 							},
 						}
 					: undefined,
@@ -362,8 +352,6 @@ export function createNotificationActionController(
 						actionType: "star",
 						performUndo: async () => {
 							await unstarNotification(key);
-							await options.onRefresh?.();
-							await options.onRefreshViewCounts?.();
 						},
 					}
 				: undefined,
@@ -384,8 +372,6 @@ export function createNotificationActionController(
 						actionType: "unstar",
 						performUndo: async () => {
 							await starNotification(key);
-							await options.onRefresh?.();
-							await options.onRefreshViewCounts?.();
 						},
 					}
 				: undefined,
@@ -446,8 +432,6 @@ export function createNotificationActionController(
 							metadata: { tagId: tagIdOrName, tagName: tagName },
 							performUndo: async () => {
 								await removeTagFromNotification(key, tagIdOrName);
-								await options.onRefresh?.();
-								await options.onRefreshViewCounts?.();
 							},
 						}
 					: undefined,
@@ -480,8 +464,6 @@ export function createNotificationActionController(
 						metadata: { tagId, tagName },
 						performUndo: async () => {
 							await assignTagToNotification(key, tagId);
-							await options.onRefresh?.();
-							await options.onRefreshViewCounts?.();
 						},
 					}
 				: undefined,

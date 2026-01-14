@@ -31,7 +31,6 @@ Octobud is designed for keyboard-first navigation. Press `h` at any time to see 
 | `Escape` | Close history (when history open) |
 
 
-
 ## Command Palette
 
 | Shortcut | Action |
