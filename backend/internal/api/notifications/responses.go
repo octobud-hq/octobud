@@ -47,6 +47,23 @@ type ThreadItem struct {
 	SHA         *string      `json:"sha,omitempty"`         // For commits
 	HTMLURL     string       `json:"htmlUrl"`
 	Timestamp   time.Time    `json:"-"` // Internal field for sorting
+	// Event-specific metadata
+	RequestedReviewer *string       `json:"requestedReviewer,omitempty"` // For review_requested
+	Label             *ThreadLabel  `json:"label,omitempty"`             // For labeled/unlabeled
+	Milestone         *string       `json:"milestone,omitempty"`         // For milestoned/demilestoned
+	Rename            *ThreadRename `json:"rename,omitempty"`            // For renamed
+}
+
+// ThreadLabel represents a label in timeline events.
+type ThreadLabel struct {
+	Name  string `json:"name"`
+	Color string `json:"color"`
+}
+
+// ThreadRename represents rename metadata in timeline events.
+type ThreadRename struct {
+	From string `json:"from"`
+	To   string `json:"to"`
 }
 
 // ThreadAuthor represents the author of a comment, review, or event.

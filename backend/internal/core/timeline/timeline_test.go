@@ -57,20 +57,20 @@ func TestFetchFilteredTimeline(t *testing.T) {
 			description:   "should filter out 2 subscribed events and return 3",
 		},
 		{
-			name: "filters out labeled events",
+			name: "filters out project events",
 			timelinePages: [][]types.TimelineEvent{
 				{
 					{Event: "commented", CreatedAt: &now},
-					{Event: "labeled", CreatedAt: &now},
+					{Event: "added_to_project_v2", CreatedAt: &now},
 					{Event: "reviewed", CreatedAt: &now},
-					{Event: "labeled", CreatedAt: &now},
+					{Event: "added_to_project_v2", CreatedAt: &now},
 					{Event: "committed", CreatedAt: &now},
 				},
 			},
 			perPage:       10,
 			page:          1,
 			expectedCount: 3, // Should only get commented, reviewed, committed
-			description:   "should filter out 2 labeled events and return 3",
+			description:   "should filter out 2 project events and return 3",
 		},
 		{
 			name: "fetches multiple pages when needed",
@@ -79,10 +79,10 @@ func TestFetchFilteredTimeline(t *testing.T) {
 				// Need 100 events so service continues to next page
 				page1 := []types.TimelineEvent{
 					{Event: "subscribed", CreatedAt: &now},
-					{Event: "labeled", CreatedAt: &now},
+					{Event: "added_to_project_v2", CreatedAt: &now},
 					{Event: "commented", CreatedAt: &now},
 					{Event: "subscribed", CreatedAt: &now},
-					{Event: "labeled", CreatedAt: &now},
+					{Event: "added_to_project_v2", CreatedAt: &now},
 				}
 				// Pad with filtered events to reach 100
 				for len(page1) < 100 {
@@ -98,7 +98,7 @@ func TestFetchFilteredTimeline(t *testing.T) {
 					{Event: "committed", CreatedAt: &now},
 					{Event: "merged", CreatedAt: &now},
 					{Event: "subscribed", CreatedAt: &now},
-					{Event: "labeled", CreatedAt: &now},
+					{Event: "added_to_project_v2", CreatedAt: &now},
 				}
 				// Pad with filtered events to reach 100
 				for len(page2) < 100 {
@@ -124,7 +124,7 @@ func TestFetchFilteredTimeline(t *testing.T) {
 					{Event: "reviewed", CreatedAt: &now},
 					{Event: "subscribed", CreatedAt: &now},
 					{Event: "committed", CreatedAt: &now},
-					{Event: "labeled", CreatedAt: &now},
+					{Event: "added_to_project_v2", CreatedAt: &now},
 					{Event: "merged", CreatedAt: &now},
 					{Event: "closed", CreatedAt: &now},
 					{Event: "reopened", CreatedAt: &now},

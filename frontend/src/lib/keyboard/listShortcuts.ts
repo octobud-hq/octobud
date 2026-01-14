@@ -20,6 +20,7 @@
  */
 
 import { executeCommand, type CommandContext } from "./commandRegistry";
+import { undoStore } from "$lib/stores/undoStore";
 
 function isFormFieldActive(active: Element | null): boolean {
 	if (!active) {
@@ -89,10 +90,82 @@ export function registerListShortcuts(context: CommandContext): () => void {
 				return;
 			}
 
+			if (lowerKey === "z" && !event.shiftKey) {
+				// Cmd/Ctrl+Z: Undo last action (only when toast is visible)
+				if (undoStore.canUndoViaKeyboard()) {
+					consumeEvent(event);
+					void undoStore.undoActiveToast();
+				}
+				return;
+			}
+
 			return;
 		}
 
 		if (event.altKey) {
+			return;
+		}
+
+		// ============================================================================
+		// HISTORY DROPDOWN MODAL HANDLING
+		// When history dropdown is open, it captures most keyboard input
+		// ============================================================================
+		const historyDropdownOpen = context.getHistoryDropdownOpen?.() ?? false;
+		if (historyDropdownOpen) {
+			const key = event.key.toLowerCase();
+
+			// J/K for navigation within history
+			if (key === "j") {
+				if (executeCommand("historyNavigateDown", context)) {
+					consumeEvent(event);
+				}
+				return;
+			}
+			if (key === "k") {
+				if (executeCommand("historyNavigateUp", context)) {
+					consumeEvent(event);
+				}
+				return;
+			}
+
+			// Enter to undo focused action
+			if (event.key === "Enter") {
+				if (executeCommand("historyUndoFocused", context)) {
+					consumeEvent(event);
+				}
+				return;
+			}
+
+			// Space to open focused notification
+			if (event.key === " " || event.key === "spacebar") {
+				event.preventDefault(); // Prevent page scroll
+				if (executeCommand("historyOpenFocusedNotification", context)) {
+					consumeEvent(event);
+				}
+				return;
+			}
+
+			// Escape to close history (handled below in existing Escape handler)
+			if (event.key === "Escape") {
+				if (executeCommand("closeHistoryDropdown", context)) {
+					consumeEvent(event);
+				}
+				return;
+			}
+
+			// H or Shift+H to toggle/close history
+			if (key === "h") {
+				if (executeCommand("closeHistoryDropdown", context)) {
+					consumeEvent(event);
+				}
+				return;
+			}
+
+			// Block all other keys while history is open
+			// (except modifier keys which naturally don't trigger actions)
+			if (!event.metaKey && !event.ctrlKey && !event.altKey) {
+				consumeEvent(event);
+			}
 			return;
 		}
 
@@ -476,10 +549,18 @@ export function registerListShortcuts(context: CommandContext): () => void {
 			return;
 		}
 
-		// Handle H key to toggle shortcuts modal
+		// Handle H key - Shift+H for history dropdown, H for shortcuts modal
 		if (key === "h") {
-			if (executeCommand("toggleShortcutsModal", context)) {
-				consumeEvent(event);
+			if (event.shiftKey) {
+				// Shift+H: Toggle history dropdown
+				if (executeCommand("toggleHistoryDropdown", context)) {
+					consumeEvent(event);
+				}
+			} else {
+				// H: Toggle shortcuts modal
+				if (executeCommand("toggleShortcutsModal", context)) {
+					consumeEvent(event);
+				}
 			}
 			return;
 		}

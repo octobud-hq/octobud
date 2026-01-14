@@ -367,7 +367,7 @@
 	<div
 		bind:this={rootElement}
 		data-notification-key={notification.githubId ?? notification.id}
-		class={`group relative flex flex-1 cursor-pointer gap-2.5 rounded-lg border px-2.5 py-2 transition ${baseBackground} ${hoverBackground} focus-visible:outline-none ${hasKeyboardFocus || isDetailOpen ? `border-transparent ring-1 ring-blue-600` : borderClass}`}
+		class={`group relative flex flex-1 cursor-pointer gap-2.5 rounded-lg border px-2.5 py-2 transition ${baseBackground} ${hoverBackground} focus-visible:outline-none ${hasKeyboardFocus || isDetailOpen ? `border-blue-600` : borderClass}`}
 		role="button"
 		tabindex="0"
 		aria-label={`Open details for ${notification.subjectTitle}`}

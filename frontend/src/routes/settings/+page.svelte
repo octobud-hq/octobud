@@ -78,6 +78,11 @@
 		return layoutContext?.isAnyDialogOpen() ?? false;
 	}
 
+	// History dropdown functions (delegated to layout)
+	function getHistoryDropdownOpen(): boolean {
+		return layoutContext?.isHistoryDropdownOpen() ?? false;
+	}
+
 	let unregisterShortcuts: (() => void) | null = null;
 
 	onMount(() => {
@@ -92,11 +97,32 @@
 		registerCommand("openPaletteEmpty", () => openCommandPaletteEmpty());
 		registerCommand("toggleShortcutsModal", () => toggleShortcutsModal());
 
+		// History dropdown commands
+		registerCommand("toggleHistoryDropdown", () => {
+			return layoutContext?.toggleHistoryDropdown() ?? false;
+		});
+		registerCommand("closeHistoryDropdown", () => {
+			return layoutContext?.closeHistoryDropdown() ?? false;
+		});
+		registerCommand("historyNavigateDown", () => {
+			return layoutContext?.historyNavigateDown() ?? false;
+		});
+		registerCommand("historyNavigateUp", () => {
+			return layoutContext?.historyNavigateUp() ?? false;
+		});
+		registerCommand("historyUndoFocused", () => {
+			return layoutContext?.historyUndoFocused() ?? false;
+		});
+		registerCommand("historyOpenFocusedNotification", () => {
+			return layoutContext?.historyOpenFocusedNotification() ?? false;
+		});
+
 		// Register shortcuts - only Cmd+K and Cmd+Shift+K are needed for settings
 		unregisterShortcuts = registerListShortcuts({
 			getDetailOpen: () => false,
 			isAnyDialogOpen,
 			isFilterDropdownOpen: () => false,
+			getHistoryDropdownOpen,
 		});
 
 		return () => {
