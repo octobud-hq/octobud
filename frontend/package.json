@@ -33,7 +33,7 @@
         "eslint": "^9.39.2",
         "eslint-config-prettier": "^10.1.8",
         "eslint-plugin-svelte": "^3.13.0",
-        "jsdom": "^27.2.0",
+        "jsdom": "^27.4.0",
         "patch-package": "^8.0.1",
         "postcss": "^8.4.41",
         "prettier": "^3.7.3",
