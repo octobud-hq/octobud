@@ -274,3 +274,132 @@ func TestSQLiteJobQueue_QueueIsolation(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []byte("rule"), job.Payload)
 }
+
+func TestSQLiteJobQueue_NackWithDelay(t *testing.T) {
+	db := setupQueueTestDB(t)
+	queue := NewSQLiteJobQueue(db)
+	ctx := context.Background()
+
+	t.Run("uses minDelay when larger than calculated backoff", func(t *testing.T) {
+		jobID, err := queue.Enqueue(ctx, EnqueueParams{
+			Queue:       QueueProcessNotification,
+			Payload:     []byte("test-min-delay"),
+			MaxAttempts: 5,
+		})
+		require.NoError(t, err)
+
+		job, err := queue.Dequeue(ctx, QueueProcessNotification)
+		require.NoError(t, err)
+		require.Equal(t, jobID, job.ID)
+
+		// First attempt backoff would be ~2s (with jitter), so use a larger minDelay
+		minDelay := 60 * time.Second
+		err = queue.NackWithDelay(ctx, job.ID, errors.New("rate limited"), minDelay)
+		require.NoError(t, err)
+
+		// Verify the job is scheduled with at least the minDelay
+		var scheduledAt string
+		err = db.QueryRowContext(ctx, "SELECT scheduled_at FROM jobs WHERE id = ?", job.ID).
+			Scan(&scheduledAt)
+		require.NoError(t, err)
+
+		scheduled, err := time.Parse(time.RFC3339, scheduledAt)
+		require.NoError(t, err)
+
+		// Should be scheduled at least 55 seconds from now (allowing for test execution time)
+		require.True(t, scheduled.After(time.Now().Add(55*time.Second)),
+			"job should be scheduled at least 55s from now, but was scheduled for %v", scheduled)
+	})
+
+	t.Run("uses calculated backoff when larger than minDelay", func(t *testing.T) {
+		jobID, err := queue.Enqueue(ctx, EnqueueParams{
+			Queue:       QueueProcessNotification,
+			Payload:     []byte("test-calculated-backoff"),
+			MaxAttempts: 5,
+		})
+		require.NoError(t, err)
+
+		job, err := queue.Dequeue(ctx, QueueProcessNotification)
+		require.NoError(t, err)
+		require.Equal(t, jobID, job.ID)
+
+		// Use a very small minDelay that will be smaller than the calculated backoff
+		minDelay := 100 * time.Millisecond
+		err = queue.NackWithDelay(ctx, job.ID, errors.New("temporary error"), minDelay)
+		require.NoError(t, err)
+
+		// Verify the job is scheduled (with calculated backoff, not minDelay)
+		var scheduledAt string
+		err = db.QueryRowContext(ctx, "SELECT scheduled_at FROM jobs WHERE id = ?", job.ID).
+			Scan(&scheduledAt)
+		require.NoError(t, err)
+
+		scheduled, err := time.Parse(time.RFC3339, scheduledAt)
+		require.NoError(t, err)
+
+		// First attempt backoff should be around 1s-3s with jitter (base 2s ±50%)
+		// Should be more than 100ms (the minDelay)
+		delay := time.Until(scheduled)
+		require.True(t, delay > minDelay,
+			"delay should be greater than minDelay, got %v", delay)
+	})
+}
+
+func TestCalculateBackoffWithJitter(t *testing.T) {
+	t.Run("first attempt returns approximately 2 seconds with jitter", func(t *testing.T) {
+		// Run multiple times to verify jitter is applied
+		var results []time.Duration
+		for i := 0; i < 100; i++ {
+			results = append(results, calculateBackoffWithJitter(1))
+		}
+
+		// With jitterFactor = 0.5, base of 2s should give 1s to 3s range
+		for _, d := range results {
+			require.True(t, d >= 1*time.Second && d <= 3*time.Second,
+				"backoff %v should be between 1s and 3s", d)
+		}
+
+		// Verify there's variance (jitter is working)
+		allSame := true
+		for i := 1; i < len(results); i++ {
+			if results[i] != results[0] {
+				allSame = false
+				break
+			}
+		}
+		require.False(t, allSame, "expected jitter to produce different values")
+	})
+
+	t.Run("respects max cap of 300 seconds", func(t *testing.T) {
+		// Attempt 10 would normally give 2^10 = 1024 seconds base, but capped at 300s
+		for i := 0; i < 10; i++ {
+			d := calculateBackoffWithJitter(10)
+			// With jitterFactor = 0.5 and max of 300s, range is 150s to 450s
+			require.True(t, d <= 450*time.Second,
+				"backoff %v should not exceed 450s (300s * 1.5)", d)
+			require.True(t, d >= 150*time.Second,
+				"backoff %v should be at least 150s (300s * 0.5)", d)
+		}
+	})
+
+	t.Run("exponential growth", func(t *testing.T) {
+		// Calculate average for each attempt level
+		avgForAttempt := func(attempt int) time.Duration {
+			var total time.Duration
+			n := 100
+			for i := 0; i < n; i++ {
+				total += calculateBackoffWithJitter(attempt)
+			}
+			return total / time.Duration(n)
+		}
+
+		avg1 := avgForAttempt(1) // Base ~2s
+		avg2 := avgForAttempt(2) // Base ~4s
+		avg3 := avgForAttempt(3) // Base ~8s
+
+		// Each level should approximately double
+		// Allow for jitter variance
+		require.True(t, avg2 > avg1, "avg2 (%v) should be > avg1 (%v)", avg2, avg1)
+		require.True(t, avg3 > avg2, "avg3 (%v) should be > avg2 (%v)", avg3, avg2)
+	})
+}

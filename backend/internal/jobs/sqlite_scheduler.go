@@ -28,6 +28,7 @@ import (
 	"github.com/octobud-hq/octobud/backend/internal/core/auth"
 	"github.com/octobud-hq/octobud/backend/internal/core/update"
 	"github.com/octobud-hq/octobud/backend/internal/db"
+	"github.com/octobud-hq/octobud/backend/internal/github"
 	"github.com/octobud-hq/octobud/backend/internal/jobs/handlers"
 	coresync "github.com/octobud-hq/octobud/backend/internal/sync"
 )
@@ -441,13 +442,21 @@ func (s *SQLiteScheduler) notificationWorker(ctx context.Context, workerID int) 
 
 		err = s.processNotificationHandler.Handle(ctx, userID, job.Payload)
 		if err != nil {
-			s.logger.Warn("notification job failed",
+			// Extract server-specified retry delay if present (e.g., from Retry-After header)
+			var minDelay time.Duration
+			fields := []zap.Field{
 				zap.Int64("jobID", job.ID),
 				zap.Int("attempt", job.Attempts),
-				zap.Error(err))
+				zap.Error(err),
+			}
+			if retryDelay := github.GetRetryDelayFromError(err); retryDelay != nil {
+				minDelay = *retryDelay
+				fields = append(fields, zap.Duration("serverRetryDelay", minDelay))
+			}
+			s.logger.Warn("notification job failed", fields...)
 
-			// Nack will either retry or dead-letter the job
-			if nackErr := s.jobQueue.Nack(ctx, job.ID, err); nackErr != nil {
+			// NackWithDelay uses max(minDelay, calculatedBackoff); 0 means use backoff only
+			if nackErr := s.jobQueue.NackWithDelay(ctx, job.ID, err, minDelay); nackErr != nil {
 				s.logger.Error("failed to nack job", zap.Int64("jobID", job.ID), zap.Error(nackErr))
 			}
 		} else {
