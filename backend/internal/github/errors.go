@@ -17,12 +17,64 @@ package github
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"net/url"
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 )
+
+// APIError represents an error from the GitHub API with optional retry information.
+// It captures response headers that indicate when the client should retry.
+type APIError struct {
+	StatusCode     int            // HTTP status code
+	Message        string         // Error message from response body
+	RetryAfter     *time.Duration // Parsed from Retry-After header (seconds to wait)
+	RateLimitReset *time.Time     // Parsed from x-ratelimit-reset header (UTC timestamp)
+}
+
+// Error implements the error interface.
+func (e *APIError) Error() string {
+	return fmt.Sprintf("github: API status %d: %s", e.StatusCode, e.Message)
+}
+
+// GetRetryDelay returns the recommended duration to wait before retrying.
+// It prefers RetryAfter if set, otherwise calculates from RateLimitReset.
+// Returns nil if no retry information is available.
+func (e *APIError) GetRetryDelay() *time.Duration {
+	if e.RetryAfter != nil {
+		return e.RetryAfter
+	}
+	if e.RateLimitReset != nil {
+		delay := time.Until(*e.RateLimitReset)
+		if delay > 0 {
+			return &delay
+		}
+	}
+	return nil
+}
+
+// IsRateLimitError returns true if this is a rate limit error (429 or 403 with rate limit).
+func (e *APIError) IsRateLimitError() bool {
+	return e.StatusCode == 429 || (e.StatusCode == 403 && e.RateLimitReset != nil)
+}
+
+// IsServerError returns true if this is a server error (5xx).
+func (e *APIError) IsServerError() bool {
+	return e.StatusCode >= 500 && e.StatusCode < 600
+}
+
+// GetRetryDelayFromError extracts the retry delay from an error if it's an APIError.
+// Returns nil if the error is not an APIError or has no retry information.
+func GetRetryDelayFromError(err error) *time.Duration {
+	var apiErr *APIError
+	if errors.As(err, &apiErr) {
+		return apiErr.GetRetryDelay()
+	}
+	return nil
+}
 
 // IsRetriableError determines if an error from GitHub API calls should be retried.
 // Returns true for transient errors that might succeed on retry:
@@ -30,12 +82,18 @@ import (
 // - HTTP 429 (rate limit)
 // - HTTP 5xx (server errors)
 // Returns false for permanent errors that won't succeed on retry:
-// - HTTP 403 (forbidden - org restrictions)
+// - HTTP 403 (forbidden - org restrictions, unless rate limited)
 // - HTTP 404 (not found - deleted PR/issue)
 // - HTTP 401 (unauthorized - auth issues)
 func IsRetriableError(err error) bool {
 	if err == nil {
 		return false
+	}
+
+	// Check if it's our structured APIError type
+	var apiErr *APIError
+	if errors.As(err, &apiErr) {
+		return isRetriableStatusCode(apiErr.StatusCode, apiErr.RateLimitReset != nil)
 	}
 
 	// Check for network errors
@@ -65,8 +123,8 @@ func IsRetriableError(err error) bool {
 		return IsRetriableError(urlErr.Err)
 	}
 
-	// Parse error message for HTTP status codes
-	// FetchSubjectRaw returns: "github: subject status %d: %s"
+	// Parse error message for HTTP status codes (legacy path for non-APIError errors)
+	// Format: "github: API status %d: %s" or similar patterns containing "status <code>"
 	errStr := err.Error()
 
 	// Look for "status" followed by a number
@@ -91,13 +149,21 @@ func IsRetriableError(err error) bool {
 		return true // Can't parse status code, assume retriable
 	}
 
-	// Classify based on status code
+	return isRetriableStatusCode(statusCode, false)
+}
+
+// isRetriableStatusCode determines if an HTTP status code indicates a retriable error.
+// The isRateLimited parameter indicates if rate limit headers were present (for 403 responses).
+func isRetriableStatusCode(statusCode int, isRateLimited bool) bool {
 	switch statusCode {
 	case 429: // Rate limit - definitely retriable
 		return true
 	case 500, 502, 503, 504: // Server errors - retriable
 		return true
-	case 403, 404, 401: // Permanent errors - not retriable
+	case 403:
+		// 403 is retriable if it's due to rate limiting, otherwise permanent
+		return isRateLimited
+	case 404, 401: // Permanent errors - not retriable
 		return false
 	default:
 		// Unknown status code - be conservative and retry

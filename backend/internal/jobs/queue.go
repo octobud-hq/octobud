@@ -21,10 +21,18 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"math/rand"
 	"time"
 
 	"github.com/octobud-hq/octobud/backend/internal/db"
 	"github.com/octobud-hq/octobud/backend/internal/db/sqlite"
+)
+
+// Jitter configuration for exponential backoff
+const (
+	// jitterFactor is the range of randomization applied to backoff.
+	// 0.5 means the actual delay will be between 50% and 150% of the base backoff.
+	jitterFactor = 0.5
 )
 
 // Queue names for different job types
@@ -84,6 +92,11 @@ type JobQueue interface {
 
 	// Nack marks a job as failed - will retry with backoff or dead-letter
 	Nack(ctx context.Context, jobID int64, err error) error
+
+	// NackWithDelay marks a job as failed with a minimum retry delay.
+	// This is useful when the server provides a Retry-After header.
+	// The actual delay will be max(minDelay, calculatedBackoff).
+	NackWithDelay(ctx context.Context, jobID int64, err error, minDelay time.Duration) error
 
 	// ResetStale reclaims jobs stuck in "processing" state (crashed workers)
 	ResetStale(ctx context.Context, timeout time.Duration) (int64, error)
@@ -178,6 +191,18 @@ func (q *SQLiteJobQueue) Ack(ctx context.Context, jobID int64) error {
 
 // Nack marks a job as failed - will retry with backoff or dead-letter
 func (q *SQLiteJobQueue) Nack(ctx context.Context, jobID int64, jobErr error) error {
+	return q.NackWithDelay(ctx, jobID, jobErr, 0)
+}
+
+// NackWithDelay marks a job as failed with an optional minimum retry delay.
+// If minDelay is provided (> 0), the actual delay will be max(minDelay, calculatedBackoff).
+// This is useful when the server provides a Retry-After header that should be respected.
+func (q *SQLiteJobQueue) NackWithDelay(
+	ctx context.Context,
+	jobID int64,
+	jobErr error,
+	minDelay time.Duration,
+) error {
 	// Retry all operations on SQLITE_BUSY - critical to ensure job state is updated
 	// If Nack fails, the job would be stuck in "processing" state until stale job cleanup
 
@@ -204,16 +229,15 @@ func (q *SQLiteJobQueue) Nack(ctx context.Context, jobID int64, jobErr error) er
 		})
 	}
 
-	// Calculate exponential backoff: 1s, 2s, 4s, 8s, 16s...
-	backoffSeconds := int(math.Pow(2, float64(job.Attempts-1)))
-	if backoffSeconds < 1 {
-		backoffSeconds = 1
-	}
-	if backoffSeconds > 300 { // Cap at 5 minutes
-		backoffSeconds = 300
+	// Calculate exponential backoff with jitter to prevent thundering herd
+	backoffDelay := calculateBackoffWithJitter(int(job.Attempts))
+
+	// Use the larger of calculated backoff or server-specified minimum delay
+	if minDelay > backoffDelay {
+		backoffDelay = minDelay
 	}
 
-	nextSchedule := time.Now().UTC().Add(time.Duration(backoffSeconds) * time.Second)
+	nextSchedule := time.Now().UTC().Add(backoffDelay)
 
 	return db.RetryVoidOnBusy(ctx, func() error {
 		return q.queries.NackJobRetry(ctx, sqlite.NackJobRetryParams{
@@ -222,6 +246,32 @@ func (q *SQLiteJobQueue) Nack(ctx context.Context, jobID int64, jobErr error) er
 			LastError:   errStr,
 		})
 	})
+}
+
+// calculateBackoffWithJitter computes an exponential backoff delay with random jitter.
+// Base formula: 2^attempts seconds, with ±50% jitter.
+// This prevents the thundering herd problem when multiple workers fail at the same time.
+func calculateBackoffWithJitter(attempts int) time.Duration {
+	// Base exponential backoff: 2s, 4s, 8s, 16s, 32s...
+	// Starting at 2s gives a reasonable initial delay for API failures.
+	baseBackoffSeconds := math.Pow(2, float64(attempts))
+	if baseBackoffSeconds < 2 {
+		baseBackoffSeconds = 2
+	}
+
+	// Cap at 5 minutes before applying jitter
+	const maxBackoffSeconds = 300.0
+	if baseBackoffSeconds > maxBackoffSeconds {
+		baseBackoffSeconds = maxBackoffSeconds
+	}
+
+	// Apply jitter: multiply by random factor between (1-jitterFactor) and (1+jitterFactor)
+	// This spreads retries across time to avoid synchronized retry storms
+	// #nosec G404 -- math/rand is sufficient for jitter; no security requirement
+	jitterMultiplier := 1.0 - jitterFactor + (rand.Float64() * 2 * jitterFactor)
+	backoffSeconds := baseBackoffSeconds * jitterMultiplier
+
+	return time.Duration(backoffSeconds * float64(time.Second))
 }
 
 // ResetStale reclaims jobs stuck in "processing" state
