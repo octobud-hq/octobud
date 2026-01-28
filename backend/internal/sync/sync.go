@@ -312,10 +312,15 @@ func (s *Service) ProcessNotification(
 	} else if err != nil {
 		// Check if error is retriable - if so, return error to trigger job retry
 		if github.IsRetriableError(err) {
-			s.logger.Warn("failed to fetch subject data (retriable error, will retry)",
+			fields := []zap.Field{
 				zap.String("githubID", thread.ID),
 				zap.String("subjectURL", thread.Subject.URL),
-				zap.Error(err))
+				zap.Error(err),
+			}
+			if retryDelay := github.GetRetryDelayFromError(err); retryDelay != nil {
+				fields = append(fields, zap.Duration("serverRetryAfter", *retryDelay))
+			}
+			s.logger.Warn("failed to fetch subject data (retriable error, will retry)", fields...)
 			return errors.Join(ErrFailedToFetchSubject, err)
 		}
 		// Non-retriable error - log but don't fail, continue without subject data

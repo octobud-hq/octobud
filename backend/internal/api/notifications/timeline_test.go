@@ -58,38 +58,38 @@ func TestFetchAndFilterTimelineEvents(t *testing.T) {
 			description:   "should filter out 2 subscribed events and return 3",
 		},
 		{
-			name: "filters out labeled events",
+			name: "filters out cross-referenced events",
 			timelinePages: [][]types.TimelineEvent{
 				{
 					{Event: "commented", CreatedAt: &now},
-					{Event: "labeled", CreatedAt: &now},
+					{Event: "cross-referenced", CreatedAt: &now},
 					{Event: "reviewed", CreatedAt: &now},
-					{Event: "labeled", CreatedAt: &now},
+					{Event: "cross-referenced", CreatedAt: &now},
 					{Event: "committed", CreatedAt: &now},
 				},
 			},
 			perPage:       10,
 			page:          1,
 			expectedCount: 3, // Should only get commented, reviewed, committed
-			description:   "should filter out 2 labeled events and return 3",
+			description:   "should filter out 2 cross-referenced events and return 3",
 		},
 		{
-			name: "filters out both subscribed and labeled events",
+			name: "filters out both subscribed and project events",
 			timelinePages: [][]types.TimelineEvent{
 				{
 					{Event: "commented", CreatedAt: &now},
 					{Event: "subscribed", CreatedAt: &now},
-					{Event: "labeled", CreatedAt: &now},
+					{Event: "added_to_project_v2", CreatedAt: &now},
 					{Event: "reviewed", CreatedAt: &now},
 					{Event: "subscribed", CreatedAt: &now},
-					{Event: "labeled", CreatedAt: &now},
+					{Event: "added_to_project_v2", CreatedAt: &now},
 					{Event: "committed", CreatedAt: &now},
 				},
 			},
 			perPage:       10,
 			page:          1,
 			expectedCount: 3, // Should only get commented, reviewed, committed
-			description:   "should filter out 2 subscribed and 2 labeled events and return 3",
+			description:   "should filter out 2 subscribed and 2 project events and return 3",
 		},
 		{
 			name: "filters out project events",
@@ -140,20 +140,20 @@ func TestFetchAndFilterTimelineEvents(t *testing.T) {
 			description:   "should filter out connected events",
 		},
 		{
-			name: "filters out review_requested events",
+			name: "filters out base_ref_changed events",
 			timelinePages: [][]types.TimelineEvent{
 				{
 					{Event: "commented", CreatedAt: &now},
-					{Event: "review_requested", CreatedAt: &now},
+					{Event: "base_ref_changed", CreatedAt: &now},
 					{Event: "reviewed", CreatedAt: &now},
-					{Event: "review_requested", CreatedAt: &now},
+					{Event: "base_ref_changed", CreatedAt: &now},
 					{Event: "committed", CreatedAt: &now},
 				},
 			},
 			perPage:       10,
 			page:          1,
 			expectedCount: 3, // Should only get commented, reviewed, committed
-			description:   "should filter out review_requested events",
+			description:   "should filter out base_ref_changed events",
 		},
 		{
 			name: "fetches multiple pages when needed",
@@ -162,10 +162,10 @@ func TestFetchAndFilterTimelineEvents(t *testing.T) {
 				// Need 100 events so service continues to next page
 				page1 := []types.TimelineEvent{
 					{Event: "subscribed", CreatedAt: &now},
-					{Event: "labeled", CreatedAt: &now},
+					{Event: "added_to_project_v2", CreatedAt: &now},
 					{Event: "commented", CreatedAt: &now},
 					{Event: "subscribed", CreatedAt: &now},
-					{Event: "labeled", CreatedAt: &now},
+					{Event: "added_to_project_v2", CreatedAt: &now},
 				}
 				// Pad with filtered events to reach 100
 				for len(page1) < 100 {
@@ -178,7 +178,7 @@ func TestFetchAndFilterTimelineEvents(t *testing.T) {
 					{Event: "committed", CreatedAt: &now},
 					{Event: "merged", CreatedAt: &now},
 					{Event: "subscribed", CreatedAt: &now},
-					{Event: "labeled", CreatedAt: &now},
+					{Event: "added_to_project_v2", CreatedAt: &now},
 				}
 				// Pad with filtered events to reach 100
 				for len(page2) < 100 {
@@ -201,7 +201,7 @@ func TestFetchAndFilterTimelineEvents(t *testing.T) {
 					{Event: "reviewed", CreatedAt: &now},
 					{Event: "subscribed", CreatedAt: &now},
 					{Event: "committed", CreatedAt: &now},
-					{Event: "labeled", CreatedAt: &now},
+					{Event: "added_to_project_v2", CreatedAt: &now},
 					{Event: "merged", CreatedAt: &now},
 					{Event: "closed", CreatedAt: &now},
 					{Event: "reopened", CreatedAt: &now},

@@ -97,12 +97,20 @@ export function computeAvatarUrl(
 }
 
 /**
- * Checks if a URL is a redirect URL (github.com/username.png pattern).
+ * Checks if a URL is a GitHub avatar redirect URL.
  * @param url - URL to check
- * @returns True if it's a redirect URL
+ * @returns True if the URL is on github.com and ends with .png
  */
 export function isRedirectAvatarUrl(url: string | null | undefined): boolean {
-	return !!(url && url.includes("github.com/") && url.endsWith(".png"));
+	if (!url || !url.endsWith(".png")) {
+		return false;
+	}
+	try {
+		const parsed = new URL(url);
+		return parsed.hostname === "github.com" || parsed.hostname === "www.github.com";
+	} catch {
+		return false;
+	}
 }
 
 /**

@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -35,11 +36,44 @@ const (
 	minPerPage        = 10 // Minimum page size for retries
 	githubAPIBase     = "https://api.github.com"
 	githubGraphQLBase = "https://api.github.com/graphql"
+
+	// HTTP header names for rate limiting
+	headerRetryAfter     = "Retry-After"
+	headerRateLimitReset = "X-RateLimit-Reset"
 )
 
 // retryPageSizes defines the page sizes to try when encountering 502/504 errors.
 // These are progressively smaller to help with timeout issues.
 var retryPageSizes = []int{25, 15, minPerPage}
+
+// newAPIError creates an APIError with retry timing information parsed from headers.
+// This takes only the required fields rather than the full http.Response for testability.
+func newAPIError(statusCode int, headers http.Header, body []byte) *APIError {
+	apiErr := &APIError{
+		StatusCode: statusCode,
+		Message:    string(body),
+	}
+
+	// Parse Retry-After header (integer seconds)
+	// GitHub uses this for secondary rate limits
+	if retryAfter := headers.Get(headerRetryAfter); retryAfter != "" {
+		if seconds, err := strconv.Atoi(retryAfter); err == nil && seconds > 0 {
+			duration := time.Duration(seconds) * time.Second
+			apiErr.RetryAfter = &duration
+		}
+	}
+
+	// Parse X-RateLimit-Reset header (Unix timestamp)
+	// GitHub uses this for primary rate limits
+	if resetStr := headers.Get(headerRateLimitReset); resetStr != "" {
+		if timestamp, err := strconv.ParseInt(resetStr, 10, 64); err == nil {
+			resetTime := time.Unix(timestamp, 0)
+			apiErr.RateLimitReset = &resetTime
+		}
+	}
+
+	return apiErr
+}
 
 // clientImpl wraps calls to the GitHub API for interacting with the Notifications API.
 type clientImpl struct {
@@ -334,6 +368,8 @@ func (c *clientImpl) FetchNotifications(
 }
 
 // FetchSubjectRaw retrieves the raw JSON payload for a notification subject.
+// On error, it returns an *APIError that may contain retry timing information
+// from the Retry-After or X-RateLimit-Reset headers.
 func (c *clientImpl) FetchSubjectRaw(
 	ctx context.Context,
 	subjectURL string,
@@ -368,7 +404,8 @@ func (c *clientImpl) FetchSubjectRaw(
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("github: subject status %d: %s", resp.StatusCode, string(body))
+		// Return a structured APIError with retry information from headers
+		return nil, newAPIError(resp.StatusCode, resp.Header, body)
 	}
 
 	var raw json.RawMessage

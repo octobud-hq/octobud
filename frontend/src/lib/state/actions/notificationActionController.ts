@@ -31,6 +31,12 @@ import {
 } from "$lib/api/notifications";
 import { assignTagToNotification, removeTagFromNotification } from "$lib/api/tags";
 import { toastStore } from "$lib/stores/toastStore";
+import { undoStore } from "$lib/stores/undoStore";
+import {
+	createUndoableAction,
+	toRecentActionNotification,
+	type UndoableActionType,
+} from "$lib/undo/types";
 import type { NotificationStore } from "../../stores/notificationStore";
 import type { PaginationStore } from "../../stores/paginationStore";
 import type { DetailStore } from "../../stores/detailViewStore";
@@ -85,6 +91,19 @@ export function createNotificationActionController(
 		successToast?: string | null;
 		errorToast?: string;
 		shouldCloseDetailInSingleMode?: boolean;
+		/** Configuration for making this action undoable */
+		undoConfig?: {
+			/** The action type for undo purposes */
+			actionType: UndoableActionType;
+			/** Function to perform the inverse operation */
+			performUndo: () => Promise<void>;
+			/** Optional metadata (e.g., tagId, snoozedUntil) */
+			metadata?: {
+				tagId?: string;
+				tagName?: string;
+				snoozedUntil?: string | null;
+			};
+		};
 	}): Promise<void> {
 		const {
 			notification,
@@ -94,6 +113,7 @@ export function createNotificationActionController(
 			successToast = null,
 			errorToast = "Failed to perform action",
 			shouldCloseDetailInSingleMode = false,
+			undoConfig,
 		} = params;
 
 		const key = notification.githubId ?? notification.id;
@@ -149,8 +169,19 @@ export function createNotificationActionController(
 			// Perform the actual API call using the key from the current notification
 			const updated = await performAction(key);
 
-			// Show success toast if provided
-			if (successToast) {
+			// Handle success: show toast with undo support or regular toast
+			if (undoConfig && successToast) {
+				// Create undoable action and push to undo store (shows toast with undo button)
+				// Use toRecentActionNotification to store only essential fields for lighter storage
+				const undoableAction = createUndoableAction({
+					type: undoConfig.actionType,
+					notifications: [toRecentActionNotification(currentNotification)],
+					metadata: undoConfig.metadata,
+					performUndo: undoConfig.performUndo,
+				});
+				undoStore.pushAction(undoableAction);
+			} else if (successToast) {
+				// Show regular toast without undo
 				toastStore.info(successToast);
 			}
 
@@ -193,79 +224,157 @@ export function createNotificationActionController(
 
 	async function archive(notification: Notification): Promise<void> {
 		const isCurrentlyArchived = notification.archived;
+		const key = notification.githubId ?? notification.id;
 
 		await handleAction({
 			notification,
 			actionName: isCurrentlyArchived ? "unarchive" : "archive",
-			performAction: (key) =>
-				isCurrentlyArchived ? unarchiveNotification(key) : archiveNotification(key),
+			performAction: (k) =>
+				isCurrentlyArchived ? unarchiveNotification(k) : archiveNotification(k),
 			shouldRemoveFromSelection: true,
 			successToast: isCurrentlyArchived ? "Unarchived" : "Archived",
 			errorToast: "Failed to toggle archive status",
+			undoConfig: key
+				? {
+						actionType: isCurrentlyArchived ? "unarchive" : "archive",
+						performUndo: async () => {
+							if (isCurrentlyArchived) {
+								await archiveNotification(key);
+							} else {
+								await unarchiveNotification(key);
+							}
+						},
+					}
+				: undefined,
 		});
 	}
 
 	async function mute(notification: Notification): Promise<void> {
+		const key = notification.githubId ?? notification.id;
+
 		await handleAction({
 			notification,
 			actionName: "mute",
-			performAction: (key) => muteNotification(key),
+			performAction: (k) => muteNotification(k),
 			successToast: "Muted",
 			errorToast: "Failed to mute notification",
+			undoConfig: key
+				? {
+						actionType: "mute",
+						performUndo: async () => {
+							await unmuteNotification(key);
+						},
+					}
+				: undefined,
 		});
 	}
 
 	async function unmute(notification: Notification): Promise<void> {
+		const key = notification.githubId ?? notification.id;
+
 		await handleAction({
 			notification,
 			actionName: "unmute",
-			performAction: (key) => unmuteNotification(key),
+			performAction: (k) => unmuteNotification(k),
 			successToast: "Unmuted",
 			errorToast: "Failed to unmute notification",
+			undoConfig: key
+				? {
+						actionType: "unmute",
+						performUndo: async () => {
+							await muteNotification(key);
+						},
+					}
+				: undefined,
 		});
 	}
 
 	async function snooze(notification: Notification, until: string): Promise<void> {
+		const key = notification.githubId ?? notification.id;
+
 		await handleAction({
 			notification,
 			actionName: "snooze",
-			performAction: async (key) => {
-				await snoozeNotification(key, until);
+			performAction: async (k) => {
+				await snoozeNotification(k, until);
 				// Snooze API doesn't return updated notification, so return original
 				return notification;
 			},
 			successToast: "Snoozed",
 			errorToast: "Failed to snooze notification",
+			undoConfig: key
+				? {
+						actionType: "snooze",
+						metadata: { snoozedUntil: until },
+						performUndo: async () => {
+							await unsnoozeNotification(key);
+						},
+					}
+				: undefined,
 		});
 	}
 
 	async function unsnooze(notification: Notification): Promise<void> {
+		const key = notification.githubId ?? notification.id;
+		// Store the current snoozedUntil value for potential redo
+		const previousSnoozedUntil = notification.snoozedUntil;
+
 		await handleAction({
 			notification,
 			actionName: "unsnooze",
-			performAction: (key) => unsnoozeNotification(key),
+			performAction: (k) => unsnoozeNotification(k),
 			successToast: "Unsnoozed",
 			errorToast: "Failed to unsnooze notification",
+			undoConfig:
+				key && previousSnoozedUntil
+					? {
+							actionType: "unsnooze",
+							metadata: { snoozedUntil: previousSnoozedUntil },
+							performUndo: async () => {
+								await snoozeNotification(key, previousSnoozedUntil);
+							},
+						}
+					: undefined,
 		});
 	}
 
 	async function star(notification: Notification): Promise<void> {
+		const key = notification.githubId ?? notification.id;
+
 		await handleAction({
 			notification,
 			actionName: "star",
-			performAction: (key) => starNotification(key),
-			successToast: null,
+			performAction: (k) => starNotification(k),
+			successToast: "Starred",
 			errorToast: "Failed to star notification",
+			undoConfig: key
+				? {
+						actionType: "star",
+						performUndo: async () => {
+							await unstarNotification(key);
+						},
+					}
+				: undefined,
 		});
 	}
 
 	async function unstar(notification: Notification): Promise<void> {
+		const key = notification.githubId ?? notification.id;
+
 		await handleAction({
 			notification,
 			actionName: "unstar",
-			performAction: (key) => unstarNotification(key),
-			successToast: null,
+			performAction: (k) => unstarNotification(k),
+			successToast: "Unstarred",
 			errorToast: "Failed to unstar notification",
+			undoConfig: key
+				? {
+						actionType: "unstar",
+						performUndo: async () => {
+							await starNotification(key);
+						},
+					}
+				: undefined,
 		});
 	}
 
@@ -279,7 +388,7 @@ export function createNotificationActionController(
 		});
 	}
 
-	async function assignTag(githubId: string, tagIdOrName: string): Promise<void> {
+	async function assignTag(githubId: string, tagIdOrName: string, tagName?: string): Promise<void> {
 		// Find the notification to operate on
 		const currentPageData = get(notificationStore.pageData);
 		const currentNotification = currentPageData.items.find(
@@ -298,26 +407,38 @@ export function createNotificationActionController(
 			tagIdOrName
 		);
 
+		const key = currentNotification.githubId ?? currentNotification.id;
+
 		await handleAction({
 			notification: currentNotification,
 			actionName: "assignTag",
-			performAction: async (key) => {
+			performAction: async (k) => {
 				if (isUuidId) {
 					// It's a UUID tag ID - use direct assignment
-					return await assignTagToNotification(key, tagIdOrName);
+					return await assignTagToNotification(k, tagIdOrName);
 				} else {
 					// It's a tag name - use name-based assignment (creates tag if needed)
 					return await import("$lib/api/tags").then((m) =>
-						m.assignTagToNotificationByName(key, tagIdOrName)
+						m.assignTagToNotificationByName(k, tagIdOrName)
 					);
 				}
 			},
-			successToast: null,
+			successToast: `Added tag${tagName ? ` "${tagName}"` : ""}`,
 			errorToast: "Failed to assign tag",
+			undoConfig:
+				key && isUuidId
+					? {
+							actionType: "assignTag",
+							metadata: { tagId: tagIdOrName, tagName: tagName },
+							performUndo: async () => {
+								await removeTagFromNotification(key, tagIdOrName);
+							},
+						}
+					: undefined,
 		});
 	}
 
-	async function removeTag(githubId: string, tagId: string): Promise<void> {
+	async function removeTag(githubId: string, tagId: string, tagName?: string): Promise<void> {
 		// Find the notification to operate on
 		const currentPageData = get(notificationStore.pageData);
 		const currentNotification = currentPageData.items.find(
@@ -329,12 +450,23 @@ export function createNotificationActionController(
 			return;
 		}
 
+		const key = currentNotification.githubId ?? currentNotification.id;
+
 		await handleAction({
 			notification: currentNotification,
 			actionName: "unassignTag",
-			performAction: (key) => removeTagFromNotification(key, tagId),
-			successToast: null,
+			performAction: (k) => removeTagFromNotification(k, tagId),
+			successToast: `Removed tag${tagName ? ` "${tagName}"` : ""}`,
 			errorToast: "Failed to remove tag",
+			undoConfig: key
+				? {
+						actionType: "removeTag",
+						metadata: { tagId, tagName },
+						performUndo: async () => {
+							await assignTagToNotification(key, tagId);
+						},
+					}
+				: undefined,
 		});
 	}
 

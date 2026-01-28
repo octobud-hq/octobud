@@ -96,6 +96,14 @@ func TestListOptions_normalizedPagination(t *testing.T) {
 			expectedPage:   1,
 			expectedSize:   50,
 		},
+		{
+			name:           "excessively large page clamped to maxListPage",
+			opts:           models.ListOptions{Page: 999_999_999, PageSize: 50},
+			expectedLimit:  50,
+			expectedOffset: int32((maxListPage - 1) * 50), // clamped page * pageSize
+			expectedPage:   maxListPage,
+			expectedSize:   50,
+		},
 	}
 
 	for _, tt := range tests {

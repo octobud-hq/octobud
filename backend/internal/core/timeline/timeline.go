@@ -37,11 +37,6 @@ var FilteredEventTypes = map[string]bool{
 	// PR
 	"auto_squash_enabled":  true,
 	"auto_squash_disabled": true,
-	// Mentioned
-	"mentioned": true,
-	// Labels
-	"labeled":   true,
-	"unlabeled": true,
 	// Projects
 	"added_to_project_v2":            true,
 	"removed_from_project_v2":        true,
@@ -52,18 +47,13 @@ var FilteredEventTypes = map[string]bool{
 	// Connections
 	"connected":                       true,
 	"disconnected":                    true,
-	"review_requested":                true,
-	"review_dismissed":                true,
 	"automatic_base_change_succeeded": true,
 	"automatic_base_change_failed":    true,
 	"cross-referenced":                true,
 	"referenced":                      true,
-	"milestoned":                      true,
-	"demilestoned":                    true,
 	"base_ref_changed":                true,
 	"base_ref_force_pushed":           true,
 	// Issue modifications
-	"renamed":            true,
 	"parent_issue_added": true,
 	"issue_type_added":   true,
 	"sub_issue_added":    true,
@@ -472,6 +462,22 @@ func convertTimelineEvent(event types.TimelineEvent) *models.TimelineItem {
 	} else if event.Actor != nil {
 		item.AuthorLogin = event.Actor.Login
 		item.AuthorAvatarURL = event.Actor.AvatarURL
+	}
+
+	// Set event-specific metadata
+	if event.RequestedReviewer != nil {
+		item.RequestedReviewerLogin = event.RequestedReviewer.Login
+	}
+	if event.Label != nil {
+		item.LabelName = event.Label.Name
+		item.LabelColor = event.Label.Color
+	}
+	if event.Milestone != nil {
+		item.MilestoneTitle = event.Milestone.Title
+	}
+	if event.Rename != nil {
+		item.RenameFrom = event.Rename.From
+		item.RenameTo = event.Rename.To
 	}
 
 	// Set timestamp for sorting - if no timestamp exists, return nil

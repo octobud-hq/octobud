@@ -126,4 +126,26 @@ type TimelineEvent struct {
 	HTMLURL     string          `json:"html_url,omitempty"`
 	CommitID    string          `json:"commit_id,omitempty"`  // For some events
 	CommitURL   string          `json:"commit_url,omitempty"` // For some events
+	// Event-specific metadata
+	RequestedReviewer *SimpleUser      `json:"requested_reviewer,omitempty"` // For review_requested
+	Label             *TimelineLabel   `json:"label,omitempty"`              // For labeled/unlabeled
+	Milestone         *SimpleMilestone `json:"milestone,omitempty"`          // For milestoned/demilestoned
+	Rename            *TimelineRename  `json:"rename,omitempty"`             // For renamed
+}
+
+// TimelineLabel represents a label in timeline events.
+type TimelineLabel struct {
+	Name  string `json:"name"`
+	Color string `json:"color"`
+}
+
+// SimpleMilestone represents a milestone in timeline events.
+type SimpleMilestone struct {
+	Title string `json:"title"`
+}
+
+// TimelineRename represents rename metadata in timeline events.
+type TimelineRename struct {
+	From string `json:"from"`
+	To   string `json:"to"`
 }

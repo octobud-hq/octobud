@@ -309,6 +309,17 @@ export interface NotificationTimelineItem {
 	createdAt?: string;
 	updatedAt?: string;
 	submittedAt?: string;
+	// Event-specific metadata
+	requestedReviewer?: string; // For review_requested
+	label?: {
+		name: string;
+		color: string;
+	};
+	milestone?: string; // For milestoned/demilestoned
+	rename?: {
+		from: string;
+		to: string;
+	};
 }
 
 export type NotificationThreadItem =
