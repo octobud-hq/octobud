@@ -21,6 +21,7 @@ import (
 	"net/url"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -160,3 +161,231 @@ type timeoutError struct{}
 func (e *timeoutError) Error() string   { return "timeout" }
 func (e *timeoutError) Timeout() bool   { return true }
 func (e *timeoutError) Temporary() bool { return false }
+
+func TestAPIError_Error(t *testing.T) {
+	err := &APIError{
+		StatusCode: 429,
+		Message:    "rate limit exceeded",
+	}
+	require.Equal(t, "github: API status 429: rate limit exceeded", err.Error())
+}
+
+func TestAPIError_GetRetryDelay(t *testing.T) {
+	t.Run("prefers RetryAfter when set", func(t *testing.T) {
+		// Use a far-future RateLimitReset to avoid timing sensitivity
+		futureReset := time.Now().Add(10 * time.Minute)
+		err := &APIError{
+			StatusCode:     429,
+			Message:        "rate limited",
+			RetryAfter:     durationPtr(60 * time.Second),
+			RateLimitReset: &futureReset,
+		}
+		result := err.GetRetryDelay()
+		require.NotNil(t, result)
+		require.Equal(t, 60*time.Second, *result)
+	})
+
+	t.Run("uses RateLimitReset when RetryAfter not set", func(t *testing.T) {
+		// Use a generous buffer to avoid timing sensitivity in slow CI
+		futureReset := time.Now().Add(5 * time.Minute)
+		err := &APIError{
+			StatusCode:     429,
+			Message:        "rate limited",
+			RateLimitReset: &futureReset,
+		}
+		result := err.GetRetryDelay()
+		require.NotNil(t, result)
+		// Allow for up to 10 seconds of test execution time
+		require.True(t, *result > 4*time.Minute+50*time.Second && *result <= 5*time.Minute,
+			"expected delay ~5m, got %v", *result)
+	})
+
+	t.Run("returns nil when neither set", func(t *testing.T) {
+		err := &APIError{
+			StatusCode: 500,
+			Message:    "server error",
+		}
+		require.Nil(t, err.GetRetryDelay())
+	})
+
+	t.Run("returns nil when RateLimitReset is in the past", func(t *testing.T) {
+		// Use a clearly past time to avoid boundary issues
+		pastReset := time.Now().Add(-5 * time.Minute)
+		err := &APIError{
+			StatusCode:     429,
+			Message:        "rate limited",
+			RateLimitReset: &pastReset,
+		}
+		require.Nil(t, err.GetRetryDelay())
+	})
+}
+
+func TestAPIError_IsRateLimitError(t *testing.T) {
+	// Fixed time for tests that only check nil vs non-nil
+	anyTime := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name     string
+		err      *APIError
+		expected bool
+	}{
+		{
+			name:     "429 is rate limit error",
+			err:      &APIError{StatusCode: 429},
+			expected: true,
+		},
+		{
+			name:     "403 with RateLimitReset is rate limit error",
+			err:      &APIError{StatusCode: 403, RateLimitReset: &anyTime},
+			expected: true,
+		},
+		{
+			name:     "403 without RateLimitReset is not rate limit error",
+			err:      &APIError{StatusCode: 403},
+			expected: false,
+		},
+		{
+			name:     "500 is not rate limit error",
+			err:      &APIError{StatusCode: 500},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.expected, tt.err.IsRateLimitError())
+		})
+	}
+}
+
+func TestAPIError_IsServerError(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      *APIError
+		expected bool
+	}{
+		{name: "500 is server error", err: &APIError{StatusCode: 500}, expected: true},
+		{name: "502 is server error", err: &APIError{StatusCode: 502}, expected: true},
+		{name: "503 is server error", err: &APIError{StatusCode: 503}, expected: true},
+		{name: "504 is server error", err: &APIError{StatusCode: 504}, expected: true},
+		{name: "599 is server error", err: &APIError{StatusCode: 599}, expected: true},
+		{name: "400 is not server error", err: &APIError{StatusCode: 400}, expected: false},
+		{name: "429 is not server error", err: &APIError{StatusCode: 429}, expected: false},
+		{name: "200 is not server error", err: &APIError{StatusCode: 200}, expected: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.expected, tt.err.IsServerError())
+		})
+	}
+}
+
+func TestGetRetryDelayFromError(t *testing.T) {
+	retryDuration := 30 * time.Second
+
+	tests := []struct {
+		name          string
+		err           error
+		expectNil     bool
+		expectSeconds int
+	}{
+		{
+			name:      "nil error returns nil",
+			err:       nil,
+			expectNil: true,
+		},
+		{
+			name:      "non-APIError returns nil",
+			err:       errors.New("some error"),
+			expectNil: true,
+		},
+		{
+			name: "APIError with RetryAfter returns delay",
+			err: &APIError{
+				StatusCode: 429,
+				RetryAfter: &retryDuration,
+			},
+			expectNil:     false,
+			expectSeconds: 30,
+		},
+		{
+			name: "wrapped APIError returns delay",
+			err: errors.Join(
+				errors.New("failed to fetch"),
+				&APIError{StatusCode: 429, RetryAfter: &retryDuration},
+			),
+			expectNil:     false,
+			expectSeconds: 30,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := GetRetryDelayFromError(tt.err)
+			if tt.expectNil {
+				require.Nil(t, result)
+			} else {
+				require.NotNil(t, result)
+				require.Equal(t, time.Duration(tt.expectSeconds)*time.Second, *result)
+			}
+		})
+	}
+}
+
+func TestIsRetriableError_WithAPIError(t *testing.T) {
+	// Fixed time for tests that only check nil vs non-nil
+	anyTime := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name     string
+		err      *APIError
+		expected bool
+	}{
+		{
+			name:     "APIError 429 is retriable",
+			err:      &APIError{StatusCode: 429, Message: "rate limited"},
+			expected: true,
+		},
+		{
+			name:     "APIError 500 is retriable",
+			err:      &APIError{StatusCode: 500, Message: "server error"},
+			expected: true,
+		},
+		{
+			name:     "APIError 502 is retriable",
+			err:      &APIError{StatusCode: 502, Message: "bad gateway"},
+			expected: true,
+		},
+		{
+			name:     "APIError 403 with RateLimitReset is retriable",
+			err:      &APIError{StatusCode: 403, Message: "rate limited", RateLimitReset: &anyTime},
+			expected: true,
+		},
+		{
+			name:     "APIError 403 without RateLimitReset is not retriable",
+			err:      &APIError{StatusCode: 403, Message: "forbidden"},
+			expected: false,
+		},
+		{
+			name:     "APIError 404 is not retriable",
+			err:      &APIError{StatusCode: 404, Message: "not found"},
+			expected: false,
+		},
+		{
+			name:     "APIError 401 is not retriable",
+			err:      &APIError{StatusCode: 401, Message: "unauthorized"},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.expected, IsRetriableError(tt.err))
+		})
+	}
+}
+
+func durationPtr(d time.Duration) *time.Duration {
+	return &d
+}

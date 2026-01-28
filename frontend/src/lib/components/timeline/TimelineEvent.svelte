@@ -178,6 +178,51 @@
 					textClass: "text-white",
 					iconClass: "text-white",
 				};
+			case "review_dismissed":
+				return {
+					label: "Review dismissed",
+					iconPath: getIconPath("x"),
+					useIcon: true,
+					bgClass: "bg-gray-600",
+					textClass: "text-white",
+					iconClass: "text-white",
+				};
+			case "mentioned":
+				return {
+					label: "Mentioned",
+					iconPath: getIconPath("mention"),
+					useIcon: true,
+					bgClass: "bg-blue-600",
+					textClass: "text-white",
+					iconClass: "text-white",
+				};
+			case "renamed":
+				return {
+					label: "Renamed",
+					iconPath: getIconPath("pencil"),
+					useIcon: true,
+					bgClass: "bg-gray-600",
+					textClass: "text-white",
+					iconClass: "text-white",
+				};
+			case "milestoned":
+				return {
+					label: "Added to milestone",
+					iconPath: getIconPath("milestone"),
+					useIcon: true,
+					bgClass: "bg-blue-600",
+					textClass: "text-white",
+					iconClass: "text-white",
+				};
+			case "demilestoned":
+				return {
+					label: "Removed from milestone",
+					iconPath: getIconPath("milestone"),
+					useIcon: true,
+					bgClass: "bg-gray-600",
+					textClass: "text-white",
+					iconClass: "text-white",
+				};
 			default:
 				return null;
 		}
@@ -204,6 +249,10 @@
 				return "requested a review";
 			case "review_request_removed":
 				return "removed a review request";
+			case "review_dismissed":
+				return "dismissed a review";
+			case "mentioned":
+				return "mentioned this";
 			case "ready_for_review":
 				return "marked as ready for review";
 			case "converted_to_draft":
@@ -298,7 +347,32 @@
 	<div class="flex-1 min-w-0 py-1">
 		<div class="text-sm text-gray-600 dark:text-gray-400">
 			<span class="font-semibold text-gray-700 dark:text-gray-300">{authorLogin}</span>
-			{#if eventBadgeConfig}
+			<!-- Special handling for events with inline context -->
+			{#if item.type === "review_requested"}
+				{#if item.requestedReviewer}
+					requested a review from <span class="font-medium text-gray-700 dark:text-gray-300"
+						>@{item.requestedReviewer}</span
+					>
+				{:else}
+					requested a review
+				{/if}
+			{:else if item.type === "labeled" && item.label}
+				added label <span
+					class="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border"
+					style="background-color: #{item.label.color}20; color: #{item.label
+						.color}; border-color: #{item.label.color}40;"
+				>
+					{item.label.name}
+				</span>
+			{:else if item.type === "unlabeled" && item.label}
+				removed label <span
+					class="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border"
+					style="background-color: #{item.label.color}20; color: #{item.label
+						.color}; border-color: #{item.label.color}40;"
+				>
+					{item.label.name}
+				</span>
+			{:else if eventBadgeConfig}
 				<span
 					class="inline-flex items-center gap-1 px-2 py-0.5 mx-1 text-xs font-medium rounded-md {eventBadgeConfig.bgClass} {eventBadgeConfig.textClass}"
 				>
@@ -316,6 +390,21 @@
 					{/if}
 					<span>{eventBadgeConfig.label}</span>
 				</span>
+				<!-- Context for badge events -->
+				{#if (item.type === "milestoned" || item.type === "demilestoned") && item.milestone}
+					<span
+						class="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-md bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300"
+					>
+						{item.milestone}
+					</span>
+				{/if}
+				{#if item.type === "renamed" && item.rename}
+					<span class="text-gray-600 dark:text-gray-400">
+						<span class="line-through opacity-60">{item.rename.from}</span>
+						<span class="mx-1">→</span>
+						<span class="text-gray-700 dark:text-gray-300">{item.rename.to}</span>
+					</span>
+				{/if}
 			{:else}
 				<span class="mx-1">{eventLabel}</span>
 			{/if}

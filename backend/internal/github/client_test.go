@@ -18,6 +18,7 @@ package github
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -846,7 +847,7 @@ func TestFetchSubjectRaw(t *testing.T) {
 			serverStatus:   http.StatusNotFound,
 			serverResponse: `{"message": "Not Found"}`,
 			wantErr:        true,
-			errContains:    "subject status 404",
+			errContains:    "API status 404",
 		},
 		{
 			name:           "server error (500)",
@@ -854,7 +855,7 @@ func TestFetchSubjectRaw(t *testing.T) {
 			serverStatus:   http.StatusInternalServerError,
 			serverResponse: `{"message": "Server Error"}`,
 			wantErr:        true,
-			errContains:    "subject status 500",
+			errContains:    "API status 500",
 		},
 		{
 			name:           "invalid JSON response",
@@ -901,6 +902,97 @@ func TestFetchSubjectRaw(t *testing.T) {
 				} else {
 					require.NotNil(t, raw)
 				}
+			}
+		})
+	}
+}
+
+func TestFetchSubjectRaw_RetryHeaders(t *testing.T) {
+	tests := []struct {
+		name                 string
+		statusCode           int
+		retryAfterHeader     string
+		rateLimitReset       string
+		expectRetryAfter     bool
+		expectRateLimitReset bool
+		expectedSeconds      int
+	}{
+		{
+			name:             "429 with Retry-After header",
+			statusCode:       http.StatusTooManyRequests,
+			retryAfterHeader: "60",
+			expectRetryAfter: true,
+			expectedSeconds:  60,
+		},
+		{
+			name:                 "403 with X-RateLimit-Reset header",
+			statusCode:           http.StatusForbidden,
+			rateLimitReset:       "", // Will be set dynamically
+			expectRateLimitReset: true,
+		},
+		{
+			name:                 "500 without retry headers",
+			statusCode:           http.StatusInternalServerError,
+			expectRetryAfter:     false,
+			expectRateLimitReset: false,
+		},
+		{
+			name:             "429 with both headers prefers Retry-After",
+			statusCode:       http.StatusTooManyRequests,
+			retryAfterHeader: "30",
+			rateLimitReset:   "", // Will be set dynamically
+			expectRetryAfter: true,
+			expectedSeconds:  30,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			futureReset := time.Now().Add(2 * time.Minute).Unix()
+
+			server := httptest.NewServer(
+				http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					if tt.retryAfterHeader != "" {
+						w.Header().Set("Retry-After", tt.retryAfterHeader)
+					}
+					if tt.expectRateLimitReset ||
+						tt.name == "429 with both headers prefers Retry-After" {
+						w.Header().Set("X-RateLimit-Reset", fmt.Sprintf("%d", futureReset))
+					}
+					w.WriteHeader(tt.statusCode)
+					_, err := w.Write([]byte(`{"message": "error"}`))
+					assert.NoError(t, err)
+				}),
+			)
+			defer server.Close()
+
+			client := newTestClient(server.URL)
+			client.token = testToken
+
+			_, err := client.FetchSubjectRaw(context.Background(), server.URL+"/test")
+			require.Error(t, err)
+
+			// Verify it's an APIError with the expected retry info
+			var apiErr *APIError
+			require.True(t, errors.As(err, &apiErr), "error should be an APIError")
+			require.Equal(t, tt.statusCode, apiErr.StatusCode)
+
+			if tt.expectRetryAfter {
+				require.NotNil(t, apiErr.RetryAfter, "RetryAfter should be set")
+				require.Equal(t, time.Duration(tt.expectedSeconds)*time.Second, *apiErr.RetryAfter)
+			}
+
+			if tt.expectRateLimitReset {
+				require.NotNil(t, apiErr.RateLimitReset, "RateLimitReset should be set")
+				require.True(t, apiErr.RateLimitReset.After(time.Now()),
+					"RateLimitReset should be in the future")
+			}
+
+			// Verify GetRetryDelay works
+			delay := apiErr.GetRetryDelay()
+			if tt.expectRetryAfter || tt.expectRateLimitReset {
+				require.NotNil(t, delay, "GetRetryDelay should return a value")
+				require.True(t, *delay > 0, "delay should be positive")
 			}
 		})
 	}

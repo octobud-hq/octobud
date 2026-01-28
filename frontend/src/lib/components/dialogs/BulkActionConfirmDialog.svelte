@@ -19,6 +19,7 @@
 	export let open = false;
 	export let action = "perform this action on";
 	export let count = 0;
+	export let isQueryBased = false;
 	export let onConfirm: () => void = () => {};
 	export let onCancel: () => void = () => {};
 	export let confirming = false;
@@ -116,6 +117,30 @@
 			<header class="space-y-2">
 				<h2 class="text-lg font-semibold text-gray-900 dark:text-gray-300">{title}</h2>
 				<p class="text-sm text-gray-600 dark:text-gray-400">{body}</p>
+				{#if isQueryBased}
+					<div
+						class="mt-3 flex items-start gap-2.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5 dark:border-amber-700 dark:bg-amber-950/50"
+					>
+						<svg
+							class="h-5 w-5 flex-shrink-0 text-amber-500 dark:text-amber-400"
+							fill="none"
+							stroke="currentColor"
+							viewBox="0 0 24 24"
+							aria-hidden="true"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"
+							/>
+						</svg>
+						<p class="text-sm text-amber-700 dark:text-amber-300">
+							This action affects all notifications matching the current query and cannot be
+							automatically undone.
+						</p>
+					</div>
+				{/if}
 			</header>
 			<footer class="mt-6 flex justify-end gap-3">
 				<button

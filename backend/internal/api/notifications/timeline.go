@@ -238,5 +238,25 @@ func convertTimelineItemToThreadItem(item models.TimelineItem) ThreadItem {
 		threadItem.SHA = &item.SHA
 	}
 
+	// Set event-specific metadata
+	if item.RequestedReviewerLogin != "" {
+		threadItem.RequestedReviewer = &item.RequestedReviewerLogin
+	}
+	if item.LabelName != "" {
+		threadItem.Label = &ThreadLabel{
+			Name:  item.LabelName,
+			Color: item.LabelColor,
+		}
+	}
+	if item.MilestoneTitle != "" {
+		threadItem.Milestone = &item.MilestoneTitle
+	}
+	if item.RenameFrom != "" || item.RenameTo != "" {
+		threadItem.Rename = &ThreadRename{
+			From: item.RenameFrom,
+			To:   item.RenameTo,
+		}
+	}
+
 	return threadItem
 }

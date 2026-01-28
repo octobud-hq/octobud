@@ -5,13 +5,43 @@ All notable changes to Octobud will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.1]
+
+### Added
+### Changed
+
+- Less aggressive retrying when syncing, now respecting rate limit headers if present.
+
+### Deprecated
+### Removed
+### Fixed
+
+## [0.2.0]
 
 ### Added
 
-- Improved display of releases and CI activity.
+- **Undo System**: Full undo support for notification actions
+  - Undo individual actions: archive, star, mute, snooze, read/unread, tag/untag
+  - Undo bulk actions performed on selected notifications (by ID)
+  - Toast notifications with inline undo button and `Cmd+Z` / `Ctrl+Z` keyboard shortcut
+  - Recent actions history dropdown (`Shift+H`) showing up to 20 undoable actions
+  - Actions persist across page refreshes via local storage
+  - Intelligent inverse cancellation: rapid toggling (e.g., star then unstar) cancels out in history
+- **History Dropdown Keyboard Navigation**: Full vim-style navigation when history is open
+  - `J` / `K` to navigate between items
+  - `Enter` to undo the focused action
+  - `Space` to open the notification in detail view
+  - `Escape` or `H` to close
+  - All other shortcuts blocked while history is open (modal focus trap)
+- **Unread badge on favicon (optional)** - show unread count in a badge on favicon. Off by default but can be enabled in settings -> notifications.
+- **Timeline improvements** - some filtered timeline items have been reintroduced with richer context (review request, mention, label)
 
 ### Changed
+
+- Bulk actions on "select all" (query-based) now always show a confirmation dialog with a warning that the action cannot be undone
+- Toast notifications moved to bottom-right corner of the screen
+- Improved detail/icon/title handling for CI and release notifications
+
 ### Deprecated
 ### Removed
 ### Fixed

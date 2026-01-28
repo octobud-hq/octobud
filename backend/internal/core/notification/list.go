@@ -23,25 +23,22 @@ const (
 	defaultListPage     = 1
 	defaultListPageSize = 50
 	maxListPageSize     = 200
+	maxListPage         = 10_000_000 // 10M pages * 200 page size = 2B max offset, fits in int32
 )
 
 // normalizedPagination extracts and normalizes pagination parameters
 func normalizedPagination(opts models.ListOptions) (limit, offset int32, page, pageSize int) {
-	page = opts.Page
-	if page < 1 {
-		page = defaultListPage
-	}
+	page = max(opts.Page, defaultListPage)
+	page = min(page, maxListPage)
 
 	pageSize = opts.PageSize
 	if pageSize <= 0 {
 		pageSize = defaultListPageSize
 	}
-	if pageSize > maxListPageSize {
-		pageSize = maxListPageSize
-	}
+	pageSize = min(pageSize, maxListPageSize)
 
+	// With bounded page and pageSize, these conversions are safe
 	limit = int32(pageSize)
-
 	offset = int32((page - 1) * pageSize)
-	return
+	return limit, offset, page, pageSize
 }

@@ -23,7 +23,7 @@
 
 	// Framework & Core
 	import { getContext, onDestroy, onMount, setContext } from "svelte";
-	import { get } from "svelte/store";
+	import { get, derived, readable } from "svelte/store";
 	import { browser } from "$app/environment";
 	import { goto, afterNavigate } from "$app/navigation";
 	import { resolve } from "$app/paths";
@@ -61,6 +61,7 @@
 
 	// Stores
 	import { toastStore } from "$lib/stores/toastStore";
+	import { undoStore } from "$lib/stores/undoStore";
 
 	// API & Types
 	import { fetchViews } from "$lib/api/views";
@@ -87,6 +88,11 @@
 	import { getSWHealthStore } from "$lib/stores/swHealthStore";
 	import { setupServiceWorkerHandlers } from "$lib/utils/serviceWorkerMessageHandler";
 	import { NavigationEventSource } from "$lib/api/navigation";
+	import {
+		initializeFavicon,
+		updateFaviconBadge,
+		restoreOriginalFavicon,
+	} from "$lib/utils/faviconBadge";
 
 	// Props
 	export let data: LayoutData;
@@ -219,12 +225,13 @@
 					state: navOptions?.state,
 				});
 			},
-			requestBulkConfirmation: async (action: string, count: number) => {
+			requestBulkConfirmation: async (action: string, count: number, isQueryBased?: boolean) => {
 				return new Promise((resolve) => {
 					bulkConfirmResolve = resolve;
 					bulkConfirmDialogOpen = true;
 					bulkConfirmAction = action;
 					bulkConfirmCount = count;
+					bulkConfirmIsQueryBased = isQueryBased ?? false;
 				});
 			},
 			getTags: () => currentTags,
@@ -236,6 +243,17 @@
 
 	// Update the service worker message handler with the pageController reference
 	pageControllerRef = pageController;
+
+	// Initialize undo store with refresh callback.
+	// Initialization happens here (rather than at store creation) because:
+	// 1. The refresh callback requires pageController which is only available in component context
+	// 2. localStorage access for loading persisted history should happen after hydration
+	// 3. The store has an internal guard (initialized flag) to ensure this only runs once
+	undoStore.setRefreshCallback(async () => {
+		await pageController.actions.refresh?.();
+		await pageController.actions.refreshViewCounts?.();
+	});
+	undoStore.initialize();
 
 	// Expose view dialog actions via context for child pages
 	setContext("viewDialogActions", {
@@ -251,6 +269,15 @@
 		isShortcutsModalOpen: null,
 		toggleShortcutsModal: null,
 		getCommandPalette: () => pageHeaderComponent?.getCommandPalette(),
+		// History dropdown methods
+		isHistoryDropdownOpen: () => pageHeaderComponent?.isHistoryDropdownOpen() ?? false,
+		toggleHistoryDropdown: () => pageHeaderComponent?.toggleHistoryDropdownExternal() ?? false,
+		closeHistoryDropdown: () => pageHeaderComponent?.closeHistoryDropdownExternal() ?? false,
+		historyNavigateDown: () => pageHeaderComponent?.historyNavigateDown() ?? false,
+		historyNavigateUp: () => pageHeaderComponent?.historyNavigateUp() ?? false,
+		historyUndoFocused: () => pageHeaderComponent?.historyUndoFocused() ?? false,
+		historyOpenFocusedNotification: () =>
+			pageHeaderComponent?.historyOpenFocusedNotification() ?? false,
 	});
 
 	// ============================================================================
@@ -277,6 +304,7 @@
 	let bulkConfirmDialogOpen = false;
 	let bulkConfirmAction = "";
 	let bulkConfirmCount = 0;
+	let bulkConfirmIsQueryBased = false;
 	let bulkConfirmResolve: ((confirmed: boolean) => void) | null = null;
 
 	// ============================================================================
@@ -454,6 +482,9 @@
 		// Hide splash screen once component is mounted
 		if (browser) {
 			document.body.classList.remove("loading");
+
+			// Initialize favicon for badge rendering
+			initializeFavicon();
 
 			// Set up navigation event source for tray menu navigation
 			navEventSource = new NavigationEventSource({
@@ -744,6 +775,35 @@
 			})();
 
 	// ============================================================================
+	// FAVICON BADGE
+	// ============================================================================
+
+	// Get the favicon badge setting
+	const notificationSettingsStore = browser ? getNotificationSettingsStore() : null;
+	const faviconBadgeEnabledStore = notificationSettingsStore?.faviconBadgeEnabled;
+
+	// Create a store that defaults to true when the badge enabled store doesn't exist
+	const badgeEnabledStore = faviconBadgeEnabledStore ?? readable(true);
+
+	// Derived store that only reacts to unreadCount and badgeEnabled changes
+	const faviconBadgeState = derived([views, badgeEnabledStore], ([$views, $badgeEnabled]) => {
+		const systemViewsBySlug = new Map($views.filter((v) => v.systemView).map((v) => [v.slug, v]));
+		const inboxView = systemViewsBySlug.get("inbox");
+		const unreadCount = inboxView?.unreadCount ?? 0;
+		return { unreadCount, badgeEnabled: $badgeEnabled };
+	});
+
+	// Update favicon badge only when relevant values change
+	$: if (browser && !isLoginRoute && !isSetupRoute) {
+		const { unreadCount, badgeEnabled } = $faviconBadgeState;
+		if (badgeEnabled) {
+			updateFaviconBadge(unreadCount);
+		} else {
+			restoreOriginalFavicon();
+		}
+	}
+
+	// ============================================================================
 	// ROUTE-SPECIFIC LOGIC
 	// ============================================================================
 
@@ -926,6 +986,7 @@
 		open={bulkConfirmDialogOpen}
 		action={bulkConfirmAction}
 		count={bulkConfirmCount}
+		isQueryBased={bulkConfirmIsQueryBased}
 		onConfirm={handleBulkConfirm}
 		onCancel={handleBulkCancel}
 		confirming={$bulkUpdating}
