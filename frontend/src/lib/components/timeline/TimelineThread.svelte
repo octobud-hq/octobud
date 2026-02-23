@@ -18,6 +18,7 @@
 	import TimelineItem from "./TimelineItem.svelte";
 	import { writable, get } from "svelte/store";
 	import { tick, onMount, onDestroy } from "svelte";
+	import { SvelteMap } from "svelte/reactivity";
 	import { fly, fade } from "svelte/transition";
 	import { getNotificationSettingsStore } from "$lib/stores/notificationSettings";
 
@@ -159,7 +160,7 @@
 	$: showInitialLoading = $isLoading && !hasItems;
 
 	// Helper to get the effective timestamp of a timeline item
-	function getItemTimestamp(item: typeof $items[0]): string | undefined {
+	function getItemTimestamp(item: (typeof $items)[0]): string | undefined {
 		return item.timestamp || item.createdAt || item.submittedAt || item.updatedAt;
 	}
 
@@ -245,7 +246,7 @@
 	}
 
 	// Map to store element references by index
-	let itemElementsByIndex: Map<number, HTMLElement> = new Map();
+	let itemElementsByIndex: Map<number, HTMLElement> = new SvelteMap();
 
 	// Scroll to first unseen item within the nearest scrollable ancestor.
 	// Does NOT dismiss — dismissal is handled by the IntersectionObserver
@@ -293,11 +294,7 @@
 	// Auto-scroll to first unseen on initial load if enabled.
 	// scrollToFirstUnseen is a named function reference so Svelte's compiler
 	// doesn't track its internal variable accesses as $: dependencies.
-	$: if (
-		!hasScrolledToUnseen &&
-		firstUnseenIndex >= 0 &&
-		$timelineAutoScroll
-	) {
+	$: if (!hasScrolledToUnseen && firstUnseenIndex >= 0 && $timelineAutoScroll) {
 		tick().then(scrollToFirstUnseen);
 	}
 
@@ -514,9 +511,13 @@
 							class="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-0.5 bg-gray-300 dark:bg-gray-800 -z-10"
 						></div>
 						<!-- Plus circle icon -->
-						<div class="h-8 w-8 rounded-full bg-blue-600 dark:bg-blue-500 ring-2 ring-white dark:ring-gray-950 flex items-center justify-center">
+						<div
+							class="h-8 w-8 rounded-full bg-blue-600 dark:bg-blue-500 ring-2 ring-white dark:ring-gray-950 flex items-center justify-center"
+						>
 							<svg class="h-4 w-4 text-white" viewBox="0 0 16 16" fill="currentColor">
-								<path d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2Z"/>
+								<path
+									d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2Z"
+								/>
 							</svg>
 						</div>
 					</div>
@@ -531,10 +532,7 @@
 					</div>
 				</div>
 			{/if}
-			<div
-				data-timestamp={getItemTimestamp(item)}
-				use:observeTimelineItem={index}
-			>
+			<div data-timestamp={getItemTimestamp(item)} use:observeTimelineItem={index}>
 				<TimelineItem {item} showThread={true} isLastItem={index === lastItemIndex} />
 			</div>
 		{/each}

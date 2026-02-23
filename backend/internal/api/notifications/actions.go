@@ -562,7 +562,11 @@ func (h *Handler) handleUpdateTimelineLastSeen(w http.ResponseWriter, r *http.Re
 			return
 		}
 		if errors.Is(err, notificationcore.ErrInvalidTimelineTimestampFmt) {
-			helpers.WriteError(w, http.StatusBadRequest, "invalid timestamp format, expected RFC3339")
+			helpers.WriteError(
+				w,
+				http.StatusBadRequest,
+				"invalid timestamp format, expected RFC3339",
+			)
 			return
 		}
 		h.logger.Error(

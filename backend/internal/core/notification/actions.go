@@ -26,7 +26,7 @@ import (
 
 // Error definitions
 var (
-	ErrInvalidSnoozedUntilFormat    = errors.New("invalid snoozedUntil format")
+	ErrInvalidSnoozedUntilFormat   = errors.New("invalid snoozedUntil format")
 	ErrInvalidTimelineTimestampFmt = errors.New("invalid timeline timestamp format")
 )
 
