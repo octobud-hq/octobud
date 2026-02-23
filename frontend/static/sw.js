@@ -618,6 +618,7 @@ async function notifyClients(newNotifications) {
                 client.postMessage({
                     type: 'NEW_NOTIFICATIONS',
                     count: newNotifications.length,
+                    githubIds: newNotifications.map(n => n.githubId),
                     timestamp: Date.now()
                 });
             });

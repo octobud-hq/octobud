@@ -18,6 +18,7 @@ import { browser } from "$app/environment";
 
 const NOTIFICATIONS_ENABLED_KEY = "octobud:notifications:enabled";
 const FAVICON_BADGE_ENABLED_KEY = "octobud:notifications:faviconBadge";
+const TIMELINE_AUTO_SCROLL_KEY = "octobud:timeline:autoScroll";
 
 /**
  * Notification Settings Store
@@ -35,8 +36,15 @@ export function createNotificationSettingsStore() {
 			? localStorage.getItem(FAVICON_BADGE_ENABLED_KEY) !== "false" // Default to true
 			: true;
 
+	// Auto-scroll defaults to false (opt-in feature)
+	const storedTimelineAutoScroll =
+		typeof window !== "undefined"
+			? localStorage.getItem(TIMELINE_AUTO_SCROLL_KEY) === "true"
+			: false;
+
 	const notificationsEnabled = writable<boolean>(storedEnabled);
 	const faviconBadgeEnabled = writable<boolean>(storedFaviconBadgeEnabled);
+	const timelineAutoScroll = writable<boolean>(storedTimelineAutoScroll);
 
 	// Persist to localStorage and notify service worker
 	if (browser) {
@@ -55,22 +63,33 @@ export function createNotificationSettingsStore() {
 		faviconBadgeEnabled.subscribe((value) => {
 			localStorage.setItem(FAVICON_BADGE_ENABLED_KEY, value.toString());
 		});
+
+		timelineAutoScroll.subscribe((value) => {
+			localStorage.setItem(TIMELINE_AUTO_SCROLL_KEY, value.toString());
+		});
 	}
 
 	return {
 		notificationsEnabled: notificationsEnabled as Writable<boolean>,
 		faviconBadgeEnabled: faviconBadgeEnabled as Writable<boolean>,
+		timelineAutoScroll: timelineAutoScroll as Writable<boolean>,
 		setEnabled: (enabled: boolean) => {
 			notificationsEnabled.set(enabled);
 		},
 		setFaviconBadgeEnabled: (enabled: boolean) => {
 			faviconBadgeEnabled.set(enabled);
 		},
+		setTimelineAutoScroll: (enabled: boolean) => {
+			timelineAutoScroll.set(enabled);
+		},
 		toggle: () => {
 			notificationsEnabled.update((enabled) => !enabled);
 		},
 		toggleFaviconBadge: () => {
 			faviconBadgeEnabled.update((enabled) => !enabled);
+		},
+		toggleTimelineAutoScroll: () => {
+			timelineAutoScroll.update((enabled) => !enabled);
 		},
 	};
 }
@@ -98,4 +117,11 @@ export function isFaviconBadgeEnabled(): boolean {
 	if (!browser) return true; // Default to enabled on server
 	const stored = localStorage.getItem(FAVICON_BADGE_ENABLED_KEY);
 	return stored !== "false"; // Default to true
+}
+
+// Helper to check if timeline auto-scroll is enabled
+export function isTimelineAutoScrollEnabled(): boolean {
+	if (!browser) return false; // Default to disabled on server
+	const stored = localStorage.getItem(TIMELINE_AUTO_SCROLL_KEY);
+	return stored === "true"; // Default to false
 }

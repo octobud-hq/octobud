@@ -28,5 +28,5 @@ export interface ViewActions {
 	selectViewBySlug: (slug: string, shouldInvalidate?: boolean) => Promise<void>;
 	navigateToNextView: () => boolean;
 	navigateToPreviousView: () => boolean;
-	handleSyncNewNotifications: () => Promise<void>;
+	handleSyncNewNotifications: (updatedGithubIds?: string[]) => Promise<void>;
 }

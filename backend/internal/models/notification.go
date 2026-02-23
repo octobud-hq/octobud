@@ -55,6 +55,7 @@ type Notification struct {
 	SubjectMerged           *bool           `json:"subjectMerged,omitempty"`
 	SubjectStateReason      *string         `json:"subjectStateReason,omitempty"`
 	AuthorLogin             *string         `json:"authorLogin,omitempty"`
+	TimelineLastSeenAt      *time.Time      `json:"timelineLastSeenAt,omitempty"`
 	Repository              *Repository     `json:"repository,omitempty"`
 	ActionHints             *ActionHints    `json:"actionHints,omitempty"`
 	Tags                    []Tag           `json:"tags,omitempty"`
@@ -104,6 +105,7 @@ func NotificationFromDB(notification db.Notification) Notification {
 		SubjectState:            NullStringPtr(notification.SubjectState),
 		SubjectMerged:           NullBoolPtr(notification.SubjectMerged),
 		SubjectStateReason:      NullStringPtr(notification.SubjectStateReason),
+		TimelineLastSeenAt:      NullTimePtr(notification.TimelineLastSeenAt),
 	}
 }
 

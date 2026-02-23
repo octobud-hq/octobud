@@ -59,7 +59,7 @@ export function setupServiceWorkerHandlers(params: ServiceWorkerHandlerParams): 
 			// Trigger the existing sync handler to refresh the UI
 			const pageController = getPageController();
 			if (pageController) {
-				void pageController.actions.handleSyncNewNotifications();
+				void pageController.actions.handleSyncNewNotifications(event.data?.githubIds);
 			}
 		} else if (event.data?.type === "OPEN_NOTIFICATION") {
 			// Service worker wants to open a specific notification

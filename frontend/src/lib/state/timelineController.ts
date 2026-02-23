@@ -37,6 +37,7 @@ export interface TimelineControllerActions {
 	autoLoadTimeline: (githubId: string, perPage: number) => Promise<void>;
 	loadTimeline: (githubId: string, perPage: number) => Promise<void>;
 	loadMoreTimeline: (githubId: string, perPage: number) => Promise<void>;
+	refreshTimeline: (githubId: string, perPage?: number) => Promise<void>;
 	reset: () => void;
 }
 
@@ -195,6 +196,54 @@ export function createTimelineController(): TimelineController {
 		}
 	}
 
+	/**
+	 * Silently refresh the timeline by fetching page 1 and appending any new items.
+	 * Used when polling detects the notification was updated while the timeline is open.
+	 * Does not show loading state — this is a background refresh.
+	 */
+	async function refreshTimeline(githubId: string, perPage: number = 10): Promise<void> {
+		const currentItems = get(items);
+		if (currentItems.length === 0) return; // Don't refresh before initial load
+
+		try {
+			const response: NotificationTimelineResponse = await fetchNotificationTimeline(
+				githubId,
+				perPage,
+				1
+			);
+
+			// Abort if githubId changed while loading
+			if (currentGithubId !== githubId) return;
+
+			// Reverse to match oldest-first display order
+			const reversedNewItems = [...response.items].reverse();
+
+			// Deduplicate: only keep items not already in the list.
+			// Uses a composite key because some event types (committed, merged)
+			// have null IDs — deduplicating by id alone would treat them all as the same item.
+			// NOTE: The type-timestamp fallback can collide if two events of the same type
+			// share the exact same second (e.g. simultaneous commits). This is acceptable
+			// since it only affects the rare case of null-ID events at identical timestamps.
+			const itemKey = (item: NotificationTimelineItem) =>
+				item.id != null ? String(item.id) : `${item.type}-${item.timestamp || ""}`;
+			const existingKeys = new Set(currentItems.map(itemKey));
+			const newItems = reversedNewItems.filter((item) => !existingKeys.has(itemKey(item)));
+
+			if (newItems.length > 0) {
+				// Append new items to the end (they're the newest)
+				items.update((current) => [...current, ...newItems]);
+
+				// Update total count but preserve page/hasMore (which track the oldest loaded page)
+				pagination.update((p) => ({ ...p, total: response.total }));
+			}
+		} catch (err) {
+			// Silent failure for background refresh
+			if (currentGithubId === githubId) {
+				console.error("[TimelineController] Failed to refresh timeline:", err);
+			}
+		}
+	}
+
 	function reset(): void {
 		items.set([]);
 		isLoading.set(false);
@@ -221,6 +270,7 @@ export function createTimelineController(): TimelineController {
 			autoLoadTimeline,
 			loadTimeline,
 			loadMoreTimeline,
+			refreshTimeline,
 			reset,
 		},
 	};

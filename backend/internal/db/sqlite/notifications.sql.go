@@ -16,7 +16,7 @@ SET archived = 1,
     snoozed_until = NULL,
     snoozed_at = NULL,
     effective_sort_date = COALESCE(github_updated_at, imported_at)
-WHERE user_id = ? AND github_id = ? RETURNING id, user_id, github_id, repository_id, pull_request_id, subject_type, subject_title, subject_url, subject_latest_comment_url, reason, archived, github_unread, github_updated_at, github_last_read_at, github_url, github_subscription_url, imported_at, payload, subject_raw, subject_fetched_at, author_login, author_id, is_read, muted, snoozed_until, effective_sort_date, snoozed_at, starred, filtered, subject_number, subject_state, subject_merged, subject_state_reason
+WHERE user_id = ? AND github_id = ? RETURNING id, user_id, github_id, repository_id, pull_request_id, subject_type, subject_title, subject_url, subject_latest_comment_url, reason, archived, github_unread, github_updated_at, github_last_read_at, github_url, github_subscription_url, imported_at, payload, subject_raw, subject_fetched_at, author_login, author_id, is_read, muted, snoozed_until, effective_sort_date, snoozed_at, starred, filtered, subject_number, subject_state, subject_merged, subject_state_reason, timeline_last_seen_at
 `
 
 type ArchiveNotificationParams struct {
@@ -61,6 +61,7 @@ func (q *Queries) ArchiveNotification(ctx context.Context, arg ArchiveNotificati
 		&i.SubjectState,
 		&i.SubjectMerged,
 		&i.SubjectStateReason,
+		&i.TimelineLastSeenAt,
 	)
 	return i, err
 }
@@ -141,7 +142,7 @@ func (q *Queries) DeleteOldArchivedNotifications(ctx context.Context, arg Delete
 }
 
 const getNotificationByGithubID = `-- name: GetNotificationByGithubID :one
-SELECT id, user_id, github_id, repository_id, pull_request_id, subject_type, subject_title, subject_url, subject_latest_comment_url, reason, archived, github_unread, github_updated_at, github_last_read_at, github_url, github_subscription_url, imported_at, payload, subject_raw, subject_fetched_at, author_login, author_id, is_read, muted, snoozed_until, effective_sort_date, snoozed_at, starred, filtered, subject_number, subject_state, subject_merged, subject_state_reason FROM notifications WHERE user_id = ? AND github_id = ?
+SELECT id, user_id, github_id, repository_id, pull_request_id, subject_type, subject_title, subject_url, subject_latest_comment_url, reason, archived, github_unread, github_updated_at, github_last_read_at, github_url, github_subscription_url, imported_at, payload, subject_raw, subject_fetched_at, author_login, author_id, is_read, muted, snoozed_until, effective_sort_date, snoozed_at, starred, filtered, subject_number, subject_state, subject_merged, subject_state_reason, timeline_last_seen_at FROM notifications WHERE user_id = ? AND github_id = ?
 `
 
 type GetNotificationByGithubIDParams struct {
@@ -186,12 +187,13 @@ func (q *Queries) GetNotificationByGithubID(ctx context.Context, arg GetNotifica
 		&i.SubjectState,
 		&i.SubjectMerged,
 		&i.SubjectStateReason,
+		&i.TimelineLastSeenAt,
 	)
 	return i, err
 }
 
 const getNotificationByID = `-- name: GetNotificationByID :one
-SELECT id, user_id, github_id, repository_id, pull_request_id, subject_type, subject_title, subject_url, subject_latest_comment_url, reason, archived, github_unread, github_updated_at, github_last_read_at, github_url, github_subscription_url, imported_at, payload, subject_raw, subject_fetched_at, author_login, author_id, is_read, muted, snoozed_until, effective_sort_date, snoozed_at, starred, filtered, subject_number, subject_state, subject_merged, subject_state_reason FROM notifications WHERE user_id = ? AND id = ?
+SELECT id, user_id, github_id, repository_id, pull_request_id, subject_type, subject_title, subject_url, subject_latest_comment_url, reason, archived, github_unread, github_updated_at, github_last_read_at, github_url, github_subscription_url, imported_at, payload, subject_raw, subject_fetched_at, author_login, author_id, is_read, muted, snoozed_until, effective_sort_date, snoozed_at, starred, filtered, subject_number, subject_state, subject_merged, subject_state_reason, timeline_last_seen_at FROM notifications WHERE user_id = ? AND id = ?
 `
 
 type GetNotificationByIDParams struct {
@@ -236,6 +238,7 @@ func (q *Queries) GetNotificationByID(ctx context.Context, arg GetNotificationBy
 		&i.SubjectState,
 		&i.SubjectMerged,
 		&i.SubjectStateReason,
+		&i.TimelineLastSeenAt,
 	)
 	return i, err
 }
@@ -282,7 +285,7 @@ func (q *Queries) GetStorageStats(ctx context.Context, arg GetStorageStatsParams
 }
 
 const markNotificationFiltered = `-- name: MarkNotificationFiltered :one
-UPDATE notifications SET filtered = 1 WHERE user_id = ? AND github_id = ? RETURNING id, user_id, github_id, repository_id, pull_request_id, subject_type, subject_title, subject_url, subject_latest_comment_url, reason, archived, github_unread, github_updated_at, github_last_read_at, github_url, github_subscription_url, imported_at, payload, subject_raw, subject_fetched_at, author_login, author_id, is_read, muted, snoozed_until, effective_sort_date, snoozed_at, starred, filtered, subject_number, subject_state, subject_merged, subject_state_reason
+UPDATE notifications SET filtered = 1 WHERE user_id = ? AND github_id = ? RETURNING id, user_id, github_id, repository_id, pull_request_id, subject_type, subject_title, subject_url, subject_latest_comment_url, reason, archived, github_unread, github_updated_at, github_last_read_at, github_url, github_subscription_url, imported_at, payload, subject_raw, subject_fetched_at, author_login, author_id, is_read, muted, snoozed_until, effective_sort_date, snoozed_at, starred, filtered, subject_number, subject_state, subject_merged, subject_state_reason, timeline_last_seen_at
 `
 
 type MarkNotificationFilteredParams struct {
@@ -327,12 +330,13 @@ func (q *Queries) MarkNotificationFiltered(ctx context.Context, arg MarkNotifica
 		&i.SubjectState,
 		&i.SubjectMerged,
 		&i.SubjectStateReason,
+		&i.TimelineLastSeenAt,
 	)
 	return i, err
 }
 
 const markNotificationRead = `-- name: MarkNotificationRead :one
-UPDATE notifications SET is_read = 1 WHERE user_id = ? AND github_id = ? RETURNING id, user_id, github_id, repository_id, pull_request_id, subject_type, subject_title, subject_url, subject_latest_comment_url, reason, archived, github_unread, github_updated_at, github_last_read_at, github_url, github_subscription_url, imported_at, payload, subject_raw, subject_fetched_at, author_login, author_id, is_read, muted, snoozed_until, effective_sort_date, snoozed_at, starred, filtered, subject_number, subject_state, subject_merged, subject_state_reason
+UPDATE notifications SET is_read = 1 WHERE user_id = ? AND github_id = ? RETURNING id, user_id, github_id, repository_id, pull_request_id, subject_type, subject_title, subject_url, subject_latest_comment_url, reason, archived, github_unread, github_updated_at, github_last_read_at, github_url, github_subscription_url, imported_at, payload, subject_raw, subject_fetched_at, author_login, author_id, is_read, muted, snoozed_until, effective_sort_date, snoozed_at, starred, filtered, subject_number, subject_state, subject_merged, subject_state_reason, timeline_last_seen_at
 `
 
 type MarkNotificationReadParams struct {
@@ -377,12 +381,13 @@ func (q *Queries) MarkNotificationRead(ctx context.Context, arg MarkNotification
 		&i.SubjectState,
 		&i.SubjectMerged,
 		&i.SubjectStateReason,
+		&i.TimelineLastSeenAt,
 	)
 	return i, err
 }
 
 const markNotificationUnfiltered = `-- name: MarkNotificationUnfiltered :one
-UPDATE notifications SET filtered = 0 WHERE user_id = ? AND github_id = ? RETURNING id, user_id, github_id, repository_id, pull_request_id, subject_type, subject_title, subject_url, subject_latest_comment_url, reason, archived, github_unread, github_updated_at, github_last_read_at, github_url, github_subscription_url, imported_at, payload, subject_raw, subject_fetched_at, author_login, author_id, is_read, muted, snoozed_until, effective_sort_date, snoozed_at, starred, filtered, subject_number, subject_state, subject_merged, subject_state_reason
+UPDATE notifications SET filtered = 0 WHERE user_id = ? AND github_id = ? RETURNING id, user_id, github_id, repository_id, pull_request_id, subject_type, subject_title, subject_url, subject_latest_comment_url, reason, archived, github_unread, github_updated_at, github_last_read_at, github_url, github_subscription_url, imported_at, payload, subject_raw, subject_fetched_at, author_login, author_id, is_read, muted, snoozed_until, effective_sort_date, snoozed_at, starred, filtered, subject_number, subject_state, subject_merged, subject_state_reason, timeline_last_seen_at
 `
 
 type MarkNotificationUnfilteredParams struct {
@@ -427,12 +432,13 @@ func (q *Queries) MarkNotificationUnfiltered(ctx context.Context, arg MarkNotifi
 		&i.SubjectState,
 		&i.SubjectMerged,
 		&i.SubjectStateReason,
+		&i.TimelineLastSeenAt,
 	)
 	return i, err
 }
 
 const markNotificationUnread = `-- name: MarkNotificationUnread :one
-UPDATE notifications SET is_read = 0 WHERE user_id = ? AND github_id = ? RETURNING id, user_id, github_id, repository_id, pull_request_id, subject_type, subject_title, subject_url, subject_latest_comment_url, reason, archived, github_unread, github_updated_at, github_last_read_at, github_url, github_subscription_url, imported_at, payload, subject_raw, subject_fetched_at, author_login, author_id, is_read, muted, snoozed_until, effective_sort_date, snoozed_at, starred, filtered, subject_number, subject_state, subject_merged, subject_state_reason
+UPDATE notifications SET is_read = 0 WHERE user_id = ? AND github_id = ? RETURNING id, user_id, github_id, repository_id, pull_request_id, subject_type, subject_title, subject_url, subject_latest_comment_url, reason, archived, github_unread, github_updated_at, github_last_read_at, github_url, github_subscription_url, imported_at, payload, subject_raw, subject_fetched_at, author_login, author_id, is_read, muted, snoozed_until, effective_sort_date, snoozed_at, starred, filtered, subject_number, subject_state, subject_merged, subject_state_reason, timeline_last_seen_at
 `
 
 type MarkNotificationUnreadParams struct {
@@ -477,6 +483,7 @@ func (q *Queries) MarkNotificationUnread(ctx context.Context, arg MarkNotificati
 		&i.SubjectState,
 		&i.SubjectMerged,
 		&i.SubjectStateReason,
+		&i.TimelineLastSeenAt,
 	)
 	return i, err
 }
@@ -487,7 +494,7 @@ SET muted = 1,
     snoozed_until = NULL,
     snoozed_at = NULL,
     effective_sort_date = COALESCE(github_updated_at, imported_at)
-WHERE user_id = ? AND github_id = ? RETURNING id, user_id, github_id, repository_id, pull_request_id, subject_type, subject_title, subject_url, subject_latest_comment_url, reason, archived, github_unread, github_updated_at, github_last_read_at, github_url, github_subscription_url, imported_at, payload, subject_raw, subject_fetched_at, author_login, author_id, is_read, muted, snoozed_until, effective_sort_date, snoozed_at, starred, filtered, subject_number, subject_state, subject_merged, subject_state_reason
+WHERE user_id = ? AND github_id = ? RETURNING id, user_id, github_id, repository_id, pull_request_id, subject_type, subject_title, subject_url, subject_latest_comment_url, reason, archived, github_unread, github_updated_at, github_last_read_at, github_url, github_subscription_url, imported_at, payload, subject_raw, subject_fetched_at, author_login, author_id, is_read, muted, snoozed_until, effective_sort_date, snoozed_at, starred, filtered, subject_number, subject_state, subject_merged, subject_state_reason, timeline_last_seen_at
 `
 
 type MuteNotificationParams struct {
@@ -532,6 +539,7 @@ func (q *Queries) MuteNotification(ctx context.Context, arg MuteNotificationPara
 		&i.SubjectState,
 		&i.SubjectMerged,
 		&i.SubjectStateReason,
+		&i.TimelineLastSeenAt,
 	)
 	return i, err
 }
@@ -561,7 +569,7 @@ SET snoozed_until = ?,
     snoozed_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'),
     effective_sort_date = ?
 WHERE user_id = ? AND github_id = ? 
-RETURNING id, user_id, github_id, repository_id, pull_request_id, subject_type, subject_title, subject_url, subject_latest_comment_url, reason, archived, github_unread, github_updated_at, github_last_read_at, github_url, github_subscription_url, imported_at, payload, subject_raw, subject_fetched_at, author_login, author_id, is_read, muted, snoozed_until, effective_sort_date, snoozed_at, starred, filtered, subject_number, subject_state, subject_merged, subject_state_reason
+RETURNING id, user_id, github_id, repository_id, pull_request_id, subject_type, subject_title, subject_url, subject_latest_comment_url, reason, archived, github_unread, github_updated_at, github_last_read_at, github_url, github_subscription_url, imported_at, payload, subject_raw, subject_fetched_at, author_login, author_id, is_read, muted, snoozed_until, effective_sort_date, snoozed_at, starred, filtered, subject_number, subject_state, subject_merged, subject_state_reason, timeline_last_seen_at
 `
 
 type SnoozeNotificationParams struct {
@@ -613,12 +621,13 @@ func (q *Queries) SnoozeNotification(ctx context.Context, arg SnoozeNotification
 		&i.SubjectState,
 		&i.SubjectMerged,
 		&i.SubjectStateReason,
+		&i.TimelineLastSeenAt,
 	)
 	return i, err
 }
 
 const starNotification = `-- name: StarNotification :one
-UPDATE notifications SET starred = 1 WHERE user_id = ? AND github_id = ? RETURNING id, user_id, github_id, repository_id, pull_request_id, subject_type, subject_title, subject_url, subject_latest_comment_url, reason, archived, github_unread, github_updated_at, github_last_read_at, github_url, github_subscription_url, imported_at, payload, subject_raw, subject_fetched_at, author_login, author_id, is_read, muted, snoozed_until, effective_sort_date, snoozed_at, starred, filtered, subject_number, subject_state, subject_merged, subject_state_reason
+UPDATE notifications SET starred = 1 WHERE user_id = ? AND github_id = ? RETURNING id, user_id, github_id, repository_id, pull_request_id, subject_type, subject_title, subject_url, subject_latest_comment_url, reason, archived, github_unread, github_updated_at, github_last_read_at, github_url, github_subscription_url, imported_at, payload, subject_raw, subject_fetched_at, author_login, author_id, is_read, muted, snoozed_until, effective_sort_date, snoozed_at, starred, filtered, subject_number, subject_state, subject_merged, subject_state_reason, timeline_last_seen_at
 `
 
 type StarNotificationParams struct {
@@ -663,12 +672,13 @@ func (q *Queries) StarNotification(ctx context.Context, arg StarNotificationPara
 		&i.SubjectState,
 		&i.SubjectMerged,
 		&i.SubjectStateReason,
+		&i.TimelineLastSeenAt,
 	)
 	return i, err
 }
 
 const unarchiveNotification = `-- name: UnarchiveNotification :one
-UPDATE notifications SET archived = 0 WHERE user_id = ? AND github_id = ? RETURNING id, user_id, github_id, repository_id, pull_request_id, subject_type, subject_title, subject_url, subject_latest_comment_url, reason, archived, github_unread, github_updated_at, github_last_read_at, github_url, github_subscription_url, imported_at, payload, subject_raw, subject_fetched_at, author_login, author_id, is_read, muted, snoozed_until, effective_sort_date, snoozed_at, starred, filtered, subject_number, subject_state, subject_merged, subject_state_reason
+UPDATE notifications SET archived = 0 WHERE user_id = ? AND github_id = ? RETURNING id, user_id, github_id, repository_id, pull_request_id, subject_type, subject_title, subject_url, subject_latest_comment_url, reason, archived, github_unread, github_updated_at, github_last_read_at, github_url, github_subscription_url, imported_at, payload, subject_raw, subject_fetched_at, author_login, author_id, is_read, muted, snoozed_until, effective_sort_date, snoozed_at, starred, filtered, subject_number, subject_state, subject_merged, subject_state_reason, timeline_last_seen_at
 `
 
 type UnarchiveNotificationParams struct {
@@ -713,12 +723,13 @@ func (q *Queries) UnarchiveNotification(ctx context.Context, arg UnarchiveNotifi
 		&i.SubjectState,
 		&i.SubjectMerged,
 		&i.SubjectStateReason,
+		&i.TimelineLastSeenAt,
 	)
 	return i, err
 }
 
 const unmuteNotification = `-- name: UnmuteNotification :one
-UPDATE notifications SET muted = 0 WHERE user_id = ? AND github_id = ? RETURNING id, user_id, github_id, repository_id, pull_request_id, subject_type, subject_title, subject_url, subject_latest_comment_url, reason, archived, github_unread, github_updated_at, github_last_read_at, github_url, github_subscription_url, imported_at, payload, subject_raw, subject_fetched_at, author_login, author_id, is_read, muted, snoozed_until, effective_sort_date, snoozed_at, starred, filtered, subject_number, subject_state, subject_merged, subject_state_reason
+UPDATE notifications SET muted = 0 WHERE user_id = ? AND github_id = ? RETURNING id, user_id, github_id, repository_id, pull_request_id, subject_type, subject_title, subject_url, subject_latest_comment_url, reason, archived, github_unread, github_updated_at, github_last_read_at, github_url, github_subscription_url, imported_at, payload, subject_raw, subject_fetched_at, author_login, author_id, is_read, muted, snoozed_until, effective_sort_date, snoozed_at, starred, filtered, subject_number, subject_state, subject_merged, subject_state_reason, timeline_last_seen_at
 `
 
 type UnmuteNotificationParams struct {
@@ -763,6 +774,7 @@ func (q *Queries) UnmuteNotification(ctx context.Context, arg UnmuteNotification
 		&i.SubjectState,
 		&i.SubjectMerged,
 		&i.SubjectStateReason,
+		&i.TimelineLastSeenAt,
 	)
 	return i, err
 }
@@ -773,7 +785,7 @@ SET snoozed_until = NULL,
     snoozed_at = NULL,
     effective_sort_date = COALESCE(github_updated_at, imported_at)
 WHERE user_id = ? AND github_id = ? 
-RETURNING id, user_id, github_id, repository_id, pull_request_id, subject_type, subject_title, subject_url, subject_latest_comment_url, reason, archived, github_unread, github_updated_at, github_last_read_at, github_url, github_subscription_url, imported_at, payload, subject_raw, subject_fetched_at, author_login, author_id, is_read, muted, snoozed_until, effective_sort_date, snoozed_at, starred, filtered, subject_number, subject_state, subject_merged, subject_state_reason
+RETURNING id, user_id, github_id, repository_id, pull_request_id, subject_type, subject_title, subject_url, subject_latest_comment_url, reason, archived, github_unread, github_updated_at, github_last_read_at, github_url, github_subscription_url, imported_at, payload, subject_raw, subject_fetched_at, author_login, author_id, is_read, muted, snoozed_until, effective_sort_date, snoozed_at, starred, filtered, subject_number, subject_state, subject_merged, subject_state_reason, timeline_last_seen_at
 `
 
 type UnsnoozeNotificationParams struct {
@@ -818,12 +830,13 @@ func (q *Queries) UnsnoozeNotification(ctx context.Context, arg UnsnoozeNotifica
 		&i.SubjectState,
 		&i.SubjectMerged,
 		&i.SubjectStateReason,
+		&i.TimelineLastSeenAt,
 	)
 	return i, err
 }
 
 const unstarNotification = `-- name: UnstarNotification :one
-UPDATE notifications SET starred = 0 WHERE user_id = ? AND github_id = ? RETURNING id, user_id, github_id, repository_id, pull_request_id, subject_type, subject_title, subject_url, subject_latest_comment_url, reason, archived, github_unread, github_updated_at, github_last_read_at, github_url, github_subscription_url, imported_at, payload, subject_raw, subject_fetched_at, author_login, author_id, is_read, muted, snoozed_until, effective_sort_date, snoozed_at, starred, filtered, subject_number, subject_state, subject_merged, subject_state_reason
+UPDATE notifications SET starred = 0 WHERE user_id = ? AND github_id = ? RETURNING id, user_id, github_id, repository_id, pull_request_id, subject_type, subject_title, subject_url, subject_latest_comment_url, reason, archived, github_unread, github_updated_at, github_last_read_at, github_url, github_subscription_url, imported_at, payload, subject_raw, subject_fetched_at, author_login, author_id, is_read, muted, snoozed_until, effective_sort_date, snoozed_at, starred, filtered, subject_number, subject_state, subject_merged, subject_state_reason, timeline_last_seen_at
 `
 
 type UnstarNotificationParams struct {
@@ -868,6 +881,7 @@ func (q *Queries) UnstarNotification(ctx context.Context, arg UnstarNotification
 		&i.SubjectState,
 		&i.SubjectMerged,
 		&i.SubjectStateReason,
+		&i.TimelineLastSeenAt,
 	)
 	return i, err
 }
@@ -915,6 +929,61 @@ func (q *Queries) UpdateNotificationSubject(ctx context.Context, arg UpdateNotif
 		arg.GithubID,
 	)
 	return err
+}
+
+const updateTimelineLastSeenAt = `-- name: UpdateTimelineLastSeenAt :one
+UPDATE notifications 
+SET timeline_last_seen_at = ?
+WHERE user_id = ? AND github_id = ? 
+RETURNING id, user_id, github_id, repository_id, pull_request_id, subject_type, subject_title, subject_url, subject_latest_comment_url, reason, archived, github_unread, github_updated_at, github_last_read_at, github_url, github_subscription_url, imported_at, payload, subject_raw, subject_fetched_at, author_login, author_id, is_read, muted, snoozed_until, effective_sort_date, snoozed_at, starred, filtered, subject_number, subject_state, subject_merged, subject_state_reason, timeline_last_seen_at
+`
+
+type UpdateTimelineLastSeenAtParams struct {
+	TimelineLastSeenAt sql.NullString
+	UserID             string
+	GithubID           string
+}
+
+func (q *Queries) UpdateTimelineLastSeenAt(ctx context.Context, arg UpdateTimelineLastSeenAtParams) (Notification, error) {
+	row := q.db.QueryRowContext(ctx, updateTimelineLastSeenAt, arg.TimelineLastSeenAt, arg.UserID, arg.GithubID)
+	var i Notification
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.GithubID,
+		&i.RepositoryID,
+		&i.PullRequestID,
+		&i.SubjectType,
+		&i.SubjectTitle,
+		&i.SubjectUrl,
+		&i.SubjectLatestCommentUrl,
+		&i.Reason,
+		&i.Archived,
+		&i.GithubUnread,
+		&i.GithubUpdatedAt,
+		&i.GithubLastReadAt,
+		&i.GithubUrl,
+		&i.GithubSubscriptionUrl,
+		&i.ImportedAt,
+		&i.Payload,
+		&i.SubjectRaw,
+		&i.SubjectFetchedAt,
+		&i.AuthorLogin,
+		&i.AuthorID,
+		&i.IsRead,
+		&i.Muted,
+		&i.SnoozedUntil,
+		&i.EffectiveSortDate,
+		&i.SnoozedAt,
+		&i.Starred,
+		&i.Filtered,
+		&i.SubjectNumber,
+		&i.SubjectState,
+		&i.SubjectMerged,
+		&i.SubjectStateReason,
+		&i.TimelineLastSeenAt,
+	)
+	return i, err
 }
 
 const upsertNotification = `-- name: UpsertNotification :one
@@ -974,7 +1043,7 @@ ON CONFLICT(user_id, github_id) DO UPDATE SET
     subject_state_reason = excluded.subject_state_reason,
     -- Preserve snoozed_until as sort date if notification is snoozed, otherwise use new github_updated_at
     effective_sort_date = COALESCE(notifications.snoozed_until, excluded.effective_sort_date)
-RETURNING id, user_id, github_id, repository_id, pull_request_id, subject_type, subject_title, subject_url, subject_latest_comment_url, reason, archived, github_unread, github_updated_at, github_last_read_at, github_url, github_subscription_url, imported_at, payload, subject_raw, subject_fetched_at, author_login, author_id, is_read, muted, snoozed_until, effective_sort_date, snoozed_at, starred, filtered, subject_number, subject_state, subject_merged, subject_state_reason
+RETURNING id, user_id, github_id, repository_id, pull_request_id, subject_type, subject_title, subject_url, subject_latest_comment_url, reason, archived, github_unread, github_updated_at, github_last_read_at, github_url, github_subscription_url, imported_at, payload, subject_raw, subject_fetched_at, author_login, author_id, is_read, muted, snoozed_until, effective_sort_date, snoozed_at, starred, filtered, subject_number, subject_state, subject_merged, subject_state_reason, timeline_last_seen_at
 `
 
 type UpsertNotificationParams struct {
@@ -1066,6 +1135,7 @@ func (q *Queries) UpsertNotification(ctx context.Context, arg UpsertNotification
 		&i.SubjectState,
 		&i.SubjectMerged,
 		&i.SubjectStateReason,
+		&i.TimelineLastSeenAt,
 	)
 	return i, err
 }

@@ -190,6 +190,7 @@
 			toastStore.success("Unread count badge in tab header disabled");
 		}
 	}
+
 </script>
 
 <div class="space-y-4">

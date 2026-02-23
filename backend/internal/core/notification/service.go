@@ -91,6 +91,10 @@ type NotificationWriter interface {
 	StarNotification(ctx context.Context, userID, githubID string) (db.Notification, error)
 	UnstarNotification(ctx context.Context, userID, githubID string) (db.Notification, error)
 	UnfilterNotification(ctx context.Context, userID, githubID string) (db.Notification, error)
+	UpdateTimelineLastSeenAt(
+		ctx context.Context,
+		userID, githubID, timestamp string,
+	) (db.Notification, error)
 }
 
 // NotificationTagger defines tag operations for notifications

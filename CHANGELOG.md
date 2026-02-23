@@ -5,6 +5,20 @@ All notable changes to Octobud will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0]
+
+### Added
+
+- **Live timeline refresh**: When viewing a notification's timeline, new activity from polling is automatically appended without requiring a page refresh
+- **"New activity" indicator**: A divider line and floating button appear when unseen timeline items arrive, with smooth scroll-to and auto-dismiss on scroll
+- **Timeline last-seen tracking**: Tracks the last-seen timeline timestamp per notification so the "New activity" indicator persists across sessions
+- **Auto-mark-read on new activity**: Notifications marked unread by incoming activity are automatically marked read when the user views the new items
+
+### Changed
+
+- Service worker `NEW_NOTIFICATIONS` messages now include `githubIds` so the frontend can target refreshes to the currently-open notification
+- Timeline deduplication uses composite keys (`type-timestamp` fallback) to handle events with null IDs (e.g., commits, merges)
+
 ## [0.2.1]
 
 ### Added

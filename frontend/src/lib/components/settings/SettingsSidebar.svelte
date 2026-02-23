@@ -26,7 +26,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 	const sections: SettingsSection[] = [
 		{ id: "account", label: "Account", icon: "github" },
-		{ id: "appearance", label: "Appearance", icon: "palette" },
+		{ id: "appearance", label: "Preferences", icon: "palette" },
 		{ id: "notifications", label: "Notifications", icon: "bell" },
 		{ id: "rules", label: "Rules", icon: "bolt" },
 		{ id: "data", label: "Data", icon: "database" },

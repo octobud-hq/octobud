@@ -20,6 +20,7 @@ import type { NotificationView } from "$lib/api/types";
 import type { PageData as ViewPageData } from "../../../routes/views/[slug]/$types";
 import type { ViewActions } from "../interfaces/viewActions";
 import { fetchViews } from "$lib/api/views";
+import { fetchNotificationDetail } from "$lib/api/notifications";
 import {
 	getAllViewsInOrder,
 	getCurrentViewIndex,
@@ -185,7 +186,7 @@ export function createViewActionController(
 		return false;
 	}
 
-	async function handleSyncNewNotifications(): Promise<void> {
+	async function handleSyncNewNotifications(updatedGithubIds?: string[]): Promise<void> {
 		const currentPage = get(paginationStore.page);
 		const isSplitMode = get(uiStore.splitModeEnabled);
 		const isDetailOpen = get(detailStore.detailOpen);
@@ -202,7 +203,30 @@ export function createViewActionController(
 		const shouldRefreshNotifications =
 			hasEmptyPageData || (currentPage === 1 && ((!isSplitMode && !isDetailOpen) || isSplitMode));
 
-		if (!shouldRefreshNotifications) {
+		// Check if the currently-open notification was updated (for timeline refresh)
+		const currentDetailUpdated =
+			isDetailOpen &&
+			currentDetailId &&
+			updatedGithubIds &&
+			updatedGithubIds.includes(currentDetailId);
+
+		if (!shouldRefreshNotifications && !currentDetailUpdated) {
+			return;
+		}
+
+		// If we're not refreshing the full list but the detail notification was updated,
+		// fetch just that notification's detail so the store reflects the latest data
+		if (!shouldRefreshNotifications && currentDetailUpdated) {
+			try {
+				const currentQuery = get(queryStore.quickQuery);
+				const detail = await fetchNotificationDetail(currentDetailId, {
+					query: currentQuery,
+				});
+				notificationStore.updateNotification(detail.notification);
+			} catch (err) {
+				// Silent failure — detail will still show cached data
+				console.error("Failed to refresh detail notification on poll:", err);
+			}
 			return;
 		}
 

@@ -26,7 +26,8 @@ import (
 
 // Error definitions
 var (
-	ErrInvalidSnoozedUntilFormat = errors.New("invalid snoozedUntil format")
+	ErrInvalidSnoozedUntilFormat    = errors.New("invalid snoozedUntil format")
+	ErrInvalidTimelineTimestampFmt = errors.New("invalid timeline timestamp format")
 )
 
 // MarkNotificationRead marks a notification as read.
@@ -124,4 +125,15 @@ func (s *Service) UnfilterNotification(
 	userID, githubID string,
 ) (db.Notification, error) {
 	return s.queries.MarkNotificationUnfiltered(ctx, userID, githubID)
+}
+
+// UpdateTimelineLastSeenAt updates the timeline last seen timestamp for a notification.
+func (s *Service) UpdateTimelineLastSeenAt(
+	ctx context.Context,
+	userID, githubID, timestamp string,
+) (db.Notification, error) {
+	if _, err := time.Parse(time.RFC3339, timestamp); err != nil {
+		return db.Notification{}, errors.Join(ErrInvalidTimelineTimestampFmt, err)
+	}
+	return s.queries.UpdateTimelineLastSeenAt(ctx, userID, githubID, timestamp)
 }

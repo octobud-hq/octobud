@@ -35,6 +35,7 @@
 	import { currentTime } from "$lib/stores/timeStore";
 	import octicons from "@primer/octicons";
 	import { computeAvatarUrl, isRedirectAvatarUrl, resolveAvatarRedirect } from "$lib/utils/avatar";
+	import { updateTimelineLastSeen } from "$lib/api/notifications";
 
 	// Subscribe to time store to trigger re-renders when time updates
 	// This ensures relative timestamps for same-day notifications stay fresh
@@ -388,6 +389,35 @@
 
 	// Check if this is a CI activity notification (CheckRun/CheckSuite)
 	$: isCIActivity = checkIsCIActivity(detail?.notification.subjectType || notification.subjectType);
+
+	// Handler for updating timeline last seen timestamp
+	async function handleUpdateTimelineLastSeen(timestamp: string) {
+		const githubId = notification?.githubId;
+		if (!githubId) return;
+
+		try {
+			await updateTimelineLastSeen(githubId, timestamp);
+			// Update notification in the store so derived stores and props react
+			if (notification) {
+				pageController.actions.updateNotification({
+					...notification,
+					timelineLastSeenAt: timestamp,
+				});
+			}
+		} catch (err) {
+			console.error("Failed to update timeline last seen:", err);
+		}
+	}
+
+	// Handler for when user views new activity (scrolled to it or clicked the button)
+	// Uses the same trigger as the "New activity" button dismissal
+	function handleNewActivityViewed() {
+		if (notification && !notification.isRead) {
+			pageController.actions.markRead(notification).catch((err) => {
+				console.error("Failed to mark notification read on new activity:", err);
+			});
+		}
+	}
 </script>
 
 {#if notification}
@@ -994,6 +1024,9 @@
 								githubId={notification.githubId}
 								{timelineController}
 								{hasPermissionError}
+								timelineLastSeenAt={notification.timelineLastSeenAt}
+								onUpdateLastSeen={handleUpdateTimelineLastSeen}
+								onNewActivityViewed={handleNewActivityViewed}
 							/>
 						{/key}
 					{/if}

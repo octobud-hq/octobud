@@ -218,6 +218,7 @@ func (s *Store) toDBNotification(
 		SubjectState:            n.SubjectState,
 		SubjectMerged:           toNullBool(n.SubjectMerged),
 		SubjectStateReason:      n.SubjectStateReason,
+		TimelineLastSeenAt:      parseNullTime(n.TimelineLastSeenAt),
 	}
 }
 

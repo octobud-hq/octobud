@@ -21,7 +21,7 @@
 	import GitHubSettingsSection from "$lib/components/settings/GitHubSettingsSection.svelte";
 	import RulesSection from "$lib/components/settings/RulesSection.svelte";
 	import NotificationSettingsSection from "$lib/components/settings/NotificationSettingsSection.svelte";
-	import ThemeSettingsSection from "$lib/components/settings/ThemeSettingsSection.svelte";
+	import PreferencesSection from "$lib/components/settings/PreferencesSection.svelte";
 	import SyncOlderNotificationsSection from "$lib/components/settings/SyncOlderNotificationsSection.svelte";
 	import StorageSettingsSection from "$lib/components/settings/StorageSettingsSection.svelte";
 	import UpdateSettingsSection from "$lib/components/settings/UpdateSettingsSection.svelte";
@@ -149,8 +149,8 @@
 			description: "Manage your GitHub connection",
 		},
 		appearance: {
-			title: "Appearance",
-			description: "Customize how Octobud looks",
+			title: "Preferences",
+			description: "Customize appearance and behavior",
 		},
 		notifications: {
 			title: "Notifications",
@@ -188,7 +188,7 @@
 	{#if activeSection === "account"}
 		<GitHubSettingsSection />
 	{:else if activeSection === "appearance"}
-		<ThemeSettingsSection />
+		<PreferencesSection />
 	{:else if activeSection === "notifications"}
 		<NotificationSettingsSection />
 	{:else if activeSection === "rules"}

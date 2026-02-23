@@ -85,6 +85,10 @@ type assignTagByNameRequest struct {
 	TagName string `json:"tagName"`
 }
 
+type updateTimelineSeenRequest struct {
+	Timestamp string `json:"timestamp"` // RFC3339 format
+}
+
 type tagActionResponse struct {
 	Notification NotificationResponse `json:"notification"`
 }
@@ -507,4 +511,69 @@ func (h *Handler) handleRemoveTagFromNotification(w http.ResponseWriter, r *http
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, tagActionResponse{Notification: notification})
+}
+
+// handleUpdateTimelineLastSeen updates the timeline last seen timestamp for a notification
+func (h *Handler) handleUpdateTimelineLastSeen(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	rawGithubID := chi.URLParam(r, "githubID")
+	if rawGithubID == "" {
+		helpers.WriteError(w, http.StatusBadRequest, "githubID is required")
+		return
+	}
+
+	githubID, err := url.PathUnescape(rawGithubID)
+	if err != nil {
+		h.logger.Error(
+			"invalid githubID encoding",
+			zap.String("github_id", rawGithubID),
+			zap.Error(errors.Join(ErrInvalidGithubIDEncoding, err)),
+		)
+		helpers.WriteError(w, http.StatusBadRequest, "invalid githubID encoding")
+		return
+	}
+
+	var req updateTimelineSeenRequest
+	if decodeErr := json.NewDecoder(r.Body).Decode(&req); decodeErr != nil {
+		h.logger.Error(
+			"invalid request body",
+			zap.Error(errors.Join(ErrFailedToDecodeRequest, decodeErr)),
+		)
+		helpers.WriteError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if req.Timestamp == "" {
+		helpers.WriteError(w, http.StatusBadRequest, "timestamp is required")
+		return
+	}
+
+	userID, ok := helpers.RequireUserID(ctx, w, h.authSvc)
+	if !ok {
+		return
+	}
+
+	_, err = h.notifications.UpdateTimelineLastSeenAt(ctx, userID, githubID, req.Timestamp)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			h.logger.Debug("notification not found", zap.String("github_id", githubID))
+			helpers.WriteError(w, http.StatusNotFound, "notification not found")
+			return
+		}
+		if errors.Is(err, notificationcore.ErrInvalidTimelineTimestampFmt) {
+			helpers.WriteError(w, http.StatusBadRequest, "invalid timestamp format, expected RFC3339")
+			return
+		}
+		h.logger.Error(
+			"failed to update timeline last seen",
+			zap.String("github_id", githubID),
+			zap.Error(err),
+		)
+		helpers.WriteError(w, http.StatusInternalServerError, "failed to update timeline last seen")
+		return
+	}
+
+	// Return empty success response - we don't need to return the full notification
+	helpers.WriteJSON(w, http.StatusOK, map[string]bool{"success": true})
 }

@@ -102,6 +102,7 @@ const fromBackendNotification = (notification: BackendNotificationResponse): Not
 		actionHints: notification.actionHints,
 		tags: notification.tags ?? [],
 		effectiveSortDate: notification.effectiveSortDate,
+		timelineLastSeenAt: notification.timelineLastSeenAt ?? undefined,
 	};
 };
 
@@ -1024,6 +1025,29 @@ export async function fetchNotificationTimeline(
 
 	const payload: NotificationTimelineResponse = await response.json();
 	return payload;
+}
+
+// Update timeline last seen timestamp for a notification
+export async function updateTimelineLastSeen(
+	githubId: string,
+	timestamp: string,
+	fetchImpl?: typeof fetch
+): Promise<void> {
+	const response = await fetchWithAuth(
+		`/api/notifications/${encodeURIComponent(githubId)}/timeline-seen`,
+		{
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({ timestamp }),
+		},
+		fetchImpl
+	);
+
+	if (!response.ok) {
+		throw new Error(`Failed to update timeline last seen (${response.status})`);
+	}
 }
 
 export { fromBackendNotification };

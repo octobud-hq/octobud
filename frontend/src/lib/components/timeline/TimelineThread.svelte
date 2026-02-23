@@ -16,12 +16,19 @@
 
 	import type { TimelineController } from "$lib/state/timelineController";
 	import TimelineItem from "./TimelineItem.svelte";
-	import { writable } from "svelte/store";
+	import { writable, get } from "svelte/store";
 	import { tick, onMount, onDestroy } from "svelte";
+	import { fly, fade } from "svelte/transition";
+	import { getNotificationSettingsStore } from "$lib/stores/notificationSettings";
+
+	const { timelineAutoScroll } = getNotificationSettingsStore();
 
 	export let githubId: string;
 	export let timelineController: TimelineController;
 	export let hasPermissionError: boolean = false;
+	export let timelineLastSeenAt: string | undefined = undefined;
+	export let onUpdateLastSeen: ((timestamp: string) => void) | undefined = undefined;
+	export let onNewActivityViewed: (() => void) | undefined = undefined;
 
 	const { items, isLoading, error, pagination, hasAttemptedAutoLoad } = timelineController.stores;
 	const { autoLoadTimeline, loadTimeline, loadMoreTimeline } = timelineController.actions;
@@ -30,9 +37,60 @@
 	const isLoadingMore = writable(false);
 	let autoLoadDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
+	// Single observer for detecting when user scrolls to the last timeline item.
+	// Replaces per-item observer — we only need to know if the user reached the end.
+	// State stored on a const object to avoid Svelte reactive tracking in $: blocks
+	// (Svelte only tracks top-level let reassignment, not property mutations on const objects).
+	const observerState = {
+		observer: null as IntersectionObserver | null,
+		currentElement: null as HTMLElement | null,
+		setupTimer: null as ReturnType<typeof setTimeout> | null,
+	};
+	let observerReady = false;
+	const OBSERVER_GRACE_MS = 1500;
+
+	function setupLastItemObserver() {
+		if (typeof IntersectionObserver === "undefined") return;
+
+		observerState.observer = new IntersectionObserver(
+			(entries) => {
+				for (const entry of entries) {
+					if (!entry.isIntersecting) continue;
+					if (document.visibilityState !== "visible") continue;
+					if (firstUnseenIndex < 0) continue;
+					if (hasScrolledToUnseen) continue;
+
+					dismissNewActivity();
+				}
+			},
+			{ threshold: 0 }
+		);
+	}
+
+	// Dismiss new activity indicator: update last-seen, mark read, hide button
+	function dismissNewActivity() {
+		if (hasScrolledToUnseen) return;
+
+		hasScrolledToUnseen = true;
+
+		// Update last-seen to the newest item's timestamp
+		const currentItems = get(items);
+		if (currentItems.length > 0 && onUpdateLastSeen) {
+			const newestTimestamp = getItemTimestamp(currentItems[currentItems.length - 1]);
+			if (newestTimestamp) {
+				onUpdateLastSeen(newestTimestamp);
+			}
+		}
+
+		// Mark read if notification was marked unread by new activity
+		onNewActivityViewed?.();
+	}
+
 	// Auto-load timeline on mount with debounce
 	onMount(() => {
-		// Debounce auto-load to avoid rapid-fire requests during navigation
+		setupLastItemObserver();
+		observerReady = true;
+
 		autoLoadDebounceTimer = setTimeout(() => {
 			if (!$hasAttemptedAutoLoad && githubId) {
 				autoLoadTimeline(githubId, 10);
@@ -43,6 +101,12 @@
 	onDestroy(() => {
 		if (autoLoadDebounceTimer) {
 			clearTimeout(autoLoadDebounceTimer);
+		}
+		if (observerState.setupTimer) {
+			clearTimeout(observerState.setupTimer);
+		}
+		if (observerState.observer) {
+			observerState.observer.disconnect();
 		}
 	});
 
@@ -93,6 +157,174 @@
 		!hasPermissionError && $hasAttemptedAutoLoad && $error && !hasItems && !$isLoading;
 	// Show initial loading state when we're loading and have no items yet
 	$: showInitialLoading = $isLoading && !hasItems;
+
+	// Helper to get the effective timestamp of a timeline item
+	function getItemTimestamp(item: typeof $items[0]): string | undefined {
+		return item.timestamp || item.createdAt || item.submittedAt || item.updatedAt;
+	}
+
+	// Calculate which items are unseen based on timelineLastSeenAt
+	// Items are sorted oldest to newest in the timeline, so we find the first item
+	// that is newer than the lastSeenAt timestamp
+	$: firstUnseenIndex = (() => {
+		if (!timelineLastSeenAt || $items.length === 0) return -1;
+		const lastSeenDate = new Date(timelineLastSeenAt);
+		for (let i = 0; i < $items.length; i++) {
+			const itemTimestamp = getItemTimestamp($items[i]);
+			if (itemTimestamp) {
+				const itemDate = new Date(itemTimestamp);
+				if (itemDate > lastSeenDate) {
+					return i;
+				}
+			}
+		}
+		return -1; // All items have been seen
+	})();
+
+	// Sticky divider position — persists even after items are marked as seen,
+	// so the divider line stays visible for the session. Only updates when
+	// new unseen items arrive at a different position.
+	let stickyDividerIndex = -1;
+
+	$: if (firstUnseenIndex >= 0) {
+		stickyDividerIndex = firstUnseenIndex;
+	}
+
+	// Track if user has scrolled to unseen items
+	let hasScrolledToUnseen = false;
+	let previousFirstUnseenIndex = -1;
+
+	// Reset state when new unseen items arrive (e.g. live refresh)
+	$: {
+		if (firstUnseenIndex >= 0 && previousFirstUnseenIndex === -1) {
+			hasScrolledToUnseen = false;
+		}
+		previousFirstUnseenIndex = firstUnseenIndex;
+	}
+
+	// Update which element the observer is watching. Extracted into a named function
+	// so that Svelte's compiler cannot see internal variable references
+	// (itemElementsByIndex, etc.) as dependencies of the $: block that calls it.
+	// Delays .observe() by the grace period so the observer doesn't fire on mount
+	// or immediately when new items arrive — it only fires after the user has had
+	// time to notice the "New activity" indicator.
+	function updateObserverTarget() {
+		const obs = observerState.observer;
+		if (!obs) return;
+
+		// Cancel any pending delayed observe
+		if (observerState.setupTimer) {
+			clearTimeout(observerState.setupTimer);
+			observerState.setupTimer = null;
+		}
+
+		// Unobserve previous element
+		if (observerState.currentElement) {
+			obs.unobserve(observerState.currentElement);
+			observerState.currentElement = null;
+		}
+
+		// Delay observation by the grace period
+		observerState.setupTimer = setTimeout(() => {
+			observerState.setupTimer = null;
+			if (hasScrolledToUnseen) return;
+
+			const currentItems = get(items);
+			const lastEl = itemElementsByIndex.get(currentItems.length - 1);
+			if (lastEl) {
+				obs.observe(lastEl);
+				observerState.currentElement = lastEl;
+			}
+		}, OBSERVER_GRACE_MS);
+	}
+
+	// Reactively observe the last timeline item when there are unseen items.
+	// Uses a grace period + visibility gate to avoid firing on mount or when tab is hidden.
+	$: if ($items.length > 0 && firstUnseenIndex >= 0 && !hasScrolledToUnseen && observerReady) {
+		tick().then(updateObserverTarget);
+	}
+
+	// Map to store element references by index
+	let itemElementsByIndex: Map<number, HTMLElement> = new Map();
+
+	// Scroll to first unseen item within the nearest scrollable ancestor.
+	// Does NOT dismiss — dismissal is handled by the IntersectionObserver
+	// (when the user scrolls to the last item) or by handleNewActivityClick.
+	function scrollToFirstUnseen() {
+		const element = firstUnseenIndex >= 0 ? itemElementsByIndex.get(firstUnseenIndex) : null;
+		if (!element) return;
+
+		const scrollContainer = findScrollContainer(element);
+		if (scrollContainer) {
+			const containerRect = scrollContainer.getBoundingClientRect();
+			const elementRect = element.getBoundingClientRect();
+			const offsetTop = elementRect.top - containerRect.top + scrollContainer.scrollTop;
+			scrollContainer.scrollTo({ top: offsetTop, behavior: "smooth" });
+		}
+	}
+
+	// Button click: scroll to new activity AND dismiss the indicator
+	function handleNewActivityClick() {
+		scrollToFirstUnseen();
+		dismissNewActivity();
+	}
+
+	// Walk up the DOM to find the nearest scrollable ancestor
+	function findScrollContainer(el: HTMLElement): HTMLElement | null {
+		let current = el.parentElement;
+		while (current) {
+			const style = getComputedStyle(current);
+			if (
+				(style.overflowY === "auto" || style.overflowY === "scroll") &&
+				current.scrollHeight > current.clientHeight
+			) {
+				return current;
+			}
+			current = current.parentElement;
+		}
+		return null;
+	}
+
+	// Store element reference by index
+	function storeElementRef(index: number, element: HTMLElement) {
+		itemElementsByIndex.set(index, element);
+	}
+
+	// Auto-scroll to first unseen on initial load if enabled.
+	// scrollToFirstUnseen is a named function reference so Svelte's compiler
+	// doesn't track its internal variable accesses as $: dependencies.
+	$: if (
+		!hasScrolledToUnseen &&
+		firstUnseenIndex >= 0 &&
+		$timelineAutoScroll
+	) {
+		tick().then(scrollToFirstUnseen);
+	}
+
+	// Show floating button when there are unseen items and user hasn't scrolled to them
+	$: showNewActivityButton = firstUnseenIndex >= 0 && !hasScrolledToUnseen;
+
+	// Svelte action for timeline items — stores element ref and handles index updates
+	function observeTimelineItem(node: HTMLElement, index: number) {
+		let currentIndex = index;
+		storeElementRef(currentIndex, node);
+		return {
+			update(newIndex: number) {
+				if (newIndex !== currentIndex) {
+					itemElementsByIndex.delete(currentIndex);
+					currentIndex = newIndex;
+					storeElementRef(currentIndex, node);
+				}
+			},
+			destroy() {
+				itemElementsByIndex.delete(currentIndex);
+				if (node === observerState.currentElement && observerState.observer) {
+					observerState.observer.unobserve(node);
+					observerState.currentElement = null;
+				}
+			},
+		};
+	}
 </script>
 
 {#if showInitialLoading}
@@ -273,8 +505,58 @@
 
 		<!-- Timeline items list -->
 		{#each itemsWithKeys as { item, key }, index (key)}
-			<TimelineItem {item} showThread={true} isLastItem={index === lastItemIndex} />
+			<!-- New activity divider -->
+			{#if index === stickyDividerIndex && stickyDividerIndex > 0}
+				<div class="new-activity-divider flex items-center gap-3 my-4">
+					<div class="flex flex-col items-center flex-shrink-0 relative z-10" style="width: 40px;">
+						<!-- Thread line through divider -->
+						<div
+							class="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-0.5 bg-gray-300 dark:bg-gray-800 -z-10"
+						></div>
+						<!-- Plus circle icon -->
+						<div class="h-8 w-8 rounded-full bg-blue-600 dark:bg-blue-500 ring-2 ring-white dark:ring-gray-950 flex items-center justify-center">
+							<svg class="h-4 w-4 text-white" viewBox="0 0 16 16" fill="currentColor">
+								<path d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2Z"/>
+							</svg>
+						</div>
+					</div>
+					<div class="flex-1 flex items-center gap-2">
+						<div class="h-px flex-1 bg-blue-500 dark:bg-blue-400"></div>
+						<span
+							class="text-xs font-medium text-blue-600 dark:text-blue-400 whitespace-nowrap px-2"
+						>
+							New activity
+						</span>
+						<div class="h-px flex-1 bg-blue-500 dark:bg-blue-400"></div>
+					</div>
+				</div>
+			{/if}
+			<div
+				data-timestamp={getItemTimestamp(item)}
+				use:observeTimelineItem={index}
+			>
+				<TimelineItem {item} showThread={true} isLastItem={index === lastItemIndex} />
+			</div>
 		{/each}
+	</div>
+
+	<!-- Floating "New Activity" button — zero-height sticky wrapper prevents layout shift on dismiss -->
+	<div class="sticky bottom-8 z-30 pointer-events-none" style="height: 0;">
+		{#if showNewActivityButton}
+			<div
+				class="absolute bottom-0 left-0 right-0 flex justify-center"
+				in:fly={{ y: 12, duration: 250 }}
+				out:fade={{ duration: 150 }}
+			>
+				<button
+					type="button"
+					on:click={handleNewActivityClick}
+					class="pointer-events-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-full shadow-lg transition-all hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
+				>
+					New activity
+				</button>
+			</div>
+		{/if}
 	</div>
 {:else if !$isLoading && $hasAttemptedAutoLoad}
 	<!-- No activity state -->
