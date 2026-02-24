@@ -20,6 +20,7 @@ import { createViewActionController } from "./viewActionController";
 import { createSharedHelpers } from "./sharedHelpers";
 import { createDebounceManager } from "./debounceManager";
 import { fetchViews } from "$lib/api/views";
+import { fetchNotificationDetail } from "$lib/api/notifications";
 import type { NotificationStore } from "../../stores/notificationStore";
 import type { PaginationStore } from "../../stores/paginationStore";
 import type { DetailStore } from "../../stores/detailViewStore";
@@ -33,6 +34,10 @@ import type { ControllerOptions } from "../interfaces/common";
 // Mock fetchViews
 vi.mock("$lib/api/views", () => ({
 	fetchViews: vi.fn(),
+}));
+
+vi.mock("$lib/api/notifications", () => ({
+	fetchNotificationDetail: vi.fn(),
 }));
 
 describe("ViewActionController", () => {
@@ -50,6 +55,8 @@ describe("ViewActionController", () => {
 	let controller: ReturnType<typeof createViewActionController>;
 
 	beforeEach(() => {
+		vi.clearAllMocks();
+
 		global.window = {
 			location: {
 				href: "http://localhost:3000/views/inbox",
@@ -66,6 +73,7 @@ describe("ViewActionController", () => {
 			setPageData: vi.fn((data: any) => {
 				notificationStore.pageData.set(data);
 			}),
+			updateNotification: vi.fn(),
 		} as any;
 
 		paginationStore = {
@@ -257,6 +265,58 @@ describe("ViewActionController", () => {
 			await controller.handleSyncNewNotifications();
 
 			expect(refreshSpy).not.toHaveBeenCalled();
+		});
+
+		it("fetches only the detail notification when list refresh is skipped but detail was updated", async () => {
+			vi.mocked(fetchViews).mockResolvedValue([]);
+			// Page 2 + non-split + detail open = list refresh skipped
+			paginationStore.page.set(2);
+			(uiStore.splitModeEnabled as any).set(false);
+			(detailStore.detailOpen as any).set(true);
+			(detailStore.detailNotificationId as any).set("gh-1");
+			const refreshSpy = vi.spyOn(sharedHelpers, "refresh");
+
+			const updatedNotification = { id: "1", githubId: "gh-1", title: "Updated" };
+			vi.mocked(fetchNotificationDetail).mockResolvedValue({
+				notification: updatedNotification,
+				subject: {},
+			} as any);
+
+			await controller.handleSyncNewNotifications(["gh-1"]);
+
+			expect(refreshSpy).not.toHaveBeenCalled();
+			expect(fetchNotificationDetail).toHaveBeenCalledWith("gh-1", { query: "" });
+			expect(notificationStore.updateNotification).toHaveBeenCalledWith(updatedNotification);
+		});
+
+		it("does not fetch detail when list refresh is skipped and detail was not in updatedGithubIds", async () => {
+			vi.mocked(fetchViews).mockResolvedValue([]);
+			paginationStore.page.set(2);
+			(uiStore.splitModeEnabled as any).set(false);
+			(detailStore.detailOpen as any).set(true);
+			(detailStore.detailNotificationId as any).set("gh-1");
+			const refreshSpy = vi.spyOn(sharedHelpers, "refresh");
+
+			await controller.handleSyncNewNotifications(["gh-other"]);
+
+			expect(refreshSpy).not.toHaveBeenCalled();
+			expect(fetchNotificationDetail).not.toHaveBeenCalled();
+		});
+
+		it("handles detail fetch failure gracefully", async () => {
+			vi.mocked(fetchViews).mockResolvedValue([]);
+			paginationStore.page.set(2);
+			(uiStore.splitModeEnabled as any).set(false);
+			(detailStore.detailOpen as any).set(true);
+			(detailStore.detailNotificationId as any).set("gh-1");
+
+			vi.mocked(fetchNotificationDetail).mockRejectedValue(new Error("Network error"));
+
+			// Should not throw
+			await controller.handleSyncNewNotifications(["gh-1"]);
+
+			expect(fetchNotificationDetail).toHaveBeenCalled();
+			expect(notificationStore.updateNotification).not.toHaveBeenCalled();
 		});
 
 		it("restores keyboard focus after refresh", async () => {
