@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **"New activity" indicator**: A divider line and floating button appear when unseen timeline items arrive, with smooth scroll-to and auto-dismiss on scroll
 - **Timeline last-seen tracking**: Tracks the last-seen timeline timestamp per notification so the "New activity" indicator persists across sessions
 - **Auto-mark-read on new activity**: Notifications marked unread by incoming activity are automatically marked read when the user views the new items
+- **Auto-scroll to new timeline activity**: Optional setting to automatically scroll to unseen timeline activity when opening the detail view (disabled by default)
 
 ### Changed
 

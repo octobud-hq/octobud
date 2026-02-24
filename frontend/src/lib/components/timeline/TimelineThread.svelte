@@ -37,6 +37,8 @@
 	let hasLoaded = false;
 	const isLoadingMore = writable(false);
 	let autoLoadDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+	// Gates auto-scroll to only fire on initial detail open, not on live refreshes
+	let isInitialLoad = true;
 
 	// Single observer for detecting when user scrolls to the last timeline item.
 	// Replaces per-item observer — we only need to know if the user reached the end.
@@ -291,15 +293,28 @@
 		itemElementsByIndex.set(index, element);
 	}
 
-	// Auto-scroll to first unseen on initial load if enabled.
+	// Auto-scroll to first unseen on initial detail open only (not on live refreshes).
 	// scrollToFirstUnseen is a named function reference so Svelte's compiler
 	// doesn't track its internal variable accesses as $: dependencies.
-	$: if (!hasScrolledToUnseen && firstUnseenIndex >= 0 && $timelineAutoScroll) {
+	$: if (isInitialLoad && !hasScrolledToUnseen && firstUnseenIndex >= 0 && $timelineAutoScroll) {
 		tick().then(scrollToFirstUnseen);
 	}
 
-	// Show floating button when there are unseen items and user hasn't scrolled to them
-	$: showNewActivityButton = firstUnseenIndex >= 0 && !hasScrolledToUnseen;
+	// After the first batch of items loads, mark initial load as complete
+	// so subsequent live refreshes don't trigger auto-scroll.
+	// Uses setTimeout to schedule outside Svelte's reactive cycle and avoid
+	// the infinite-reactive-loop lint warning.
+	$: if (isInitialLoad && $items.length > 0 && !$isLoading) {
+		setTimeout(() => {
+			isInitialLoad = false;
+		}, 0);
+	}
+
+	// Show floating button when there are unseen items and user hasn't scrolled to them.
+	// During initial load with auto-scroll enabled, hide the button (auto-scroll handles it).
+	// After initial load, always show it so the user can click to jump to new activity.
+	$: showNewActivityButton =
+		firstUnseenIndex >= 0 && !hasScrolledToUnseen && !(isInitialLoad && $timelineAutoScroll);
 
 	// Svelte action for timeline items — stores element ref and handles index updates
 	function observeTimelineItem(node: HTMLElement, index: number) {
