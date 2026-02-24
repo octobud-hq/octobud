@@ -38,6 +38,14 @@ function debugLog(...args) {
     }
 }
 
+/**
+ * Get a stable, non-empty string identifier for a notification.
+ * Prefers githubId when present and non-blank, falls back to id.
+ */
+function notificationKey(n) {
+    return (n.githubId && n.githubId.trim() !== '') ? String(n.githubId) : String(n.id);
+}
+
 // State
 let lastMaxEffectiveSortDate = null; // Track the latest effectiveSortDate from first page
 let notificationQuery = 'in:inbox'; // Configurable query (default: inbox)
@@ -510,11 +518,7 @@ async function showDesktopNotification(notification) {
         return false;
     }
 
-    // Handle both BackendNotificationResponse (from API) and Notification (from main app)
-    // Use githubId if it exists and is non-empty, otherwise fall back to stringified id
-    const id = (notification.githubId && notification.githubId.trim() !== '')
-        ? String(notification.githubId)
-        : String(notification.id);
+    const id = notificationKey(notification);
     debugLog('[SW] Preparing to show desktop notification for', id, 'githubId:', notification.githubId, 'id:', notification.id);
 
     // BackendNotificationResponse has repository.fullName, Notification has repoFullName
@@ -563,9 +567,7 @@ async function showDesktopNotification(notification) {
         silent: false, // Ensure sound plays
         data: {
             notificationId: id,
-            githubId: (notification.githubId && notification.githubId.trim() !== '')
-                ? String(notification.githubId)
-                : String(notification.id)
+            githubId: notificationKey(notification)
             // Note: Not including URL - clicking notification will just focus the app
         }
     };
@@ -618,7 +620,7 @@ async function notifyClients(newNotifications) {
                 client.postMessage({
                     type: 'NEW_NOTIFICATIONS',
                     count: newNotifications.length,
-                    githubIds: newNotifications.map(n => n.githubId),
+                    githubIds: newNotifications.map(notificationKey),
                     timestamp: Date.now()
                 });
             });
@@ -665,8 +667,7 @@ async function pollForUpdates() {
             const newNotifications = notifications.filter(n => {
                 const effectiveSortDate = n.effectiveSortDate;
                 if (!effectiveSortDate) {
-                    const logId = (n.githubId && n.githubId.trim() !== '') ? n.githubId : String(n.id);
-                    debugLog('[SW] Notification', logId, 'has no effectiveSortDate, skipping');
+                    debugLog('[SW] Notification', notificationKey(n), 'has no effectiveSortDate, skipping');
                     return false;
                 }
 
@@ -675,8 +676,7 @@ async function pollForUpdates() {
                 const shouldShow = shouldShowNotification(n);
 
                 if (isNew) {
-                    const logId = (n.githubId && n.githubId.trim() !== '') ? n.githubId : String(n.id);
-                    debugLog('[SW] Notification', logId, '- effectiveSortDate:', effectiveSortDate, 'isNew:', isNew, 'shouldShow:', shouldShow, 'archived:', n.archived, 'muted:', n.muted);
+                    debugLog('[SW] Notification', notificationKey(n), '- effectiveSortDate:', effectiveSortDate, 'isNew:', isNew, 'shouldShow:', shouldShow, 'archived:', n.archived, 'muted:', n.muted);
                 }
 
                 return isNew && shouldShow;
@@ -702,19 +702,14 @@ async function pollForUpdates() {
                         debugLog('[SW] Showing', newNotifications.length, 'individual notifications');
                         for (const notification of newNotifications) {
                             try {
-                                const id = (notification.githubId && notification.githubId.trim() !== '')
-                                    ? String(notification.githubId)
-                                    : String(notification.id);
+                                const id = notificationKey(notification);
                                 debugLog('[SW] Showing desktop notification for', id);
                                 await showDesktopNotification(notification);
                                 debugLog('[SW] Successfully showed notification for', id);
                                 // Small delay between notifications to avoid overwhelming the user
                                 await new Promise(resolve => setTimeout(resolve, 100));
                             } catch (error) {
-                                const errorId = (notification.githubId && notification.githubId.trim() !== '')
-                                    ? notification.githubId
-                                    : notification.id;
-                                console.error('[SW] Failed to show notification for:', errorId, {
+                                console.error('[SW] Failed to show notification for:', notificationKey(notification), {
                                     error: error?.message || String(error),
                                     errorName: error?.name
                                 });
