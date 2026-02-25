@@ -40,48 +40,24 @@
 	// Gates auto-scroll to only fire on initial detail open, not on live refreshes
 	let isInitialLoad = true;
 
-	// Single observer for detecting when user scrolls to the last timeline item.
-	// Replaces per-item observer — we only need to know if the user reached the end.
-	// State stored on a const object to avoid Svelte reactive tracking in $: blocks
-	// (Svelte only tracks top-level let reassignment, not property mutations on const objects).
-	const observerState = {
-		observer: null as IntersectionObserver | null,
-		currentElement: null as HTMLElement | null,
-		setupTimer: null as ReturnType<typeof setTimeout> | null,
-	};
-	let observerReady = false;
-	const OBSERVER_GRACE_MS = 1500;
-
-	function setupLastItemObserver() {
-		if (typeof IntersectionObserver === "undefined") return;
-
-		observerState.observer = new IntersectionObserver(
-			(entries) => {
-				for (const entry of entries) {
-					if (!entry.isIntersecting) continue;
-					if (document.visibilityState !== "visible") continue;
-					if (firstUnseenIndex < 0) continue;
-					if (hasScrolledToUnseen) continue;
-
-					dismissNewActivity();
-				}
-			},
-			{ threshold: 0 }
-		);
-	}
+	// Local baseline for unseen detection. Provides an immediate reference point
+	// so firstUnseenIndex works without waiting for the async timelineLastSeenAt update.
+	let localBaseline: string | undefined = undefined;
 
 	// Dismiss new activity indicator: update last-seen, mark read, hide button
 	function dismissNewActivity() {
 		if (hasScrolledToUnseen) return;
 
+		// eslint-disable-next-line svelte/infinite-reactive-loop -- convergent: sets the flag that disables the reactive condition
 		hasScrolledToUnseen = true;
 
 		// Update last-seen to the newest item's timestamp
 		const currentItems = get(items);
-		if (currentItems.length > 0 && onUpdateLastSeen) {
+		if (currentItems.length > 0) {
 			const newestTimestamp = getItemTimestamp(currentItems[currentItems.length - 1]);
 			if (newestTimestamp) {
-				onUpdateLastSeen(newestTimestamp);
+				localBaseline = newestTimestamp;
+				onUpdateLastSeen?.(newestTimestamp);
 			}
 		}
 
@@ -91,9 +67,6 @@
 
 	// Auto-load timeline on mount with debounce
 	onMount(() => {
-		setupLastItemObserver();
-		observerReady = true;
-
 		autoLoadDebounceTimer = setTimeout(() => {
 			if (!$hasAttemptedAutoLoad && githubId) {
 				autoLoadTimeline(githubId, 10);
@@ -105,12 +78,7 @@
 		if (autoLoadDebounceTimer) {
 			clearTimeout(autoLoadDebounceTimer);
 		}
-		if (observerState.setupTimer) {
-			clearTimeout(observerState.setupTimer);
-		}
-		if (observerState.observer) {
-			observerState.observer.disconnect();
-		}
+		cleanupScrollDismiss();
 	});
 
 	async function handleLoadTimeline() {
@@ -166,12 +134,27 @@
 		return item.timestamp || item.createdAt || item.submittedAt || item.updatedAt;
 	}
 
-	// Calculate which items are unseen based on timelineLastSeenAt
+	// Effective last-seen: prefer the persisted prop, fall back to local baseline.
+	// localBaseline provides an immediate reference so we don't wait for the async API round-trip.
+	$: effectiveLastSeenAt = timelineLastSeenAt ?? localBaseline;
+
+	// Set baseline on first load when no persisted value exists.
+	// Without a baseline, firstUnseenIndex is always -1 and new items from live
+	// refreshes would never be detected as "unseen."
+	$: if ($items.length > 0 && !timelineLastSeenAt && !localBaseline && !$isLoading) {
+		const newestTimestamp = getItemTimestamp($items[$items.length - 1]);
+		if (newestTimestamp) {
+			localBaseline = newestTimestamp;
+			onUpdateLastSeen?.(newestTimestamp);
+		}
+	}
+
+	// Calculate which items are unseen based on effectiveLastSeenAt
 	// Items are sorted oldest to newest in the timeline, so we find the first item
 	// that is newer than the lastSeenAt timestamp
 	$: firstUnseenIndex = (() => {
-		if (!timelineLastSeenAt || $items.length === 0) return -1;
-		const lastSeenDate = new Date(timelineLastSeenAt);
+		if (!effectiveLastSeenAt || $items.length === 0) return -1;
+		const lastSeenDate = new Date(effectiveLastSeenAt);
 		for (let i = 0; i < $items.length; i++) {
 			const itemTimestamp = getItemTimestamp($items[i]);
 			if (itemTimestamp) {
@@ -205,54 +188,67 @@
 		previousFirstUnseenIndex = firstUnseenIndex;
 	}
 
-	// Update which element the observer is watching. Extracted into a named function
-	// so that Svelte's compiler cannot see internal variable references
-	// (itemElementsByIndex, etc.) as dependencies of the $: block that calls it.
-	// Delays .observe() by the grace period so the observer doesn't fire on mount
-	// or immediately when new items arrive — it only fires after the user has had
-	// time to notice the "New activity" indicator.
-	function updateObserverTarget() {
-		const obs = observerState.observer;
-		if (!obs) return;
-
-		// Cancel any pending delayed observe
-		if (observerState.setupTimer) {
-			clearTimeout(observerState.setupTimer);
-			observerState.setupTimer = null;
-		}
-
-		// Unobserve previous element
-		if (observerState.currentElement) {
-			obs.unobserve(observerState.currentElement);
-			observerState.currentElement = null;
-		}
-
-		// Delay observation by the grace period
-		observerState.setupTimer = setTimeout(() => {
-			observerState.setupTimer = null;
-			if (hasScrolledToUnseen) return;
-
-			const currentItems = get(items);
-			const lastEl = itemElementsByIndex.get(currentItems.length - 1);
-			if (lastEl) {
-				obs.observe(lastEl);
-				observerState.currentElement = lastEl;
-			}
-		}, OBSERVER_GRACE_MS);
-	}
-
-	// Reactively observe the last timeline item when there are unseen items.
-	// Uses a grace period + visibility gate to avoid firing on mount or when tab is hidden.
-	$: if ($items.length > 0 && firstUnseenIndex >= 0 && !hasScrolledToUnseen && observerReady) {
-		tick().then(updateObserverTarget);
-	}
-
 	// Map to store element references by index
 	let itemElementsByIndex: Map<number, HTMLElement> = new SvelteMap();
 
+	// Scroll-based dismiss: when the user scrolls the last timeline item into view,
+	// dismiss the "New Activity" indicator. Uses a scroll listener instead of
+	// IntersectionObserver to avoid false positives on initial load (scroll events
+	// only fire on actual user or programmatic scrolling, not on "already visible").
+	// State on const object to avoid Svelte reactive tracking.
+	const scrollDismissState = {
+		cleanup: null as (() => void) | null,
+	};
+
+	function setupScrollDismiss() {
+		cleanupScrollDismiss();
+
+		const firstEl = itemElementsByIndex.values().next().value;
+		if (!firstEl) return;
+
+		const scrollContainer = findScrollContainer(firstEl);
+		if (!scrollContainer) return;
+
+		function onScroll() {
+			if (hasScrolledToUnseen || firstUnseenIndex < 0) {
+				cleanupScrollDismiss();
+				return;
+			}
+
+			const currentItems = get(items);
+			const lastEl = itemElementsByIndex.get(currentItems.length - 1);
+			if (!lastEl) return;
+
+			const containerRect = scrollContainer!.getBoundingClientRect();
+			const lastElRect = lastEl.getBoundingClientRect();
+
+			// Dismiss when the last timeline item is within the visible scroll area
+			if (lastElRect.top < containerRect.bottom) {
+				dismissNewActivity();
+				cleanupScrollDismiss();
+			}
+		}
+
+		scrollContainer.addEventListener("scroll", onScroll, { passive: true });
+		scrollDismissState.cleanup = () => {
+			scrollContainer.removeEventListener("scroll", onScroll);
+		};
+	}
+
+	function cleanupScrollDismiss() {
+		if (scrollDismissState.cleanup) {
+			scrollDismissState.cleanup();
+			scrollDismissState.cleanup = null;
+		}
+	}
+
+	// Reactively set up scroll dismiss when unseen items exist.
+	$: if ($items.length > 0 && firstUnseenIndex >= 0 && !hasScrolledToUnseen) {
+		tick().then(setupScrollDismiss);
+	}
+
 	// Scroll to first unseen item within the nearest scrollable ancestor.
-	// Does NOT dismiss — dismissal is handled by the IntersectionObserver
-	// (when the user scrolls to the last item) or by handleNewActivityClick.
+	// Does not dismiss on its own — callers decide whether to also call dismissNewActivity().
 	function scrollToFirstUnseen() {
 		const element = firstUnseenIndex >= 0 ? itemElementsByIndex.get(firstUnseenIndex) : null;
 		if (!element) return;
@@ -294,10 +290,15 @@
 	}
 
 	// Auto-scroll to first unseen on initial detail open only (not on live refreshes).
+	// Also dismiss new activity so the button doesn't flash after isInitialLoad flips.
 	// scrollToFirstUnseen is a named function reference so Svelte's compiler
 	// doesn't track its internal variable accesses as $: dependencies.
 	$: if (isInitialLoad && !hasScrolledToUnseen && firstUnseenIndex >= 0 && $timelineAutoScroll) {
-		tick().then(scrollToFirstUnseen);
+		tick().then(() => {
+			scrollToFirstUnseen();
+			// eslint-disable-next-line svelte/infinite-reactive-loop -- convergent: dismissNewActivity sets hasScrolledToUnseen=true, disabling this block's condition
+			dismissNewActivity();
+		});
 	}
 
 	// After the first batch of items loads, mark initial load as complete
@@ -330,10 +331,6 @@
 			},
 			destroy() {
 				itemElementsByIndex.delete(currentIndex);
-				if (node === observerState.currentElement && observerState.observer) {
-					observerState.observer.unobserve(node);
-					observerState.currentElement = null;
-				}
 			},
 		};
 	}

@@ -72,6 +72,12 @@ export function createViewActionController(
 		uiStore,
 	} = stores;
 
+	let timelineRefreshHandler: ((githubId: string) => void) | null = null;
+
+	function registerTimelineRefreshHandler(handler: (githubId: string) => void): void {
+		timelineRefreshHandler = handler;
+	}
+
 	async function refresh(): Promise<void> {
 		return sharedHelpers.refresh();
 	}
@@ -214,20 +220,33 @@ export function createViewActionController(
 			return;
 		}
 
-		// If we're not refreshing the full list but the detail notification was updated,
-		// fetch just that notification's detail so the store reflects the latest data
-		if (!shouldRefreshNotifications && currentDetailUpdated) {
+		// If the currently-open detail notification was updated, fetch its latest data
+		// so the timeline reflects new activity. This runs regardless of whether the
+		// full list is also being refreshed (e.g. split mode on page 1).
+		if (currentDetailUpdated) {
 			try {
 				const currentQuery = get(queryStore.quickQuery);
 				const detail = await fetchNotificationDetail(currentDetailId, {
 					query: currentQuery,
 				});
-				notificationStore.updateNotification(detail.notification);
+				// Bypass optimistic read protection: the server legitimately changed the
+				// read state (e.g. new activity marked the notification unread on GitHub).
+				notificationStore.updateNotification(detail.notification, {
+					preserveOptimisticRead: false,
+				});
+				// Directly trigger timeline refresh via registered handler.
+				// This bypasses the reactive effectiveSortDate detection which can
+				// miss updates due to Svelte batching / timing edge cases.
+				timelineRefreshHandler?.(currentDetailId);
 			} catch (err) {
 				// Silent failure — detail will still show cached data
 				console.error("Failed to refresh detail notification on poll:", err);
 			}
-			return;
+
+			// If we're not also refreshing the full list, we're done
+			if (!shouldRefreshNotifications) {
+				return;
+			}
 		}
 
 		// Capture current state before refresh
@@ -288,5 +307,6 @@ export function createViewActionController(
 		navigateToNextView,
 		navigateToPreviousView,
 		handleSyncNewNotifications,
+		registerTimelineRefreshHandler,
 	};
 }

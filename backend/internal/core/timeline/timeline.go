@@ -203,7 +203,7 @@ func fetchAndFilterTimelineEvents(
 		return fetchDiscussionTimelineEvents(ctx, logger, client, subjectInfo, perPage, page)
 	}
 
-	return fetchRESTTimelineEvents(ctx, logger, client, subjectInfo, perPage, page)
+	return fetchRESTTimelineEvents(ctx, logger, client, subjectInfo)
 }
 
 // fetchRESTTimelineEvents fetches timeline events using REST API (for issues/PRs).
@@ -212,20 +212,18 @@ func fetchRESTTimelineEvents(
 	logger *zap.Logger,
 	client githubinterfaces.Client,
 	subjectInfo *types.SubjectInfo,
-	perPage, page int,
 ) ([]models.TimelineItem, error) {
 	const (
 		maxGitHubPerPage = 100
 		maxGitHubPages   = 10 // Safety limit to avoid infinite loops
 	)
 
-	// Calculate how many events we need in total (for all pages up to and including the requested page)
-	totalNeeded := perPage * page
-
 	var allFilteredItems []models.TimelineItem
 	githubPage := 1
 
-	// Keep fetching from GitHub until we have enough filtered events or reach the safety limit
+	// Fetch ALL events from GitHub before sorting/paginating.
+	// GitHub's timeline API returns events oldest-first, but we sort newest-first,
+	// so we must collect everything to know which events are actually newest.
 	for githubPage <= maxGitHubPages {
 		// Fetch a page from GitHub
 		logger.Debug(
@@ -315,21 +313,7 @@ func fetchRESTTimelineEvents(
 			zap.Int("events_included", filteredCount),
 			zap.Int("events_skipped", skippedCount),
 			zap.Int("total_filtered_items", len(allFilteredItems)),
-			zap.Int("total_needed", totalNeeded),
 		)
-
-		// If we have enough filtered events, we can stop fetching
-		if len(allFilteredItems) >= totalNeeded {
-			logger.Debug(
-				"collected enough filtered timeline events",
-				zap.String("owner", subjectInfo.Owner),
-				zap.String("repo", subjectInfo.Repo),
-				zap.Int("number", subjectInfo.Number),
-				zap.Int("total_filtered_items", len(allFilteredItems)),
-				zap.Int("total_needed", totalNeeded),
-			)
-			break
-		}
 
 		// If GitHub returned fewer events than requested, we've reached the end
 		if len(timeline) < maxGitHubPerPage {

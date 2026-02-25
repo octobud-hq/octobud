@@ -29,4 +29,6 @@ export interface ViewActions {
 	navigateToNextView: () => boolean;
 	navigateToPreviousView: () => boolean;
 	handleSyncNewNotifications: (updatedGithubIds?: string[]) => Promise<void>;
+	/** Register a callback invoked when the currently-open detail notification is refreshed by a sync. */
+	registerTimelineRefreshHandler: (handler: (githubId: string) => void) => void;
 }

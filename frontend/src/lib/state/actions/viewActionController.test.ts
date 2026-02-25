@@ -286,7 +286,9 @@ describe("ViewActionController", () => {
 
 			expect(refreshSpy).not.toHaveBeenCalled();
 			expect(fetchNotificationDetail).toHaveBeenCalledWith("gh-1", { query: "" });
-			expect(notificationStore.updateNotification).toHaveBeenCalledWith(updatedNotification);
+			expect(notificationStore.updateNotification).toHaveBeenCalledWith(updatedNotification, {
+				preserveOptimisticRead: false,
+			});
 		});
 
 		it("does not fetch detail when list refresh is skipped and detail was not in updatedGithubIds", async () => {
@@ -301,6 +303,69 @@ describe("ViewActionController", () => {
 
 			expect(refreshSpy).not.toHaveBeenCalled();
 			expect(fetchNotificationDetail).not.toHaveBeenCalled();
+		});
+
+		it("fetches detail AND refreshes list in split mode when detail was updated", async () => {
+			vi.mocked(fetchViews).mockResolvedValue([]);
+			// Split mode + page 1 + detail open = list refresh AND detail fetch
+			paginationStore.page.set(1);
+			(uiStore.splitModeEnabled as any).set(true);
+			(detailStore.detailOpen as any).set(true);
+			(detailStore.detailNotificationId as any).set("gh-1");
+			const refreshSpy = vi.spyOn(sharedHelpers, "refresh");
+
+			const updatedNotification = { id: "1", githubId: "gh-1", title: "Updated" };
+			vi.mocked(fetchNotificationDetail).mockResolvedValue({
+				notification: updatedNotification,
+				subject: {},
+			} as any);
+
+			await controller.handleSyncNewNotifications(["gh-1"]);
+
+			// Both detail fetch and list refresh should happen
+			expect(fetchNotificationDetail).toHaveBeenCalledWith("gh-1", { query: "" });
+			expect(notificationStore.updateNotification).toHaveBeenCalledWith(updatedNotification, {
+				preserveOptimisticRead: false,
+			});
+			expect(refreshSpy).toHaveBeenCalled();
+		});
+
+		it("calls registered timeline refresh handler when detail is updated", async () => {
+			vi.mocked(fetchViews).mockResolvedValue([]);
+			paginationStore.page.set(2);
+			(uiStore.splitModeEnabled as any).set(false);
+			(detailStore.detailOpen as any).set(true);
+			(detailStore.detailNotificationId as any).set("gh-1");
+
+			const updatedNotification = { id: "1", githubId: "gh-1", title: "Updated" };
+			vi.mocked(fetchNotificationDetail).mockResolvedValue({
+				notification: updatedNotification,
+				subject: {},
+			} as any);
+
+			const timelineHandler = vi.fn();
+			controller.registerTimelineRefreshHandler(timelineHandler);
+
+			await controller.handleSyncNewNotifications(["gh-1"]);
+
+			expect(timelineHandler).toHaveBeenCalledWith("gh-1");
+		});
+
+		it("does not call timeline refresh handler on fetch failure", async () => {
+			vi.mocked(fetchViews).mockResolvedValue([]);
+			paginationStore.page.set(2);
+			(uiStore.splitModeEnabled as any).set(false);
+			(detailStore.detailOpen as any).set(true);
+			(detailStore.detailNotificationId as any).set("gh-1");
+
+			vi.mocked(fetchNotificationDetail).mockRejectedValue(new Error("Network error"));
+
+			const timelineHandler = vi.fn();
+			controller.registerTimelineRefreshHandler(timelineHandler);
+
+			await controller.handleSyncNewNotifications(["gh-1"]);
+
+			expect(timelineHandler).not.toHaveBeenCalled();
 		});
 
 		it("handles detail fetch failure gracefully", async () => {

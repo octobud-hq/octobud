@@ -200,11 +200,19 @@ export function createTimelineController(): TimelineController {
 	 * Silently refresh the timeline by fetching page 1 and appending any new items.
 	 * Used when polling detects the notification was updated while the timeline is open.
 	 * Does not show loading state — this is a background refresh.
+	 *
+	 * Uses a guard to prevent concurrent calls (the direct handler and the reactive
+	 * effectiveSortDate block can both trigger this for the same update).
 	 */
+	let refreshInProgress = false;
+
 	async function refreshTimeline(githubId: string, perPage: number = 10): Promise<void> {
+		if (refreshInProgress) return;
+
 		const currentItems = get(items);
 		if (currentItems.length === 0) return; // Don't refresh before initial load
 
+		refreshInProgress = true;
 		try {
 			const response: NotificationTimelineResponse = await fetchNotificationTimeline(
 				githubId,
@@ -219,14 +227,14 @@ export function createTimelineController(): TimelineController {
 			const reversedNewItems = [...response.items].reverse();
 
 			// Deduplicate: only keep items not already in the list.
+			// Re-read the store (not the stale capture) so concurrent callers
+			// that slipped past the guard still see the latest items.
 			// Uses a composite key because some event types (committed, merged)
 			// have null IDs — deduplicating by id alone would treat them all as the same item.
-			// NOTE: The type-timestamp fallback can collide if two events of the same type
-			// share the exact same second (e.g. simultaneous commits). This is acceptable
-			// since it only affects the rare case of null-ID events at identical timestamps.
 			const itemKey = (item: NotificationTimelineItem) =>
 				item.id != null ? String(item.id) : `${item.type}-${item.timestamp || ""}`;
-			const existingKeys = new Set(currentItems.map(itemKey));
+			const latestItems = get(items);
+			const existingKeys = new Set(latestItems.map(itemKey));
 			const newItems = reversedNewItems.filter((item) => !existingKeys.has(itemKey(item)));
 
 			if (newItems.length > 0) {
@@ -241,6 +249,8 @@ export function createTimelineController(): TimelineController {
 			if (currentGithubId === githubId) {
 				console.error("[TimelineController] Failed to refresh timeline:", err);
 			}
+		} finally {
+			refreshInProgress = false;
 		}
 	}
 
@@ -256,6 +266,7 @@ export function createTimelineController(): TimelineController {
 		});
 		hasAttemptedAutoLoad.set(false);
 		currentGithubId = null;
+		refreshInProgress = false;
 	}
 
 	return {

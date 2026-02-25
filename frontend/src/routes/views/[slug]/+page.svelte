@@ -149,6 +149,12 @@
 
 	const timelineController = createTimelineController();
 
+	// Register a direct handler so handleSyncNewNotifications can trigger
+	// timeline refreshes without relying on reactive effectiveSortDate detection.
+	pageController.actions.registerTimelineRefreshHandler((githubId: string) => {
+		timelineController.actions.refreshTimeline(githubId);
+	});
+
 	// Sync from parent data prop and reset state
 	$: if (data !== lastData) {
 		const viewChanged = lastData?.selectedViewSlug !== data.selectedViewSlug;
