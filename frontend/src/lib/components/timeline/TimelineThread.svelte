@@ -16,12 +16,20 @@
 
 	import type { TimelineController } from "$lib/state/timelineController";
 	import TimelineItem from "./TimelineItem.svelte";
-	import { writable } from "svelte/store";
+	import { writable, get } from "svelte/store";
 	import { tick, onMount, onDestroy } from "svelte";
+	import { SvelteMap } from "svelte/reactivity";
+	import { fly, fade } from "svelte/transition";
+	import { getNotificationSettingsStore } from "$lib/stores/notificationSettings";
+
+	const { timelineAutoScroll } = getNotificationSettingsStore();
 
 	export let githubId: string;
 	export let timelineController: TimelineController;
 	export let hasPermissionError: boolean = false;
+	export let timelineLastSeenAt: string | undefined = undefined;
+	export let onUpdateLastSeen: ((timestamp: string) => void) | undefined = undefined;
+	export let onNewActivityViewed: (() => void) | undefined = undefined;
 
 	const { items, isLoading, error, pagination, hasAttemptedAutoLoad } = timelineController.stores;
 	const { autoLoadTimeline, loadTimeline, loadMoreTimeline } = timelineController.actions;
@@ -29,10 +37,36 @@
 	let hasLoaded = false;
 	const isLoadingMore = writable(false);
 	let autoLoadDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+	// Gates auto-scroll to only fire on initial detail open, not on live refreshes
+	let isInitialLoad = true;
+
+	// Local baseline for unseen detection. Provides an immediate reference point
+	// so firstUnseenIndex works without waiting for the async timelineLastSeenAt update.
+	let localBaseline: string | undefined = undefined;
+
+	// Dismiss new activity indicator: update last-seen, mark read, hide button
+	function dismissNewActivity() {
+		if (hasScrolledToUnseen) return;
+
+		// eslint-disable-next-line svelte/infinite-reactive-loop -- convergent: sets the flag that disables the reactive condition
+		hasScrolledToUnseen = true;
+
+		// Update last-seen to the newest item's timestamp
+		const currentItems = get(items);
+		if (currentItems.length > 0) {
+			const newestTimestamp = getItemTimestamp(currentItems[currentItems.length - 1]);
+			if (newestTimestamp) {
+				localBaseline = newestTimestamp;
+				onUpdateLastSeen?.(newestTimestamp);
+			}
+		}
+
+		// Mark read if notification was marked unread by new activity
+		onNewActivityViewed?.();
+	}
 
 	// Auto-load timeline on mount with debounce
 	onMount(() => {
-		// Debounce auto-load to avoid rapid-fire requests during navigation
 		autoLoadDebounceTimer = setTimeout(() => {
 			if (!$hasAttemptedAutoLoad && githubId) {
 				autoLoadTimeline(githubId, 10);
@@ -44,6 +78,7 @@
 		if (autoLoadDebounceTimer) {
 			clearTimeout(autoLoadDebounceTimer);
 		}
+		cleanupScrollDismiss();
 	});
 
 	async function handleLoadTimeline() {
@@ -93,6 +128,212 @@
 		!hasPermissionError && $hasAttemptedAutoLoad && $error && !hasItems && !$isLoading;
 	// Show initial loading state when we're loading and have no items yet
 	$: showInitialLoading = $isLoading && !hasItems;
+
+	// Helper to get the effective timestamp of a timeline item
+	function getItemTimestamp(item: (typeof $items)[0]): string | undefined {
+		return item.timestamp || item.createdAt || item.submittedAt || item.updatedAt;
+	}
+
+	// Effective last-seen: prefer the persisted prop, fall back to local baseline.
+	// localBaseline provides an immediate reference so we don't wait for the async API round-trip.
+	$: effectiveLastSeenAt = timelineLastSeenAt ?? localBaseline;
+
+	// Set baseline on first load when no persisted value exists.
+	// Without a baseline, firstUnseenIndex is always -1 and new items from live
+	// refreshes would never be detected as "unseen."
+	$: if ($items.length > 0 && !timelineLastSeenAt && !localBaseline && !$isLoading) {
+		const newestTimestamp = getItemTimestamp($items[$items.length - 1]);
+		if (newestTimestamp) {
+			localBaseline = newestTimestamp;
+			onUpdateLastSeen?.(newestTimestamp);
+		}
+	}
+
+	// Calculate which items are unseen based on effectiveLastSeenAt
+	// Items are sorted oldest to newest in the timeline, so we find the first item
+	// that is newer than the lastSeenAt timestamp
+	$: firstUnseenIndex = (() => {
+		if (!effectiveLastSeenAt || $items.length === 0) return -1;
+		const lastSeenDate = new Date(effectiveLastSeenAt);
+		for (let i = 0; i < $items.length; i++) {
+			const itemTimestamp = getItemTimestamp($items[i]);
+			if (itemTimestamp) {
+				const itemDate = new Date(itemTimestamp);
+				if (itemDate > lastSeenDate) {
+					return i;
+				}
+			}
+		}
+		return -1; // All items have been seen
+	})();
+
+	// Sticky divider position — persists even after items are marked as seen,
+	// so the divider line stays visible for the session. Only updates when
+	// new unseen items arrive at a different position.
+	let stickyDividerIndex = -1;
+
+	$: if (firstUnseenIndex >= 0) {
+		stickyDividerIndex = firstUnseenIndex;
+	}
+
+	// Track if user has scrolled to unseen items
+	let hasScrolledToUnseen = false;
+	let previousFirstUnseenIndex = -1;
+
+	// Reset state when new unseen items arrive (e.g. live refresh)
+	$: {
+		if (firstUnseenIndex >= 0 && previousFirstUnseenIndex === -1) {
+			hasScrolledToUnseen = false;
+		}
+		previousFirstUnseenIndex = firstUnseenIndex;
+	}
+
+	// Map to store element references by index
+	let itemElementsByIndex: Map<number, HTMLElement> = new SvelteMap();
+
+	// Scroll-based dismiss: when the user scrolls the last timeline item into view,
+	// dismiss the "New Activity" indicator. Uses a scroll listener instead of
+	// IntersectionObserver to avoid false positives on initial load (scroll events
+	// only fire on actual user or programmatic scrolling, not on "already visible").
+	// State on const object to avoid Svelte reactive tracking.
+	const scrollDismissState = {
+		cleanup: null as (() => void) | null,
+	};
+
+	function setupScrollDismiss() {
+		cleanupScrollDismiss();
+
+		const firstEl = itemElementsByIndex.values().next().value;
+		if (!firstEl) return;
+
+		const scrollContainer = findScrollContainer(firstEl);
+		if (!scrollContainer) return;
+
+		function onScroll() {
+			if (hasScrolledToUnseen || firstUnseenIndex < 0) {
+				cleanupScrollDismiss();
+				return;
+			}
+
+			const currentItems = get(items);
+			const lastEl = itemElementsByIndex.get(currentItems.length - 1);
+			if (!lastEl) return;
+
+			const containerRect = scrollContainer!.getBoundingClientRect();
+			const lastElRect = lastEl.getBoundingClientRect();
+
+			// Dismiss when the last timeline item is within the visible scroll area
+			if (lastElRect.top < containerRect.bottom) {
+				dismissNewActivity();
+				cleanupScrollDismiss();
+			}
+		}
+
+		scrollContainer.addEventListener("scroll", onScroll, { passive: true });
+		scrollDismissState.cleanup = () => {
+			scrollContainer.removeEventListener("scroll", onScroll);
+		};
+	}
+
+	function cleanupScrollDismiss() {
+		if (scrollDismissState.cleanup) {
+			scrollDismissState.cleanup();
+			scrollDismissState.cleanup = null;
+		}
+	}
+
+	// Reactively set up scroll dismiss when unseen items exist.
+	$: if ($items.length > 0 && firstUnseenIndex >= 0 && !hasScrolledToUnseen) {
+		tick().then(setupScrollDismiss);
+	}
+
+	// Scroll to first unseen item within the nearest scrollable ancestor.
+	// Does not dismiss on its own — callers decide whether to also call dismissNewActivity().
+	function scrollToFirstUnseen() {
+		const element = firstUnseenIndex >= 0 ? itemElementsByIndex.get(firstUnseenIndex) : null;
+		if (!element) return;
+
+		const scrollContainer = findScrollContainer(element);
+		if (scrollContainer) {
+			const containerRect = scrollContainer.getBoundingClientRect();
+			const elementRect = element.getBoundingClientRect();
+			const offsetTop = elementRect.top - containerRect.top + scrollContainer.scrollTop;
+			scrollContainer.scrollTo({ top: offsetTop, behavior: "smooth" });
+		}
+	}
+
+	// Button click: scroll to new activity AND dismiss the indicator
+	function handleNewActivityClick() {
+		scrollToFirstUnseen();
+		dismissNewActivity();
+	}
+
+	// Walk up the DOM to find the nearest scrollable ancestor
+	function findScrollContainer(el: HTMLElement): HTMLElement | null {
+		let current = el.parentElement;
+		while (current) {
+			const style = getComputedStyle(current);
+			if (
+				(style.overflowY === "auto" || style.overflowY === "scroll") &&
+				current.scrollHeight > current.clientHeight
+			) {
+				return current;
+			}
+			current = current.parentElement;
+		}
+		return null;
+	}
+
+	// Store element reference by index
+	function storeElementRef(index: number, element: HTMLElement) {
+		itemElementsByIndex.set(index, element);
+	}
+
+	// Auto-scroll to first unseen on initial detail open only (not on live refreshes).
+	// Also dismiss new activity so the button doesn't flash after isInitialLoad flips.
+	// scrollToFirstUnseen is a named function reference so Svelte's compiler
+	// doesn't track its internal variable accesses as $: dependencies.
+	$: if (isInitialLoad && !hasScrolledToUnseen && firstUnseenIndex >= 0 && $timelineAutoScroll) {
+		tick().then(() => {
+			scrollToFirstUnseen();
+			// eslint-disable-next-line svelte/infinite-reactive-loop -- convergent: dismissNewActivity sets hasScrolledToUnseen=true, disabling this block's condition
+			dismissNewActivity();
+		});
+	}
+
+	// After the first batch of items loads, mark initial load as complete
+	// so subsequent live refreshes don't trigger auto-scroll.
+	// Uses setTimeout to schedule outside Svelte's reactive cycle and avoid
+	// the infinite-reactive-loop lint warning.
+	$: if (isInitialLoad && $items.length > 0 && !$isLoading) {
+		setTimeout(() => {
+			isInitialLoad = false;
+		}, 0);
+	}
+
+	// Show floating button when there are unseen items and user hasn't scrolled to them.
+	// During initial load with auto-scroll enabled, hide the button (auto-scroll handles it).
+	// After initial load, always show it so the user can click to jump to new activity.
+	$: showNewActivityButton =
+		firstUnseenIndex >= 0 && !hasScrolledToUnseen && !(isInitialLoad && $timelineAutoScroll);
+
+	// Svelte action for timeline items — stores element ref and handles index updates
+	function observeTimelineItem(node: HTMLElement, index: number) {
+		let currentIndex = index;
+		storeElementRef(currentIndex, node);
+		return {
+			update(newIndex: number) {
+				if (newIndex !== currentIndex) {
+					itemElementsByIndex.delete(currentIndex);
+					currentIndex = newIndex;
+					storeElementRef(currentIndex, node);
+				}
+			},
+			destroy() {
+				itemElementsByIndex.delete(currentIndex);
+			},
+		};
+	}
 </script>
 
 {#if showInitialLoading}
@@ -273,8 +514,59 @@
 
 		<!-- Timeline items list -->
 		{#each itemsWithKeys as { item, key }, index (key)}
-			<TimelineItem {item} showThread={true} isLastItem={index === lastItemIndex} />
+			<!-- New activity divider -->
+			{#if index === stickyDividerIndex && stickyDividerIndex > 0}
+				<div class="new-activity-divider flex items-center gap-3 my-4">
+					<div class="flex flex-col items-center flex-shrink-0 relative z-10" style="width: 40px;">
+						<!-- Thread line through divider -->
+						<div
+							class="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-0.5 bg-gray-300 dark:bg-gray-800 -z-10"
+						></div>
+						<!-- Plus circle icon -->
+						<div
+							class="h-8 w-8 rounded-full bg-blue-600 dark:bg-blue-500 ring-2 ring-white dark:ring-gray-950 flex items-center justify-center"
+						>
+							<svg class="h-4 w-4 text-white" viewBox="0 0 16 16" fill="currentColor">
+								<path
+									d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2Z"
+								/>
+							</svg>
+						</div>
+					</div>
+					<div class="flex-1 flex items-center gap-2">
+						<div class="h-px flex-1 bg-blue-500 dark:bg-blue-400"></div>
+						<span
+							class="text-xs font-medium text-blue-600 dark:text-blue-400 whitespace-nowrap px-2"
+						>
+							New activity
+						</span>
+						<div class="h-px flex-1 bg-blue-500 dark:bg-blue-400"></div>
+					</div>
+				</div>
+			{/if}
+			<div data-timestamp={getItemTimestamp(item)} use:observeTimelineItem={index}>
+				<TimelineItem {item} showThread={true} isLastItem={index === lastItemIndex} />
+			</div>
 		{/each}
+	</div>
+
+	<!-- Floating "New Activity" button — zero-height sticky wrapper prevents layout shift on dismiss -->
+	<div class="sticky bottom-8 z-30 pointer-events-none" style="height: 0;">
+		{#if showNewActivityButton}
+			<div
+				class="absolute bottom-0 left-0 right-0 flex justify-center"
+				in:fly={{ y: 12, duration: 250 }}
+				out:fade={{ duration: 150 }}
+			>
+				<button
+					type="button"
+					on:click={handleNewActivityClick}
+					class="pointer-events-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-full shadow-lg transition-all hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
+				>
+					New activity
+				</button>
+			</div>
+		{/if}
 	</div>
 {:else if !$isLoading && $hasAttemptedAutoLoad}
 	<!-- No activity state -->

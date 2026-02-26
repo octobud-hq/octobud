@@ -50,6 +50,10 @@ type Store interface {
 	UnstarNotification(ctx context.Context, userID, githubID string) (Notification, error)
 	MarkNotificationFiltered(ctx context.Context, userID, githubID string) (Notification, error)
 	MarkNotificationUnfiltered(ctx context.Context, userID, githubID string) (Notification, error)
+	UpdateTimelineLastSeenAt(
+		ctx context.Context,
+		userID, githubID, timestamp string,
+	) (Notification, error)
 	BulkSnoozeNotifications(
 		ctx context.Context,
 		userID string,

@@ -282,6 +282,24 @@ func (s *Store) MarkNotificationUnfiltered(
 	return s.toDBNotification(ctx, userID, n), nil
 }
 
+// UpdateTimelineLastSeenAt updates the timeline last seen timestamp for a notification.
+func (s *Store) UpdateTimelineLastSeenAt(
+	ctx context.Context,
+	userID, githubID, timestamp string,
+) (db.Notification, error) {
+	n, err := db.RetryOnBusy(ctx, func() (Notification, error) {
+		return s.q.UpdateTimelineLastSeenAt(ctx, UpdateTimelineLastSeenAtParams{
+			TimelineLastSeenAt: sql.NullString{String: timestamp, Valid: timestamp != ""},
+			UserID:             userID,
+			GithubID:           githubID,
+		})
+	})
+	if err != nil {
+		return db.Notification{}, err
+	}
+	return s.toDBNotification(ctx, userID, n), nil
+}
+
 // --- Bulk notification methods ---
 
 // BulkSnoozeNotifications marks notifications as snoozed.

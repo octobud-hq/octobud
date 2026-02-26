@@ -576,3 +576,124 @@ func TestHandler_handleRemoveTagFromNotification(t *testing.T) {
 		})
 	}
 }
+
+func TestHandler_handleUpdateTimelineLastSeen(t *testing.T) {
+	tests := []struct {
+		name           string
+		githubID       string
+		requestBody    interface{}
+		setupMock      func(*notificationmocks.MockNotificationService)
+		expectedStatus int
+		expectedBody   func(*testing.T, *httptest.ResponseRecorder)
+	}{
+		{
+			name:     "success updates timeline last seen",
+			githubID: "test-id",
+			requestBody: updateTimelineSeenRequest{
+				Timestamp: "2024-12-31T23:59:59Z",
+			},
+			setupMock: func(mockSvc *notificationmocks.MockNotificationService) {
+				mockSvc.EXPECT().
+					UpdateTimelineLastSeenAt(gomock.Any(), "test-user-id", "test-id", "2024-12-31T23:59:59Z").
+					Return(db.Notification{}, nil)
+			},
+			expectedStatus: http.StatusOK,
+			expectedBody: func(t *testing.T, w *httptest.ResponseRecorder) {
+				var response map[string]bool
+				err := json.Unmarshal(w.Body.Bytes(), &response)
+				require.NoError(t, err)
+				require.True(t, response["success"])
+			},
+		},
+		{
+			name:           "missing timestamp returns 400",
+			githubID:       "test-id",
+			requestBody:    updateTimelineSeenRequest{Timestamp: ""},
+			setupMock:      func(*notificationmocks.MockNotificationService) {},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:           "invalid body returns 400",
+			githubID:       "test-id",
+			requestBody:    "invalid json",
+			setupMock:      func(*notificationmocks.MockNotificationService) {},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:     "invalid timestamp format returns 400",
+			githubID: "test-id",
+			requestBody: updateTimelineSeenRequest{
+				Timestamp: "not-a-timestamp",
+			},
+			setupMock: func(mockSvc *notificationmocks.MockNotificationService) {
+				mockSvc.EXPECT().
+					UpdateTimelineLastSeenAt(gomock.Any(), "test-user-id", "test-id", "not-a-timestamp").
+					Return(db.Notification{}, notificationcore.ErrInvalidTimelineTimestampFmt)
+			},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:     "not found returns 404",
+			githubID: "not-found",
+			requestBody: updateTimelineSeenRequest{
+				Timestamp: "2024-12-31T23:59:59Z",
+			},
+			setupMock: func(mockSvc *notificationmocks.MockNotificationService) {
+				mockSvc.EXPECT().
+					UpdateTimelineLastSeenAt(gomock.Any(), "test-user-id", "not-found", "2024-12-31T23:59:59Z").
+					Return(db.Notification{}, sql.ErrNoRows)
+			},
+			expectedStatus: http.StatusNotFound,
+		},
+		{
+			name:     "service error returns 500",
+			githubID: "test-id",
+			requestBody: updateTimelineSeenRequest{
+				Timestamp: "2024-12-31T23:59:59Z",
+			},
+			setupMock: func(mockSvc *notificationmocks.MockNotificationService) {
+				mockSvc.EXPECT().
+					UpdateTimelineLastSeenAt(gomock.Any(), "test-user-id", "test-id", "2024-12-31T23:59:59Z").
+					Return(db.Notification{}, errors.New("database error"))
+			},
+			expectedStatus: http.StatusInternalServerError,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			const testUserID = "test-user-id"
+			handler, mockSvc, _, mockAuthSvc := setupTestHandler(ctrl)
+			mockAuthSvc.EXPECT().
+				GetUser(gomock.Any()).
+				Return(&models.User{GithubUserID: testUserID}, nil).
+				AnyTimes()
+			if tt.setupMock != nil {
+				tt.setupMock(mockSvc)
+			}
+
+			req := createRequest(
+				http.MethodPost,
+				"/notifications/"+url.PathEscape(tt.githubID)+"/timeline-seen",
+				tt.requestBody,
+			)
+			rctx := chi.NewRouteContext()
+			if tt.githubID != "" {
+				rctx.URLParams.Add("githubID", tt.githubID)
+			}
+			req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+			req = req.WithContext(helpers.ContextWithUserID(req.Context(), testUserID))
+
+			w := httptest.NewRecorder()
+			handler.handleUpdateTimelineLastSeen(w, req)
+
+			require.Equal(t, tt.expectedStatus, w.Code)
+			if tt.expectedBody != nil {
+				tt.expectedBody(t, w)
+			}
+		})
+	}
+}

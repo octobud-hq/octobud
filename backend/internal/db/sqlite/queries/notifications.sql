@@ -183,3 +183,9 @@ WHERE id IN (
     ORDER BY COALESCE(n.effective_sort_date, n.github_updated_at, n.imported_at) ASC
     LIMIT sqlc.arg(batch_size)
 );
+
+-- name: UpdateTimelineLastSeenAt :one
+UPDATE notifications 
+SET timeline_last_seen_at = ?
+WHERE user_id = ? AND github_id = ? 
+RETURNING *;

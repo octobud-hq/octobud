@@ -20,6 +20,7 @@ import type { NotificationView } from "$lib/api/types";
 import type { PageData as ViewPageData } from "../../../routes/views/[slug]/$types";
 import type { ViewActions } from "../interfaces/viewActions";
 import { fetchViews } from "$lib/api/views";
+import { fetchNotificationDetail } from "$lib/api/notifications";
 import {
 	getAllViewsInOrder,
 	getCurrentViewIndex,
@@ -70,6 +71,12 @@ export function createViewActionController(
 		viewStore,
 		uiStore,
 	} = stores;
+
+	let timelineRefreshHandler: ((githubId: string) => void) | null = null;
+
+	function registerTimelineRefreshHandler(handler: (githubId: string) => void): void {
+		timelineRefreshHandler = handler;
+	}
 
 	async function refresh(): Promise<void> {
 		return sharedHelpers.refresh();
@@ -185,7 +192,7 @@ export function createViewActionController(
 		return false;
 	}
 
-	async function handleSyncNewNotifications(): Promise<void> {
+	async function handleSyncNewNotifications(updatedGithubIds?: string[]): Promise<void> {
 		const currentPage = get(paginationStore.page);
 		const isSplitMode = get(uiStore.splitModeEnabled);
 		const isDetailOpen = get(detailStore.detailOpen);
@@ -202,8 +209,44 @@ export function createViewActionController(
 		const shouldRefreshNotifications =
 			hasEmptyPageData || (currentPage === 1 && ((!isSplitMode && !isDetailOpen) || isSplitMode));
 
-		if (!shouldRefreshNotifications) {
+		// Check if the currently-open notification was updated (for timeline refresh)
+		const currentDetailUpdated =
+			isDetailOpen &&
+			currentDetailId &&
+			updatedGithubIds &&
+			updatedGithubIds.includes(currentDetailId);
+
+		if (!shouldRefreshNotifications && !currentDetailUpdated) {
 			return;
+		}
+
+		// If the currently-open detail notification was updated, fetch its latest data
+		// so the timeline reflects new activity. This runs regardless of whether the
+		// full list is also being refreshed (e.g. split mode on page 1).
+		if (currentDetailUpdated) {
+			try {
+				const currentQuery = get(queryStore.quickQuery);
+				const detail = await fetchNotificationDetail(currentDetailId, {
+					query: currentQuery,
+				});
+				// Bypass optimistic read protection: the server legitimately changed the
+				// read state (e.g. new activity marked the notification unread on GitHub).
+				notificationStore.updateNotification(detail.notification, {
+					preserveOptimisticRead: false,
+				});
+				// Directly trigger timeline refresh via registered handler.
+				// This bypasses the reactive effectiveSortDate detection which can
+				// miss updates due to Svelte batching / timing edge cases.
+				timelineRefreshHandler?.(currentDetailId);
+			} catch (err) {
+				// Silent failure — detail will still show cached data
+				console.error("Failed to refresh detail notification on poll:", err);
+			}
+
+			// If we're not also refreshing the full list, we're done
+			if (!shouldRefreshNotifications) {
+				return;
+			}
 		}
 
 		// Capture current state before refresh
@@ -264,5 +307,6 @@ export function createViewActionController(
 		navigateToNextView,
 		navigateToPreviousView,
 		handleSyncNewNotifications,
+		registerTimelineRefreshHandler,
 	};
 }

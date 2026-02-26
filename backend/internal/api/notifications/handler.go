@@ -112,5 +112,8 @@ func (h *Handler) Register(r chi.Router) {
 		r.Post("/{githubID}/tags", h.handleAssignTagToNotification)
 		r.Post("/{githubID}/tags-by-name", h.handleAssignTagByName)
 		r.Delete("/{githubID}/tags/{tagId}", h.handleRemoveTagFromNotification)
+
+		// Timeline operations
+		r.Post("/{githubID}/timeline-seen", h.handleUpdateTimelineLastSeen)
 	})
 }

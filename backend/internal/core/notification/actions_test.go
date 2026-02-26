@@ -872,3 +872,114 @@ func TestService_SnoozeNotification(t *testing.T) {
 		})
 	}
 }
+
+func TestService_UpdateTimelineLastSeenAt(t *testing.T) {
+	const testUserID = "test-user-id"
+	tests := []struct {
+		name        string
+		githubID    string
+		timestamp   string
+		setupMock   func(*mocks.MockStore, string, string, string)
+		expectErr   bool
+		checkErr    func(*testing.T, error)
+		checkResult func(*testing.T, db.Notification)
+	}{
+		{
+			name:      "success updates timeline last seen",
+			githubID:  "notif-1",
+			timestamp: "2024-12-31T23:59:59Z",
+			setupMock: func(m *mocks.MockStore, userID, id string, ts string) {
+				now := time.Now().UTC()
+				expectedNotification := db.Notification{
+					ID:       1,
+					UserID:   userID,
+					GithubID: id,
+					TimelineLastSeenAt: sql.NullTime{
+						Time:  time.Date(2024, 12, 31, 23, 59, 59, 0, time.UTC),
+						Valid: true,
+					},
+					ImportedAt: now,
+				}
+				m.EXPECT().
+					UpdateTimelineLastSeenAt(gomock.Any(), userID, id, ts).
+					Return(expectedNotification, nil)
+			},
+			expectErr: false,
+			checkResult: func(t *testing.T, notification db.Notification) {
+				require.Equal(t, "notif-1", notification.GithubID)
+				require.True(t, notification.TimelineLastSeenAt.Valid)
+			},
+		},
+		{
+			name:      "invalid timestamp format returns error before DB call",
+			githubID:  "notif-1",
+			timestamp: "not-a-timestamp",
+			setupMock: func(_ *mocks.MockStore, _ string, _ string, _ string) {
+				// No mock expectations - should fail before DB call
+			},
+			expectErr: true,
+			checkErr: func(t *testing.T, err error) {
+				require.True(t, errors.Is(err, ErrInvalidTimelineTimestampFmt))
+			},
+		},
+		{
+			name:      "not found returns error",
+			githubID:  "notif-missing",
+			timestamp: "2024-12-31T23:59:59Z",
+			setupMock: func(m *mocks.MockStore, userID, id string, ts string) {
+				m.EXPECT().
+					UpdateTimelineLastSeenAt(gomock.Any(), userID, id, ts).
+					Return(db.Notification{}, sql.ErrNoRows)
+			},
+			expectErr: true,
+			checkErr: func(t *testing.T, err error) {
+				require.True(t, errors.Is(err, sql.ErrNoRows))
+			},
+		},
+		{
+			name:      "database error propagated",
+			githubID:  "notif-1",
+			timestamp: "2024-12-31T23:59:59Z",
+			setupMock: func(m *mocks.MockStore, userID, id string, ts string) {
+				m.EXPECT().
+					UpdateTimelineLastSeenAt(gomock.Any(), userID, id, ts).
+					Return(db.Notification{}, errors.New("database connection failed"))
+			},
+			expectErr: true,
+			checkErr: func(t *testing.T, err error) {
+				require.Error(t, err)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockQuerier := mocks.NewMockStore(ctrl)
+			tt.setupMock(mockQuerier, testUserID, tt.githubID, tt.timestamp)
+			service := NewService(mockQuerier)
+
+			ctx := context.Background()
+			result, err := service.UpdateTimelineLastSeenAt(
+				ctx,
+				testUserID,
+				tt.githubID,
+				tt.timestamp,
+			)
+
+			if tt.expectErr {
+				require.Error(t, err)
+				if tt.checkErr != nil {
+					tt.checkErr(t, err)
+				}
+			} else {
+				require.NoError(t, err)
+				if tt.checkResult != nil {
+					tt.checkResult(t, result)
+				}
+			}
+		})
+	}
+}

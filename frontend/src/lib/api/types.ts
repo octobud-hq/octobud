@@ -85,6 +85,7 @@ export interface BackendNotificationResponse {
 	actionHints?: ActionHints;
 	tags?: Tag[];
 	authorLogin?: string | null;
+	timelineLastSeenAt?: string | null;
 }
 
 export interface ActionHints {
@@ -126,6 +127,7 @@ export interface Notification {
 	actionHints?: ActionHints;
 	tags?: Tag[];
 	effectiveSortDate?: string;
+	timelineLastSeenAt?: string;
 }
 
 export type ViewFilterOperator = "equals" | "contains" | "does not equal" | "does not contain";

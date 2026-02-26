@@ -131,6 +131,11 @@
 	let lastData: typeof data | null = null;
 	let lastProcessedNotificationId: string | null = null;
 
+	// Track the last known sort date to detect when a notification is updated via polling.
+	// When the date changes, we refresh the timeline to show new activity.
+	let lastKnownSortDate: string | null = null;
+	let lastKnownDetailGithubId: string | null = null;
+
 	// Helper to check if a notification type is CI activity
 	function checkIsCIActivity(subjectType: string | undefined | null): boolean {
 		if (!subjectType) return false;
@@ -143,6 +148,12 @@
 	// ============================================================================
 
 	const timelineController = createTimelineController();
+
+	// Register a direct handler so handleSyncNewNotifications can trigger
+	// timeline refreshes without relying on reactive effectiveSortDate detection.
+	pageController.actions.registerTimelineRefreshHandler((githubId: string) => {
+		timelineController.actions.refreshTimeline(githubId);
+	});
 
 	// Sync from parent data prop and reset state
 	$: if (data !== lastData) {
@@ -440,6 +451,30 @@
 		// Reset timeline controller to abort any ongoing loading
 		// This prevents timeline loading from blocking detail closing
 		timelineController.actions.reset();
+
+		// Clear timeline refresh tracking
+		lastKnownSortDate = null;
+		lastKnownDetailGithubId = null;
+	}
+
+	// Detect when the currently-open notification is updated via polling
+	// and trigger a silent timeline refresh to show new activity
+	$: if ($detailOpen && $currentDetailNotification) {
+		const githubId = $currentDetailNotification.githubId;
+		const sortDate =
+			$currentDetailNotification.effectiveSortDate ?? $currentDetailNotification.updatedAt;
+
+		if (githubId !== lastKnownDetailGithubId) {
+			// Different notification — reset tracking (initial load will handle timeline)
+			lastKnownDetailGithubId = githubId ?? null;
+			lastKnownSortDate = sortDate ?? null;
+		} else if (lastKnownSortDate && sortDate && sortDate !== lastKnownSortDate) {
+			// Same notification but sort date changed — poll detected new activity
+			lastKnownSortDate = sortDate;
+			if (githubId) {
+				timelineController.actions.refreshTimeline(githubId);
+			}
+		}
 	}
 
 	$: systemViewsBySlug = new Map($views.filter((v) => v.systemView).map((v) => [v.slug, v]));

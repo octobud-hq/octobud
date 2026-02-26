@@ -41,11 +41,18 @@ export function createNotificationStore(initialPage: NotificationPage) {
 
 	/**
 	 * Update a notification in both normalized store and pageData
-	 * Preserves optimistic read status to prevent refresh from overriding it
+	 * Preserves optimistic read status to prevent refresh from overriding it.
+	 * Pass `preserveOptimisticRead: false` when the server legitimately changed
+	 * the read state (e.g. new activity marked the notification unread).
 	 */
-	function updateNotification(updated: Notification): void {
+	function updateNotification(
+		updated: Notification,
+		options?: { preserveOptimisticRead?: boolean }
+	): void {
 		const key = updated.githubId ?? updated.id;
 		if (!key) return;
+
+		const preserveRead = options?.preserveOptimisticRead ?? true;
 
 		// Check if we have an existing notification with optimistic read status
 		const currentMap = get(notificationsById);
@@ -53,8 +60,9 @@ export function createNotificationStore(initialPage: NotificationPage) {
 
 		// If the existing notification is optimistically marked as read (but the updated one isn't),
 		// preserve the optimistic read status. This prevents refresh from overriding it.
+		// Skip this protection when the caller knows the server legitimately changed the state.
 		let finalNotification = updated;
-		if (existing && existing.isRead && !updated.isRead) {
+		if (preserveRead && existing && existing.isRead && !updated.isRead) {
 			finalNotification = { ...updated, isRead: true };
 		}
 

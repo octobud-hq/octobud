@@ -1070,6 +1070,21 @@ func (mr *MockStoreMockRecorder) UpdateTagDisplayOrder(ctx, userID, arg any) *go
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateTagDisplayOrder", reflect.TypeOf((*MockStore)(nil).UpdateTagDisplayOrder), ctx, userID, arg)
 }
 
+// UpdateTimelineLastSeenAt mocks base method.
+func (m *MockStore) UpdateTimelineLastSeenAt(ctx context.Context, userID, githubID, timestamp string) (db.Notification, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateTimelineLastSeenAt", ctx, userID, githubID, timestamp)
+	ret0, _ := ret[0].(db.Notification)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdateTimelineLastSeenAt indicates an expected call of UpdateTimelineLastSeenAt.
+func (mr *MockStoreMockRecorder) UpdateTimelineLastSeenAt(ctx, userID, githubID, timestamp any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateTimelineLastSeenAt", reflect.TypeOf((*MockStore)(nil).UpdateTimelineLastSeenAt), ctx, userID, githubID, timestamp)
+}
+
 // UpdateUserGitHubIdentity mocks base method.
 func (m *MockStore) UpdateUserGitHubIdentity(ctx context.Context, arg db.UpdateUserGitHubIdentityParams) (db.User, error) {
 	m.ctrl.T.Helper()

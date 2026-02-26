@@ -381,6 +381,21 @@ func (mr *MockNotificationWriterMockRecorder) UpdateNotificationSubject(ctx, use
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateNotificationSubject", reflect.TypeOf((*MockNotificationWriter)(nil).UpdateNotificationSubject), ctx, userID, params)
 }
 
+// UpdateTimelineLastSeenAt mocks base method.
+func (m *MockNotificationWriter) UpdateTimelineLastSeenAt(ctx context.Context, userID, githubID, timestamp string) (db.Notification, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateTimelineLastSeenAt", ctx, userID, githubID, timestamp)
+	ret0, _ := ret[0].(db.Notification)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdateTimelineLastSeenAt indicates an expected call of UpdateTimelineLastSeenAt.
+func (mr *MockNotificationWriterMockRecorder) UpdateTimelineLastSeenAt(ctx, userID, githubID, timestamp any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateTimelineLastSeenAt", reflect.TypeOf((*MockNotificationWriter)(nil).UpdateTimelineLastSeenAt), ctx, userID, githubID, timestamp)
+}
+
 // UpsertNotification mocks base method.
 func (m *MockNotificationWriter) UpsertNotification(ctx context.Context, userID string, params db.UpsertNotificationParams) (db.Notification, error) {
 	m.ctrl.T.Helper()
@@ -960,6 +975,21 @@ func (m *MockNotificationService) UpdateNotificationSubject(ctx context.Context,
 func (mr *MockNotificationServiceMockRecorder) UpdateNotificationSubject(ctx, userID, params any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateNotificationSubject", reflect.TypeOf((*MockNotificationService)(nil).UpdateNotificationSubject), ctx, userID, params)
+}
+
+// UpdateTimelineLastSeenAt mocks base method.
+func (m *MockNotificationService) UpdateTimelineLastSeenAt(ctx context.Context, userID, githubID, timestamp string) (db.Notification, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateTimelineLastSeenAt", ctx, userID, githubID, timestamp)
+	ret0, _ := ret[0].(db.Notification)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdateTimelineLastSeenAt indicates an expected call of UpdateTimelineLastSeenAt.
+func (mr *MockNotificationServiceMockRecorder) UpdateTimelineLastSeenAt(ctx, userID, githubID, timestamp any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateTimelineLastSeenAt", reflect.TypeOf((*MockNotificationService)(nil).UpdateTimelineLastSeenAt), ctx, userID, githubID, timestamp)
 }
 
 // UpsertNotification mocks base method.
