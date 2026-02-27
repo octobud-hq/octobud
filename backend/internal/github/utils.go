@@ -113,6 +113,21 @@ func ExtractSubjectMerged(subjectJSON json.RawMessage) sql.NullBool {
 	return sql.NullBool{}
 }
 
+// ExtractSubjectTitle extracts the title from subject JSON.
+// Works for PRs, Issues, and Discussions which all have a "title" field.
+func ExtractSubjectTitle(subjectJSON json.RawMessage) sql.NullString {
+	var data map[string]interface{}
+	if err := json.Unmarshal(subjectJSON, &data); err != nil {
+		return sql.NullString{}
+	}
+
+	if titleVal, ok := data["title"].(string); ok && titleVal != "" {
+		return sql.NullString{String: titleVal, Valid: true}
+	}
+
+	return sql.NullString{}
+}
+
 // ExtractSubjectStateReason extracts the state_reason from subject JSON.
 // Works for Issues which have a "state_reason" field (e.g., "completed", "not_planned").
 func ExtractSubjectStateReason(subjectJSON json.RawMessage) sql.NullString {

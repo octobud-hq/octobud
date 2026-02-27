@@ -30,6 +30,7 @@ import (
 	"github.com/octobud-hq/octobud/backend/internal/api/helpers"
 	"github.com/octobud-hq/octobud/backend/internal/core/notification"
 	"github.com/octobud-hq/octobud/backend/internal/models"
+	"github.com/octobud-hq/octobud/backend/internal/sync"
 )
 
 // Error definitions
@@ -238,9 +239,14 @@ func (h *Handler) handleRefreshNotificationSubject(w http.ResponseWriter, r *htt
 	// Refresh the subject by fetching fresh data from GitHub
 	wasMissing, err := h.refreshSubjectData(ctx, userID, githubID)
 	if err != nil {
-		// Check if this is a 403 Forbidden error (likely due to organization restrictions)
-		errStr := err.Error()
-		if strings.Contains(errStr, "status 403") || strings.Contains(errStr, "403") {
+		// Types without a subject URL (CI, Dependabot, Discussions) - skip refresh silently
+		if errors.Is(err, sync.ErrNotificationMissingSubjectURL) {
+			h.logger.Debug(
+				"skipping subject refresh (no subject URL)",
+				zap.String("github_id", githubID),
+			)
+		} else if strings.Contains(err.Error(), "status 403") || strings.Contains(err.Error(), "403") {
+			// 403 Forbidden error (likely due to organization restrictions)
 			h.logger.Warn(
 				"forbidden when refreshing subject data (likely organization restriction)",
 				zap.String("github_id", githubID),
@@ -252,14 +258,15 @@ func (h *Handler) handleRefreshNotificationSubject(w http.ResponseWriter, r *htt
 				"insufficient permissions to access repository details",
 			)
 			return
+		} else {
+			h.logger.Error(
+				"failed to refresh subject data",
+				zap.String("github_id", githubID),
+				zap.Error(errors.Join(ErrFailedToRefreshSubjectData, err)),
+			)
+			helpers.WriteError(w, http.StatusInternalServerError, "failed to refresh subject data")
+			return
 		}
-		h.logger.Error(
-			"failed to refresh subject data",
-			zap.String("github_id", githubID),
-			zap.Error(errors.Join(ErrFailedToRefreshSubjectData, err)),
-		)
-		helpers.WriteError(w, http.StatusInternalServerError, "failed to refresh subject data")
-		return
 	}
 
 	// If subject data was previously missing and refresh succeeded, enqueue rule re-application

@@ -254,6 +254,13 @@
 		return type === "checkrun" || type === "checksuite" || type === "workflowrun";
 	}
 
+	// Helper to check if a type is a Dependabot alert
+	function checkIsDependabotAlert(subjectType: string | undefined | null): boolean {
+		if (!subjectType) return false;
+		const type = subjectType.toLowerCase().replace(/[-_\s]/g, "");
+		return type === "repositorydependabotalertsthread";
+	}
+
 	// Compute GitHub URLs
 	$: githubUrl = (() => {
 		const subjectType = detail?.notification.subjectType || notification.subjectType;
@@ -262,6 +269,11 @@
 		// For CI activity, always use the actions page URL (subject data is not available)
 		if (checkIsCIActivity(subjectType) && repoFullName) {
 			return `https://github.com/${repoFullName}/actions`;
+		}
+
+		// For Dependabot alerts, link to the security/dependabot page
+		if (checkIsDependabotAlert(subjectType) && repoFullName) {
+			return `https://github.com/${repoFullName}/security/dependabot`;
 		}
 
 		// For other types, try to get URL from detail/notification
@@ -310,13 +322,14 @@
 		authorName.toLowerCase().includes("[bot]") || authorName.toLowerCase().endsWith("-bot");
 	$: authorInitial = authorName.charAt(0).toUpperCase();
 
-	// Try to find direct avatar URL from timeline items first
-	// Access commentItems store reactively to ensure updates trigger recalculation
+	// Try to find direct avatar URL: subject summary first, then timeline items
 	$: directAvatarUrl = (() => {
+		// Prefer avatar URL from subject raw data (available immediately)
+		if (detail?.subject?.authorAvatarUrl) return detail.subject.authorAvatarUrl;
+
 		if (!authorName || authorName === "Unknown") return null;
 
-		// Check timeline items for the same author
-		// Access the store value reactively
+		// Fall back to checking timeline items for the same author
 		const items = commentItems ? $commentItems : [];
 		for (const item of items) {
 			const itemAuthor = item.author?.login || item.actor?.login;
@@ -389,6 +402,12 @@
 
 	// Check if this is a CI activity notification (CheckRun/CheckSuite)
 	$: isCIActivity = checkIsCIActivity(detail?.notification.subjectType || notification.subjectType);
+
+	// Check if this is a Dependabot alert notification
+	$: isDependabotAlert = checkIsDependabotAlert(
+		detail?.notification.subjectType || notification.subjectType
+	);
+	const dependabotIconPath = getIconPath("dependabot");
 
 	// Handler for updating timeline last seen timestamp
 	async function handleUpdateTimelineLastSeen(timestamp: string) {
@@ -665,7 +684,42 @@
 					{#if detail}
 						<!-- eslint-disable svelte/no-navigation-without-resolve -->
 						<div class="mt-8 mb-6 flex items-center gap-2">
-							{#if isCIActivity}
+							{#if isDependabotAlert}
+								<!-- Dependabot Alert: Open in Security button -->
+								<a
+									class="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 px-2.5 py-1.5 text-sm font-light text-gray-700 dark:text-gray-200 transition hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-800 dark:hover:text-gray-200"
+									href={githubUrl}
+									target="_blank"
+									rel="noreferrer"
+								>
+									<!-- Dependabot icon -->
+									<svg
+										class="h-4 w-4"
+										viewBox="0 0 16 16"
+										fill="currentColor"
+										xmlns="http://www.w3.org/2000/svg"
+									>
+										<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+										{@html dependabotIconPath}
+									</svg>
+									<span>Open in Dependabot</span>
+									<!-- External link icon -->
+									<svg
+										class="h-4 w-4"
+										viewBox="0 0 24 24"
+										fill="none"
+										xmlns="http://www.w3.org/2000/svg"
+									>
+										<path
+											d="M10.0002 5H8.2002C7.08009 5 6.51962 5 6.0918 5.21799C5.71547 5.40973 5.40973 5.71547 5.21799 6.0918C5 6.51962 5 7.08009 5 8.2002V15.8002C5 16.9203 5 17.4801 5.21799 17.9079C5.40973 18.2842 5.71547 18.5905 6.0918 18.7822C6.5192 19 7.07899 19 8.19691 19H15.8031C16.921 19 17.48 19 17.9074 18.7822C18.2837 18.5905 18.5905 18.2839 18.7822 17.9076C19 17.4802 19 16.921 19 15.8031V14M20 9V4M20 4H15M20 4L13 11"
+											stroke="currentColor"
+											stroke-width="2"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+										/>
+									</svg>
+								</a>
+							{:else if isCIActivity}
 								<!-- CI Activity: Open in Actions button -->
 								<a
 									class="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 px-2.5 py-1.5 text-sm font-light text-gray-700 dark:text-gray-200 transition hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-800 dark:hover:text-gray-200"
@@ -812,7 +866,24 @@
 					{/if}
 
 					<!-- For CI Activity, show a simple info message -->
-					{#if isCIActivity}
+					{#if isDependabotAlert}
+						<div
+							class="flex items-center gap-3 px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/30"
+						>
+							<svg
+								class="w-5 h-5 flex-shrink-0 text-blue-500 dark:text-blue-400"
+								viewBox="0 0 16 16"
+								fill="currentColor"
+								aria-hidden="true"
+							>
+								<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+								{@html dependabotIconPath}
+							</svg>
+							<p class="text-sm text-gray-600 dark:text-gray-400">
+								This is a Dependabot security alert. View the full details on GitHub.
+							</p>
+						</div>
+					{:else if isCIActivity}
 						<div
 							class="flex items-center gap-3 px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/30"
 						>
@@ -1023,6 +1094,7 @@
 							<TimelineThread
 								githubId={notification.githubId}
 								{timelineController}
+								subjectType={notification.subjectType}
 								{hasPermissionError}
 								timelineLastSeenAt={notification.timelineLastSeenAt}
 								onUpdateLastSeen={handleUpdateTimelineLastSeen}

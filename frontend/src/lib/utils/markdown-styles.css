@@ -220,6 +220,14 @@ code.hljs {
 	line-height: 1.6;
 }
 
+/* @mention highlighting - bold + underline like GitHub */
+.mention {
+	font-weight: 600;
+	text-decoration: underline;
+	text-underline-offset: 3px;
+	color: inherit;
+}
+
 /* Ensure proper block display for code containers */
 .prose pre.hljs {
 	display: block;

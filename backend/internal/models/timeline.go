@@ -35,12 +35,33 @@ type TimelineItem struct {
 	HTMLURL         string
 	Timestamp       time.Time // For sorting
 	// Event-specific metadata
+	AssigneeLogin          string // For assigned/unassigned
 	RequestedReviewerLogin string // For review_requested
 	LabelName              string // For labeled/unlabeled
 	LabelColor             string // For labeled/unlabeled
 	MilestoneTitle         string // For milestoned/demilestoned
 	RenameFrom             string // For renamed
 	RenameTo               string // For renamed
+	// Cross-reference source
+	SourceType    string
+	SourceNumber  int
+	SourceTitle   string
+	SourceHTMLURL string
+	// Discussion replies
+	Replies        []TimelineReply
+	ReplyCount     int
+	HasMoreReplies bool
+}
+
+// TimelineReply represents a reply to a discussion comment.
+type TimelineReply struct {
+	ID              string
+	Body            string
+	AuthorLogin     string
+	AuthorAvatarURL string
+	CreatedAt       *time.Time
+	UpdatedAt       *time.Time
+	HTMLURL         string
 }
 
 // TimelineResult contains paginated timeline results.

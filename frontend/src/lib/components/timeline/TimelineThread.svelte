@@ -16,23 +16,32 @@
 
 	import type { TimelineController } from "$lib/state/timelineController";
 	import TimelineItem from "./TimelineItem.svelte";
+	import TimelineEventGroup from "./TimelineEventGroup.svelte";
 	import { writable, get } from "svelte/store";
 	import { tick, onMount, onDestroy } from "svelte";
 	import { SvelteMap } from "svelte/reactivity";
 	import { fly, fade } from "svelte/transition";
 	import { getNotificationSettingsStore } from "$lib/stores/notificationSettings";
+	import {
+		groupConsecutiveEvents,
+		isTimelineGroup,
+		getDisplayItemTimestamp,
+	} from "$lib/utils/timelineGrouping";
+	import type { TimelineDisplayItem } from "$lib/utils/timelineGrouping";
 
 	const { timelineAutoScroll } = getNotificationSettingsStore();
 
 	export let githubId: string;
 	export let timelineController: TimelineController;
+	export let subjectType: string = "";
 	export let hasPermissionError: boolean = false;
 	export let timelineLastSeenAt: string | undefined = undefined;
 	export let onUpdateLastSeen: ((timestamp: string) => void) | undefined = undefined;
 	export let onNewActivityViewed: (() => void) | undefined = undefined;
 
 	const { items, isLoading, error, pagination, hasAttemptedAutoLoad } = timelineController.stores;
-	const { autoLoadTimeline, loadTimeline, loadMoreTimeline } = timelineController.actions;
+	const { autoLoadTimeline, loadTimeline, loadMoreTimeline, loadReviewComments } =
+		timelineController.actions;
 
 	let hasLoaded = false;
 	const isLoadingMore = writable(false);
@@ -51,10 +60,12 @@
 		// eslint-disable-next-line svelte/infinite-reactive-loop -- convergent: sets the flag that disables the reactive condition
 		hasScrolledToUnseen = true;
 
-		// Update last-seen to the newest item's timestamp
+		// Update last-seen to the newest item's timestamp (from raw items, not display items)
 		const currentItems = get(items);
 		if (currentItems.length > 0) {
-			const newestTimestamp = getItemTimestamp(currentItems[currentItems.length - 1]);
+			const last = currentItems[currentItems.length - 1];
+			const newestTimestamp =
+				last.timestamp || last.createdAt || last.submittedAt || last.updatedAt;
 			if (newestTimestamp) {
 				localBaseline = newestTimestamp;
 				onUpdateLastSeen?.(newestTimestamp);
@@ -70,6 +81,10 @@
 		autoLoadDebounceTimer = setTimeout(() => {
 			if (!$hasAttemptedAutoLoad && githubId) {
 				autoLoadTimeline(githubId, 10);
+				// Fire review comments fetch in parallel for PRs
+				if (subjectType === "pull_request") {
+					loadReviewComments(githubId);
+				}
 			}
 		}, 300);
 	});
@@ -86,6 +101,10 @@
 		isLoadingMore.set(true);
 		try {
 			await loadTimeline(githubId, 10);
+			// Ensure review comments are loaded for PRs (no-op if already fetched)
+			if (subjectType === "pull_request") {
+				loadReviewComments(githubId);
+			}
 			await tick();
 		} finally {
 			isLoadingMore.set(false);
@@ -112,12 +131,19 @@
 
 	$: hasItems = $items.length > 0;
 	$: hasMoreToLoad = $pagination.hasMore;
-	$: lastItemIndex = $items.length - 1;
 
-	// Generate unique keys for timeline items (some events may have null IDs)
-	$: itemsWithKeys = $items.map((item, index) => ({
-		item,
-		key: item.id != null ? String(item.id) : `${item.type}-${item.timestamp || ""}-${index}`,
+	// Group consecutive bundleable events (labels, assigns, review requests)
+	$: displayItems = groupConsecutiveEvents($items);
+	$: lastDisplayIndex = displayItems.length - 1;
+
+	// Generate unique keys for display items (regular items or groups)
+	$: itemsWithKeys = displayItems.map((displayItem, index) => ({
+		displayItem,
+		key: isTimelineGroup(displayItem)
+			? `group-${displayItem.groupType}-${displayItem.items[0]?.timestamp || ""}-${index}`
+			: displayItem.id != null
+				? String(displayItem.id)
+				: `${displayItem.type}-${displayItem.timestamp || ""}-${index}`,
 	}));
 	// Show button if there's more to load OR if we're currently loading
 	// Use derived logic to prevent button from disappearing during load
@@ -129,9 +155,9 @@
 	// Show initial loading state when we're loading and have no items yet
 	$: showInitialLoading = $isLoading && !hasItems;
 
-	// Helper to get the effective timestamp of a timeline item
-	function getItemTimestamp(item: (typeof $items)[0]): string | undefined {
-		return item.timestamp || item.createdAt || item.submittedAt || item.updatedAt;
+	// Helper to get the effective timestamp of a display item (regular or group)
+	function getItemTimestamp(item: TimelineDisplayItem): string | undefined {
+		return getDisplayItemTimestamp(item);
 	}
 
 	// Effective last-seen: prefer the persisted prop, fall back to local baseline.
@@ -142,7 +168,8 @@
 	// Without a baseline, firstUnseenIndex is always -1 and new items from live
 	// refreshes would never be detected as "unseen."
 	$: if ($items.length > 0 && !timelineLastSeenAt && !localBaseline && !$isLoading) {
-		const newestTimestamp = getItemTimestamp($items[$items.length - 1]);
+		const last = $items[$items.length - 1];
+		const newestTimestamp = last.timestamp || last.createdAt || last.submittedAt || last.updatedAt;
 		if (newestTimestamp) {
 			localBaseline = newestTimestamp;
 			onUpdateLastSeen?.(newestTimestamp);
@@ -153,10 +180,10 @@
 	// Items are sorted oldest to newest in the timeline, so we find the first item
 	// that is newer than the lastSeenAt timestamp
 	$: firstUnseenIndex = (() => {
-		if (!effectiveLastSeenAt || $items.length === 0) return -1;
+		if (!effectiveLastSeenAt || displayItems.length === 0) return -1;
 		const lastSeenDate = new Date(effectiveLastSeenAt);
-		for (let i = 0; i < $items.length; i++) {
-			const itemTimestamp = getItemTimestamp($items[i]);
+		for (let i = 0; i < displayItems.length; i++) {
+			const itemTimestamp = getItemTimestamp(displayItems[i]);
 			if (itemTimestamp) {
 				const itemDate = new Date(itemTimestamp);
 				if (itemDate > lastSeenDate) {
@@ -215,8 +242,7 @@
 				return;
 			}
 
-			const currentItems = get(items);
-			const lastEl = itemElementsByIndex.get(currentItems.length - 1);
+			const lastEl = itemElementsByIndex.get(displayItems.length - 1);
 			if (!lastEl) return;
 
 			const containerRect = scrollContainer!.getBoundingClientRect();
@@ -513,7 +539,7 @@
 		{/if}
 
 		<!-- Timeline items list -->
-		{#each itemsWithKeys as { item, key }, index (key)}
+		{#each itemsWithKeys as { displayItem, key }, index (key)}
 			<!-- New activity divider -->
 			{#if index === stickyDividerIndex && stickyDividerIndex > 0}
 				<div class="new-activity-divider flex items-center gap-3 my-4">
@@ -544,8 +570,20 @@
 					</div>
 				</div>
 			{/if}
-			<div data-timestamp={getItemTimestamp(item)} use:observeTimelineItem={index}>
-				<TimelineItem {item} showThread={true} isLastItem={index === lastItemIndex} />
+			<div data-timestamp={getItemTimestamp(displayItem)} use:observeTimelineItem={index}>
+				{#if isTimelineGroup(displayItem)}
+					<TimelineEventGroup
+						group={displayItem}
+						showThread={true}
+						isLastItem={index === lastDisplayIndex}
+					/>
+				{:else}
+					<TimelineItem
+						item={displayItem}
+						showThread={true}
+						isLastItem={index === lastDisplayIndex}
+					/>
+				{/if}
 			</div>
 		{/each}
 	</div>

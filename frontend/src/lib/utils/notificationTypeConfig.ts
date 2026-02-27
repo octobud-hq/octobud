@@ -83,6 +83,14 @@ export function getNotificationTypeConfig(subjectType: string): NotificationType
 				timestampVerb: "triggered",
 			};
 
+		case "repositorydependabotalertsthread":
+			return {
+				showCommentThread: false,
+				contentLabel: "Dependabot Alert",
+				emptyContentMessage: "No details available.",
+				timestampVerb: "reported",
+			};
+
 		case "repositoryvulnerabilityalert":
 		case "securityalert":
 			return {

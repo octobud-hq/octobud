@@ -1325,6 +1325,7 @@ func (s *Store) UpdateNotificationSubject(
 		return s.q.UpdateNotificationSubject(ctx, UpdateNotificationSubjectParams{
 			UserID:             userID,
 			GithubID:           arg.GithubID,
+			SubjectTitle:       arg.SubjectTitle,
 			SubjectRaw:         fromNullRawMessage(arg.SubjectRaw),
 			SubjectFetchedAt:   formatNullTime(arg.SubjectFetchedAt),
 			PullRequestID:      arg.PullRequestID,

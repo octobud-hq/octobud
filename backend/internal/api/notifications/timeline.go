@@ -19,7 +19,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -55,6 +54,9 @@ func (h *Handler) handleGetNotificationTimeline( //nolint:gocyclo // This is a c
 	if perPageStr != "" {
 		if val, err := strconv.Atoi(perPageStr); err == nil && val > 0 {
 			perPage = val
+			if perPage > 100 {
+				perPage = 100
+			}
 		}
 	}
 
@@ -120,11 +122,7 @@ func (h *Handler) handleGetNotificationTimeline( //nolint:gocyclo // This is a c
 			zap.String("subject_url", subjectURL),
 			zap.Error(errors.Join(ErrFailedToParseSubjectInfo, err)),
 		)
-		helpers.WriteError(
-			w,
-			http.StatusBadRequest,
-			fmt.Sprintf("could not parse subject info: %v", err),
-		)
+		helpers.WriteError(w, http.StatusBadRequest, "invalid notification subject")
 		return
 	}
 
@@ -239,6 +237,9 @@ func convertTimelineItemToThreadItem(item models.TimelineItem) ThreadItem {
 	}
 
 	// Set event-specific metadata
+	if item.AssigneeLogin != "" {
+		threadItem.Assignee = &item.AssigneeLogin
+	}
 	if item.RequestedReviewerLogin != "" {
 		threadItem.RequestedReviewer = &item.RequestedReviewerLogin
 	}
@@ -255,6 +256,42 @@ func convertTimelineItemToThreadItem(item models.TimelineItem) ThreadItem {
 		threadItem.Rename = &ThreadRename{
 			From: item.RenameFrom,
 			To:   item.RenameTo,
+		}
+	}
+
+	// Cross-reference source
+	if item.SourceNumber != 0 {
+		threadItem.Source = &ThreadCrossReference{
+			Type:    item.SourceType,
+			Number:  item.SourceNumber,
+			Title:   item.SourceTitle,
+			HTMLURL: item.SourceHTMLURL,
+		}
+	}
+
+	// Discussion replies
+	if len(item.Replies) > 0 {
+		threadItem.ReplyCount = &item.ReplyCount
+		threadItem.HasMoreReplies = &item.HasMoreReplies
+		for _, r := range item.Replies {
+			tr := ThreadReply{
+				ID:   r.ID,
+				Body: r.Body,
+				Author: ThreadAuthor{
+					Login:     r.AuthorLogin,
+					AvatarURL: r.AuthorAvatarURL,
+				},
+				HTMLURL: r.HTMLURL,
+			}
+			if r.CreatedAt != nil {
+				ts := r.CreatedAt.Format(time.RFC3339)
+				tr.CreatedAt = &ts
+			}
+			if r.UpdatedAt != nil {
+				ts := r.UpdatedAt.Format(time.RFC3339)
+				tr.UpdatedAt = &ts
+			}
+			threadItem.Replies = append(threadItem.Replies, tr)
 		}
 	}
 

@@ -261,6 +261,7 @@ type UpsertNotificationParams struct {
 // UpdateNotificationSubjectParams contains the parameters for updating notification subject
 type UpdateNotificationSubjectParams struct {
 	GithubID           string
+	SubjectTitle       string // Updated title from subject JSON
 	SubjectRaw         NullRawMessage
 	SubjectFetchedAt   sql.NullTime
 	PullRequestID      sql.NullInt64

@@ -60,8 +60,8 @@ export async function getAvatarUrl(
 		return directUrl;
 	}
 
-	// Fall back to resolving redirect URL
-	if (username && username !== "Unknown") {
+	// Fall back to resolving redirect URL (not for bot accounts — GitHub's .png redirect doesn't support them)
+	if (username && username !== "Unknown" && !username.includes("[bot]")) {
 		const redirectUrl = `https://github.com/${encodeURIComponent(username)}.png`;
 		return await resolveAvatarRedirect(redirectUrl);
 	}
@@ -75,7 +75,7 @@ export async function getAvatarUrl(
  * @returns Redirect URL or null if username is invalid
  */
 export function getRedirectAvatarUrl(username: string | null | undefined): string | null {
-	if (!username || username === "Unknown") {
+	if (!username || username === "Unknown" || username.includes("[bot]")) {
 		return null;
 	}
 	return `https://github.com/${encodeURIComponent(username)}.png`;

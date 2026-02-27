@@ -1214,6 +1214,118 @@ func TestFetchPullRequestReviews(t *testing.T) {
 	}
 }
 
+func TestFetchPullRequestComments(t *testing.T) {
+	tests := []struct {
+		name           string
+		owner          string
+		repo           string
+		number         int
+		perPage        int
+		page           int
+		serverStatus   int
+		serverResponse string
+		wantCount      int
+		wantErr        bool
+		errContains    string
+	}{
+		{
+			name:         "successful fetch with grouping fields",
+			owner:        "testowner",
+			repo:         "testrepo",
+			number:       42,
+			perPage:      100,
+			page:         1,
+			serverStatus: http.StatusOK,
+			serverResponse: `[
+				{"id": 1, "pull_request_review_id": 100, "body": "nit", "path": "file.go", "diff_hunk": "@@ -1 +1 @@", "position": 5, "user": {"login": "alice"}},
+				{"id": 2, "pull_request_review_id": 100, "body": "fix this", "path": "file2.go", "position": null, "user": {"login": "bob"}}
+			]`,
+			wantCount: 2,
+			wantErr:   false,
+		},
+		{
+			name:           "empty comments",
+			owner:          "testowner",
+			repo:           "testrepo",
+			number:         42,
+			perPage:        100,
+			page:           1,
+			serverStatus:   http.StatusOK,
+			serverResponse: `[]`,
+			wantCount:      0,
+			wantErr:        false,
+		},
+		{
+			name:           "not found",
+			owner:          "testowner",
+			repo:           "testrepo",
+			number:         999,
+			perPage:        100,
+			page:           1,
+			serverStatus:   http.StatusNotFound,
+			serverResponse: `{"message": "Not Found"}`,
+			wantErr:        true,
+			errContains:    "pull comments status 404",
+		},
+		{
+			name:           "invalid JSON",
+			owner:          "testowner",
+			repo:           "testrepo",
+			number:         42,
+			perPage:        100,
+			page:           1,
+			serverStatus:   http.StatusOK,
+			serverResponse: `{invalid}`,
+			wantErr:        true,
+			errContains:    "unmarshal pull comments",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(
+				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					expectedPath := "/repos/" + tt.owner + "/" + tt.repo + "/pulls/" + itoa(
+						tt.number,
+					) + "/comments"
+					require.Equal(t, expectedPath, r.URL.Path)
+					assert.Equal(t, "Bearer "+testToken, r.Header.Get("Authorization"))
+					assert.Equal(t, "application/vnd.github+json", r.Header.Get("Accept"))
+					assert.Equal(t, itoa(tt.perPage), r.URL.Query().Get("per_page"))
+					assert.Equal(t, itoa(tt.page), r.URL.Query().Get("page"))
+
+					w.WriteHeader(tt.serverStatus)
+					_, err := w.Write([]byte(tt.serverResponse))
+					assert.NoError(t, err, "failed to write response in test server")
+				}),
+			)
+			defer server.Close()
+
+			client := newTestClient(server.URL)
+			client.token = testToken
+
+			comments, err := client.FetchPullRequestComments(
+				context.Background(),
+				tt.owner,
+				tt.repo,
+				tt.number,
+				tt.perPage,
+				tt.page,
+			)
+
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.errContains != "" {
+					require.Contains(t, err.Error(), tt.errContains)
+				}
+			} else {
+				require.NoError(t, err)
+				require.Len(t, comments, tt.wantCount)
+			}
+		})
+	}
+}
+
 func TestFetchTimeline(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -1301,7 +1413,7 @@ func TestFetchTimeline(t *testing.T) {
 			client := newTestClient(server.URL)
 			client.token = testToken
 
-			timeline, err := client.FetchTimeline(
+			timeline, _, err := client.FetchTimeline(
 				context.Background(),
 				tt.owner,
 				tt.repo,
@@ -1341,7 +1453,7 @@ func TestFetchTimeline_EventTypes(t *testing.T) {
 	client := newTestClient(server.URL)
 	client.token = testToken
 
-	timeline, err := client.FetchTimeline(context.Background(), "owner", "repo", 1, 100, 1)
+	timeline, _, err := client.FetchTimeline(context.Background(), "owner", "repo", 1, 100, 1)
 
 	require.NoError(t, err)
 	require.Len(t, timeline, 4)
@@ -1449,7 +1561,7 @@ func TestRequestHeaders(t *testing.T) {
 		{
 			name: "FetchTimeline sets correct headers",
 			fetchMethod: func(client *clientImpl, _ *httptest.Server) error {
-				_, err := client.FetchTimeline(context.Background(), "owner", "repo", 1, 10, 1)
+				_, _, err := client.FetchTimeline(context.Background(), "owner", "repo", 1, 10, 1)
 				return err
 			},
 			expectedURL: "/repos/owner/repo/issues/1/timeline",
@@ -1500,4 +1612,60 @@ func itoa(n int) string {
 		result = "-" + result
 	}
 	return result
+}
+
+func TestParseLinkHeader(t *testing.T) {
+	tests := []struct {
+		name     string
+		header   string
+		expected int
+	}{
+		{
+			name:     "standard last link with per_page before page",
+			header:   `<https://api.github.com/repos/o/r/issues/1/timeline?per_page=30&page=5>; rel="last"`,
+			expected: 5,
+		},
+		{
+			name:     "page before per_page",
+			header:   `<https://api.github.com/repos/o/r/issues/1/timeline?page=7&per_page=30>; rel="last"`,
+			expected: 7,
+		},
+		{
+			name:     "multiple rels with next and last",
+			header:   `<https://api.github.com/repos/o/r/issues/1/timeline?per_page=30&page=2>; rel="next", <https://api.github.com/repos/o/r/issues/1/timeline?per_page=30&page=12>; rel="last"`,
+			expected: 12,
+		},
+		{
+			name:     "empty header",
+			header:   "",
+			expected: 1,
+		},
+		{
+			name:     "no last rel",
+			header:   `<https://api.github.com/repos/o/r/issues/1/timeline?per_page=30&page=2>; rel="next"`,
+			expected: 1,
+		},
+		{
+			name:     "malformed URL",
+			header:   `<:not-a-url>; rel="last"`,
+			expected: 1,
+		},
+		{
+			name:     "missing page param",
+			header:   `<https://api.github.com/repos/o/r/issues/1/timeline?per_page=30>; rel="last"`,
+			expected: 1,
+		},
+		{
+			name:     "page=0",
+			header:   `<https://api.github.com/repos/o/r/issues/1/timeline?page=0>; rel="last"`,
+			expected: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := parseLinkHeader(tt.header)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
 }

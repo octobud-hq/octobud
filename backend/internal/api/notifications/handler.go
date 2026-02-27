@@ -78,6 +78,7 @@ func (h *Handler) Register(r chi.Router) {
 		r.Get("/poll", h.handlePollNotifications) // Poll endpoint for service worker polling
 		r.Get("/{githubID}", h.handleGetNotification)
 		r.Get("/{githubID}/timeline", h.handleGetNotificationTimeline)
+		r.Get("/{githubID}/review-comments", h.handleGetReviewComments)
 		r.Post("/{githubID}/refresh-subject", h.handleRefreshNotificationSubject)
 
 		// Bulk operations - MUST come before individual routes to avoid "bulk" being treated as a githubID
