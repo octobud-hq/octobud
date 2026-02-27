@@ -37,6 +37,7 @@ import (
 	"github.com/octobud-hq/octobud/backend/internal/core/view"
 	"github.com/octobud-hq/octobud/backend/internal/db"
 	"github.com/octobud-hq/octobud/backend/internal/db/mocks"
+	jobsmocks "github.com/octobud-hq/octobud/backend/internal/jobs/mocks"
 	"github.com/octobud-hq/octobud/backend/internal/models"
 )
 
@@ -806,6 +807,103 @@ func TestHandler_handleReorderRules(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestHandler_handleUpdateRule_applyToExisting(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	logger := zap.NewNop()
+	mockStore := mocks.NewMockStore(ctrl)
+	mockAuthSvc := authmocks.NewMockAuthService(ctrl)
+	mockScheduler := jobsmocks.NewMockScheduler(ctrl)
+	ruleSvc := rulescore.NewService(mockStore)
+	viewSvc := view.NewService(mockStore)
+	handler := NewWithScheduler(logger, ruleSvc, viewSvc, mockScheduler, mockAuthSvc)
+
+	mockAuthSvc.EXPECT().
+		GetUser(gomock.Any()).
+		Return(&models.User{GithubUserID: "test-user-id"}, nil).
+		AnyTimes()
+
+	actionsJSON, err := json.Marshal(models.RuleActions{SkipInbox: true})
+	require.NoError(t, err)
+
+	mockStore.EXPECT().UpdateRule(gomock.Any(), "test-user-id", gomock.Any()).Return(db.Rule{
+		ID:           "1",
+		Name:         "Test Rule",
+		Query:        sql.NullString{String: "is:unread", Valid: true},
+		Actions:      actionsJSON,
+		Enabled:      true,
+		DisplayOrder: 100,
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	}, nil)
+
+	mockScheduler.EXPECT().
+		EnqueueApplyRule(gomock.Any(), "test-user-id", "1").
+		Return(nil)
+
+	req := createRequest(http.MethodPut, "/rules/1", updateRuleRequest{
+		Name:            stringPtr("Test Rule"),
+		ApplyToExisting: true,
+	})
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "1")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	req = req.WithContext(helpers.ContextWithUserID(req.Context(), "test-user-id"))
+	w := httptest.NewRecorder()
+
+	handler.handleUpdateRule(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestHandler_handleUpdateRule_applyToExistingNotSet(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	logger := zap.NewNop()
+	mockStore := mocks.NewMockStore(ctrl)
+	mockAuthSvc := authmocks.NewMockAuthService(ctrl)
+	mockScheduler := jobsmocks.NewMockScheduler(ctrl)
+	ruleSvc := rulescore.NewService(mockStore)
+	viewSvc := view.NewService(mockStore)
+	handler := NewWithScheduler(logger, ruleSvc, viewSvc, mockScheduler, mockAuthSvc)
+
+	mockAuthSvc.EXPECT().
+		GetUser(gomock.Any()).
+		Return(&models.User{GithubUserID: "test-user-id"}, nil).
+		AnyTimes()
+
+	actionsJSON, err := json.Marshal(models.RuleActions{SkipInbox: true})
+	require.NoError(t, err)
+
+	mockStore.EXPECT().UpdateRule(gomock.Any(), "test-user-id", gomock.Any()).Return(db.Rule{
+		ID:           "1",
+		Name:         "Test Rule",
+		Query:        sql.NullString{String: "is:unread", Valid: true},
+		Actions:      actionsJSON,
+		Enabled:      true,
+		DisplayOrder: 100,
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	}, nil)
+
+	// EnqueueApplyRule should NOT be called when applyToExisting is false
+
+	req := createRequest(http.MethodPut, "/rules/1", updateRuleRequest{
+		Name: stringPtr("Test Rule"),
+	})
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "1")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	req = req.WithContext(helpers.ContextWithUserID(req.Context(), "test-user-id"))
+	w := httptest.NewRecorder()
+
+	handler.handleUpdateRule(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
 }
 
 // Helper functions

@@ -87,12 +87,13 @@ type createRuleRequest struct {
 }
 
 type updateRuleRequest struct {
-	Name        *string      `json:"name"`
-	Description *string      `json:"description"`
-	Query       *string      `json:"query"`
-	ViewID      *string      `json:"viewId,omitempty"`
-	Actions     *RuleActions `json:"actions"`
-	Enabled     *bool        `json:"enabled"`
+	Name            *string      `json:"name"`
+	Description     *string      `json:"description"`
+	Query           *string      `json:"query"`
+	ViewID          *string      `json:"viewId,omitempty"`
+	Actions         *RuleActions `json:"actions"`
+	Enabled         *bool        `json:"enabled"`
+	ApplyToExisting bool         `json:"applyToExisting,omitempty"`
 }
 
 type reorderRulesRequest struct {
@@ -268,6 +269,19 @@ func (h *Handler) handleUpdateRule(w http.ResponseWriter, r *http.Request) {
 		}
 		helpers.WriteError(w, http.StatusInternalServerError, "failed to update rule")
 		return
+	}
+
+	// If ApplyToExisting is true, enqueue job to apply rule retroactively
+	if req.ApplyToExisting && h.scheduler != nil {
+		h.logger.Info("enqueuing apply_rule job", zap.String("rule_id", updatedRule.ID))
+		if enqueueErr := h.scheduler.EnqueueApplyRule(ctx, userID, updatedRule.ID); enqueueErr != nil {
+			h.logger.Error("failed to queue apply_rule job",
+				zap.String("rule_id", updatedRule.ID),
+				zap.Error(errors.Join(ErrFailedToQueueApplyRuleJob, enqueueErr)))
+			// Don't fail the entire request - rule was updated successfully
+		} else {
+			h.logger.Info("successfully queued apply_rule job", zap.String("rule_id", updatedRule.ID))
+		}
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, ruleEnvelope{Rule: updatedRule})

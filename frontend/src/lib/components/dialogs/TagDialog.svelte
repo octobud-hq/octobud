@@ -112,7 +112,7 @@
 	}
 </script>
 
-<Modal {open} title={isEditMode ? "Edit Tag" : "New Tag"} size="sm" onClose={handleClose}>
+<Modal {open} title={isEditMode ? "Edit Tag" : "New Tag"} size="sm" closeOnOverlay={false} onClose={handleClose}>
 	<form class="space-y-4" on:submit|preventDefault={handleSubmit}>
 		<div class="rounded-xl bg-gray-50 dark:bg-gray-900/80 p-5 space-y-4">
 			<!-- Name -->

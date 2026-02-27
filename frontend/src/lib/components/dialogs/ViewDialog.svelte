@@ -202,6 +202,7 @@
 	title={initialValue?.id ? "Edit view" : "Add new view"}
 	size="md"
 	maxHeight="90vh"
+	closeOnOverlay={false}
 	onClose={close}
 >
 	<form class="space-y-5" on:submit|preventDefault={submit}>

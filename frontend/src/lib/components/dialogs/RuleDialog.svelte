@@ -31,6 +31,7 @@
 
 	export let open = false;
 	export let rule: Rule | null = null; // null for create, rule object for edit
+	export let duplicateFrom: Rule | null = null; // pre-fill create form from existing rule
 	export let onDelete: (() => void) | null = null;
 
 	const dispatch = createEventDispatcher();
@@ -107,7 +108,28 @@
 			// selectedTags is already tag IDs from the API
 			selectedTags = rule.actions.assignTags || [];
 			enabled = rule.enabled;
-			applyToExisting = false; // Only for create
+			applyToExisting = false;
+		} else if (duplicateFrom) {
+			// Duplicate mode - pre-fill from existing rule but create as new
+			name = `Copy of ${duplicateFrom.name}`;
+			description = duplicateFrom.description || "";
+			if (duplicateFrom.viewId) {
+				ruleMode = "view";
+				selectedViewId = duplicateFrom.viewId;
+				query = "";
+			} else {
+				ruleMode = "query";
+				query = duplicateFrom.query;
+				selectedViewId = "";
+			}
+			skipInbox = duplicateFrom.actions.skipInbox;
+			markRead = duplicateFrom.actions.markRead || false;
+			star = duplicateFrom.actions.star || false;
+			archive = duplicateFrom.actions.archive || false;
+			mute = duplicateFrom.actions.mute || false;
+			selectedTags = duplicateFrom.actions.assignTags || [];
+			enabled = duplicateFrom.enabled;
+			applyToExisting = false;
 		} else {
 			// Create mode - reset form
 			name = "";
@@ -162,6 +184,9 @@
 			}
 
 			if (isEditMode && rule) {
+				if (applyToExisting) {
+					payload.applyToExisting = true;
+				}
 				await updateRule(rule.id, payload);
 				toastStore.show("Rule updated successfully", "success");
 			} else {
@@ -206,6 +231,7 @@
 	title={isEditMode ? "Edit Rule" : "New Rule"}
 	size="md"
 	maxHeight="calc(100vh - 12rem)"
+	closeOnOverlay={false}
 	onClose={handleClose}
 >
 	<form class="space-y-5" on:submit|preventDefault={handleSubmit}>
@@ -388,7 +414,7 @@
 				bind:enabled
 				bind:applyToExisting
 				{availableTags}
-				showApplyToExisting={!isEditMode}
+				showApplyToExisting={true}
 				inline={false}
 			/>
 		</div>
