@@ -48,10 +48,17 @@ type ThreadItem struct {
 	HTMLURL     string       `json:"htmlUrl"`
 	Timestamp   time.Time    `json:"-"` // Internal field for sorting
 	// Event-specific metadata
+	Assignee          *string       `json:"assignee,omitempty"`          // For assigned/unassigned
 	RequestedReviewer *string       `json:"requestedReviewer,omitempty"` // For review_requested
 	Label             *ThreadLabel  `json:"label,omitempty"`             // For labeled/unlabeled
 	Milestone         *string       `json:"milestone,omitempty"`         // For milestoned/demilestoned
 	Rename            *ThreadRename `json:"rename,omitempty"`            // For renamed
+	// Cross-reference source
+	Source *ThreadCrossReference `json:"source,omitempty"` // For cross-referenced
+	// Discussion replies
+	Replies        []ThreadReply `json:"replies,omitempty"`
+	ReplyCount     *int          `json:"replyCount,omitempty"`
+	HasMoreReplies *bool         `json:"hasMoreReplies,omitempty"`
 }
 
 // ThreadLabel represents a label in timeline events.
@@ -70,6 +77,36 @@ type ThreadRename struct {
 type ThreadAuthor struct {
 	Login     string `json:"login"`
 	AvatarURL string `json:"avatarUrl"`
+}
+
+// ThreadCrossReference represents the source of a cross-reference event.
+type ThreadCrossReference struct {
+	Type    string `json:"type"` // "Issue" or "PullRequest"
+	Number  int    `json:"number"`
+	Title   string `json:"title"`
+	HTMLURL string `json:"htmlUrl"`
+}
+
+// ThreadReviewComment represents an inline review comment on a PR diff.
+type ThreadReviewComment struct {
+	ID        string       `json:"id"`
+	Body      string       `json:"body"`
+	Path      string       `json:"path"`
+	DiffHunk  string       `json:"diffHunk,omitempty"`
+	Outdated  bool         `json:"outdated"`
+	Author    ThreadAuthor `json:"author"`
+	CreatedAt *string      `json:"createdAt,omitempty"`
+	HTMLURL   string       `json:"htmlUrl"`
+}
+
+// ThreadReply represents a reply to a discussion comment.
+type ThreadReply struct {
+	ID        string       `json:"id"`
+	Body      string       `json:"body"`
+	Author    ThreadAuthor `json:"author"`
+	CreatedAt *string      `json:"createdAt,omitempty"`
+	UpdatedAt *string      `json:"updatedAt,omitempty"`
+	HTMLURL   string       `json:"htmlUrl"`
 }
 
 // TimelineResponse is the response structure for the timeline endpoint.

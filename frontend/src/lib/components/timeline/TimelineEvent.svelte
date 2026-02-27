@@ -178,6 +178,69 @@
 					textClass: "text-white",
 					iconClass: "text-white",
 				};
+			case "base_ref_force_pushed":
+				return {
+					label: "Force pushed to base branch",
+					iconPath: getIconPath("git-branch"),
+					useIcon: true,
+					bgClass: "bg-gray-600",
+					textClass: "text-white",
+					iconClass: "text-white",
+				};
+			case "base_ref_changed":
+				return {
+					label: "Changed base branch",
+					iconPath: getIconPath("git-branch"),
+					useIcon: true,
+					bgClass: "bg-gray-600",
+					textClass: "text-white",
+					iconClass: "text-white",
+				};
+			case "head_ref_restored":
+				return {
+					label: "Restored branch",
+					iconPath: getIconPath("git-branch"),
+					useIcon: true,
+					bgClass: "bg-gray-600",
+					textClass: "text-white",
+					iconClass: "text-white",
+				};
+			case "reopened":
+				return {
+					label: "Reopened",
+					iconPath: getIconPath("issue-reopened"),
+					useIcon: true,
+					bgClass: "bg-green-600",
+					textClass: "text-white",
+					iconClass: "text-white",
+				};
+			case "converted_to_draft":
+				return {
+					label: "Converted to draft",
+					iconPath: getIconPath("git-pull-request-draft"),
+					useIcon: true,
+					bgClass: "bg-gray-600",
+					textClass: "text-white",
+					iconClass: "text-white",
+				};
+			case "locked":
+				return {
+					label: "Locked",
+					iconPath: getIconPath("lock"),
+					useIcon: true,
+					bgClass: "bg-gray-600",
+					textClass: "text-white",
+					iconClass: "text-white",
+				};
+			case "unlocked":
+				return {
+					label: "Unlocked",
+					iconPath: getIconPath("unlock"),
+					useIcon: true,
+					bgClass: "bg-gray-600",
+					textClass: "text-white",
+					iconClass: "text-white",
+				};
 			case "review_dismissed":
 				return {
 					label: "Review dismissed",
@@ -242,9 +305,9 @@
 			case "reopened":
 				return "reopened this";
 			case "assigned":
-				return "was assigned";
+				return "assigned";
 			case "unassigned":
-				return "was unassigned";
+				return "unassigned";
 			case "review_requested":
 				return "requested a review";
 			case "review_request_removed":
@@ -281,6 +344,20 @@
 				return "deleted the branch";
 			case "head_ref_restored":
 				return "restored the branch";
+			case "head_ref_force_pushed":
+				return "force pushed to the branch";
+			case "base_ref_force_pushed":
+				return "force pushed to the base branch";
+			case "base_ref_changed":
+				return "changed the base branch";
+			case "auto_merge_enabled":
+				return "enabled auto-merge";
+			case "auto_merge_disabled":
+				return "disabled auto-merge";
+			case "added_to_merge_queue":
+				return "added to merge queue";
+			case "removed_from_merge_queue":
+				return "removed from merge queue";
 			case "connected":
 				return "connected this";
 			case "disconnected":
@@ -356,6 +433,24 @@
 				{:else}
 					requested a review
 				{/if}
+			{:else if (item.type === "assigned" || item.type === "unassigned") && item.assignee}
+				{item.type === "assigned" ? "assigned" : "unassigned"}
+				<span class="font-medium text-gray-700 dark:text-gray-300">@{item.assignee}</span>
+			{:else if (item.type === "cross-referenced" || item.type === "referenced") && item.source}
+				mentioned this in
+				<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
+				<a
+					href={item.source.htmlUrl}
+					target="_blank"
+					rel="noreferrer"
+					class="font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
+				>
+					{item.source.type === "PullRequest" ? "PR" : "Issue"} #{item.source.number}
+				</a>
+				<span
+					class="text-gray-500 dark:text-gray-500 truncate max-w-[200px] inline-block align-bottom"
+					>{item.source.title}</span
+				>
 			{:else if item.type === "labeled" && item.label}
 				added label <span
 					class="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border"

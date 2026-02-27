@@ -23,6 +23,7 @@ import type {
 	NotificationSubjectSummary,
 	NotificationViewFilter,
 	NotificationTimelineResponse,
+	TimelineReviewComment,
 } from "./types";
 import { constructGitHubHtmlUrl } from "$lib/utils/githubUrls";
 import { fetchWithAuth, buildApiUrl, ApiUnreachableError, isProxyConnectionError } from "./fetch";
@@ -128,23 +129,12 @@ export const parseSubjectSummary = (raw: unknown): NotificationSubjectSummary | 
 		return typeof value === "boolean" ? value : undefined;
 	};
 
-	const nestedLogin = (key: string): string | undefined => {
+	const nestedString = (key: string, field: string): string | undefined => {
 		const nested = data[key];
 		if (nested && typeof nested === "object") {
-			const login = (nested as Record<string, unknown>).login;
-			if (typeof login === "string") {
-				return login;
-			}
-		}
-		return undefined;
-	};
-
-	const nestedTitle = (key: string): string | undefined => {
-		const nested = data[key];
-		if (nested && typeof nested === "object") {
-			const title = (nested as Record<string, unknown>).title;
-			if (typeof title === "string") {
-				return title;
+			const value = (nested as Record<string, unknown>)[field];
+			if (typeof value === "string") {
+				return value;
 			}
 		}
 		return undefined;
@@ -187,7 +177,8 @@ export const parseSubjectSummary = (raw: unknown): NotificationSubjectSummary | 
 		title: lookup<string>("title"),
 		url: lookup<string>("html_url") ?? lookup<string>("url"),
 		state: lookup<string>("state"),
-		author: nestedLogin("user") ?? nestedLogin("owner"),
+		author: nestedString("user", "login") ?? nestedString("owner", "login"),
+		authorAvatarUrl: nestedString("user", "avatar_url"),
 		body: lookup<string>("body"),
 		createdAt: lookup<string>("created_at") ?? lookup<string>("createdAt"),
 		updatedAt: lookup<string>("updated_at") ?? lookup<string>("updatedAt"),
@@ -199,7 +190,7 @@ export const parseSubjectSummary = (raw: unknown): NotificationSubjectSummary | 
 		comments: lookupNumber("comments"),
 		reviewComments: lookupNumber("review_comments"),
 		assignees: extractAssignees(),
-		milestone: nestedTitle("milestone"),
+		milestone: nestedString("milestone", "title"),
 		reviewDecision: lookup<string>("review_decision"),
 		closedAt: lookup<string>("closed_at"),
 	};
@@ -1025,6 +1016,24 @@ export async function fetchNotificationTimeline(
 
 	const payload: NotificationTimelineResponse = await response.json();
 	return payload;
+}
+
+// Fetch PR review comments grouped by review ID (for lazy-loading into timeline)
+export type ReviewCommentsByReviewId = Record<string, TimelineReviewComment[]>;
+
+export async function fetchReviewComments(
+	githubId: string,
+	fetchImpl?: typeof fetch
+): Promise<ReviewCommentsByReviewId> {
+	const url = `/api/notifications/${encodeURIComponent(githubId)}/review-comments`;
+	const response = await fetchWithAuth(url, {}, fetchImpl);
+
+	if (!response.ok) {
+		throw new Error(`Failed to fetch review comments (${response.status})`);
+	}
+
+	const payload: { reviewComments: ReviewCommentsByReviewId } = await response.json();
+	return payload.reviewComments;
 }
 
 // Update timeline last seen timestamp for a notification

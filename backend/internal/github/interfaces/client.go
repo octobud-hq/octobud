@@ -40,11 +40,14 @@ type Client interface {
 		unreadOnly bool,
 	) ([]types.NotificationThread, error)
 	FetchSubjectRaw(ctx context.Context, subjectURL string) (json.RawMessage, error)
+	// FetchTimeline retrieves timeline events for an issue or pull request using REST API.
+	// Returns the events on the requested page, plus the last page number parsed from
+	// the Link response header (1 if no Link header / single page).
 	FetchTimeline(
 		ctx context.Context,
 		owner, repo string,
 		number, perPage, page int,
-	) ([]types.TimelineEvent, error)
+	) ([]types.TimelineEvent, int, error)
 	FetchIssueComments(
 		ctx context.Context,
 		owner, repo string,
@@ -55,6 +58,13 @@ type Client interface {
 		owner, repo string,
 		number, perPage, page int,
 	) ([]types.PullRequestReview, error)
+	// FetchPullRequestComments retrieves inline review comments for a pull request.
+	// These are the line-level comments attached to PR reviews.
+	FetchPullRequestComments(
+		ctx context.Context,
+		owner, repo string,
+		number, perPage, page int,
+	) ([]types.PullRequestComment, error)
 	// FetchDiscussionComments retrieves comments for a discussion using GraphQL API.
 	// Returns comments as TimelineEvents, hasNextPage, endCursor, and error.
 	// This method converts discussion comments to TimelineEvent format for consistency.

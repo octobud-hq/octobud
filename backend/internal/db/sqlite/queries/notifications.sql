@@ -121,6 +121,7 @@ RETURNING *;
 
 -- name: UpdateNotificationSubject :exec
 UPDATE notifications SET
+    subject_title = ?,
     subject_raw = ?,
     subject_fetched_at = ?,
     pull_request_id = ?,

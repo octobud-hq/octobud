@@ -90,6 +90,21 @@ func (mr *MockClientMockRecorder) FetchNotifications(ctx, since, before, unreadO
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FetchNotifications", reflect.TypeOf((*MockClient)(nil).FetchNotifications), ctx, since, before, unreadOnly)
 }
 
+// FetchPullRequestComments mocks base method.
+func (m *MockClient) FetchPullRequestComments(ctx context.Context, owner, repo string, number, perPage, page int) ([]types.PullRequestComment, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FetchPullRequestComments", ctx, owner, repo, number, perPage, page)
+	ret0, _ := ret[0].([]types.PullRequestComment)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FetchPullRequestComments indicates an expected call of FetchPullRequestComments.
+func (mr *MockClientMockRecorder) FetchPullRequestComments(ctx, owner, repo, number, perPage, page any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FetchPullRequestComments", reflect.TypeOf((*MockClient)(nil).FetchPullRequestComments), ctx, owner, repo, number, perPage, page)
+}
+
 // FetchPullRequestReviews mocks base method.
 func (m *MockClient) FetchPullRequestReviews(ctx context.Context, owner, repo string, number, perPage, page int) ([]types.PullRequestReview, error) {
 	m.ctrl.T.Helper()
@@ -121,12 +136,13 @@ func (mr *MockClientMockRecorder) FetchSubjectRaw(ctx, subjectURL any) *gomock.C
 }
 
 // FetchTimeline mocks base method.
-func (m *MockClient) FetchTimeline(ctx context.Context, owner, repo string, number, perPage, page int) ([]types.TimelineEvent, error) {
+func (m *MockClient) FetchTimeline(ctx context.Context, owner, repo string, number, perPage, page int) ([]types.TimelineEvent, int, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "FetchTimeline", ctx, owner, repo, number, perPage, page)
 	ret0, _ := ret[0].([]types.TimelineEvent)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret1, _ := ret[1].(int)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
 }
 
 // FetchTimeline indicates an expected call of FetchTimeline.

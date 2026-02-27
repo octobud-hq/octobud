@@ -213,6 +213,18 @@ export function getNotificationIcon(
 		};
 	}
 
+	// Dependabot Alert
+	if (normalizedType === "repositorydependabotalertsthread") {
+		return {
+			path: getIconPath("dependabot"),
+			colorClass: getColorClass(
+				"text-blue-500 dark:text-blue-400",
+				"text-blue-400/60 dark:text-blue-400/50"
+			),
+			label: "Dependabot Alert",
+		};
+	}
+
 	// Security Alert
 	if (normalizedType === "repositoryvulnerabilityalert" || normalizedType === "securityalert") {
 		return {

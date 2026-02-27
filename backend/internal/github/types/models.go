@@ -127,10 +127,25 @@ type TimelineEvent struct {
 	CommitID    string          `json:"commit_id,omitempty"`  // For some events
 	CommitURL   string          `json:"commit_url,omitempty"` // For some events
 	// Event-specific metadata
-	RequestedReviewer *SimpleUser      `json:"requested_reviewer,omitempty"` // For review_requested
+	Assignee          *SimpleUser      `json:"assignee,omitempty"`           // For assigned/unassigned
+	RequestedReviewer *SimpleUser      `json:"requested_reviewer,omitempty"` // For review_requested (user)
+	RequestedTeam     *SimpleTeam      `json:"requested_team,omitempty"`     // For review_requested (team)
 	Label             *TimelineLabel   `json:"label,omitempty"`              // For labeled/unlabeled
 	Milestone         *SimpleMilestone `json:"milestone,omitempty"`          // For milestoned/demilestoned
 	Rename            *TimelineRename  `json:"rename,omitempty"`             // For renamed
+	// Cross-reference source (REST JSON auto-populates SourceRaw; parsed in convertTimelineEvent)
+	SourceRaw json.RawMessage       `json:"source,omitempty"`
+	Source    *CrossReferenceSource `json:"-"`
+	// Discussion replies (populated from GraphQL DiscussionComment.replies)
+	Replies        []DiscussionReplyData `json:"-"`
+	ReplyCount     int                   `json:"-"`
+	HasMoreReplies bool                  `json:"-"`
+}
+
+// SimpleTeam represents a GitHub team in timeline events.
+type SimpleTeam struct {
+	Name string `json:"name"`
+	Slug string `json:"slug"`
 }
 
 // TimelineLabel represents a label in timeline events.
@@ -148,4 +163,37 @@ type SimpleMilestone struct {
 type TimelineRename struct {
 	From string `json:"from"`
 	To   string `json:"to"`
+}
+
+// CrossReferenceSource represents the source of a cross-reference event.
+type CrossReferenceSource struct {
+	Type    string // "Issue" or "PullRequest"
+	Number  int
+	Title   string
+	HTMLURL string
+	State   string
+}
+
+// PullRequestComment represents an inline review comment from the REST API.
+// Fetched via GET /repos/{owner}/{repo}/pulls/{number}/comments.
+type PullRequestComment struct {
+	ID                  int64      `json:"id"`
+	PullRequestReviewID int64      `json:"pull_request_review_id"`
+	Body                string     `json:"body"`
+	Path                string     `json:"path"`
+	DiffHunk            string     `json:"diff_hunk"`
+	Position            *int       `json:"position"` // nil when outdated
+	User                SimpleUser `json:"user"`
+	CreatedAt           *time.Time `json:"created_at"`
+	HTMLURL             string     `json:"html_url"`
+}
+
+// DiscussionReplyData represents a reply to a discussion comment.
+type DiscussionReplyData struct {
+	ID        string
+	Body      string
+	CreatedAt *time.Time
+	UpdatedAt *time.Time
+	Author    SimpleUser
+	HTMLURL   string
 }

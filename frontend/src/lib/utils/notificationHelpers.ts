@@ -210,6 +210,8 @@ export function formatSubjectTypeLabel(type: string): string {
 			return "Commit";
 		case "release":
 			return "Release";
+		case "repositorydependabotalertsthread":
+			return "Dependabot Alert";
 		case "repositoryvulnerabilityalert":
 		case "securityalert":
 			return "Security Alert";

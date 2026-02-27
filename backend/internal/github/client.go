@@ -508,18 +508,18 @@ func (c *clientImpl) FetchPullRequestReviews(
 	return reviews, nil
 }
 
-// FetchTimeline retrieves timeline events for an issue or pull request.
-func (c *clientImpl) FetchTimeline(
+// FetchPullRequestComments retrieves inline review comments for a pull request.
+func (c *clientImpl) FetchPullRequestComments(
 	ctx context.Context,
 	owner, repo string,
 	number, perPage, page int,
-) ([]types.TimelineEvent, error) {
-	url := fmt.Sprintf("%s/repos/%s/%s/issues/%d/timeline?per_page=%d&page=%d",
+) ([]types.PullRequestComment, error) {
+	url := fmt.Sprintf("%s/repos/%s/%s/pulls/%d/comments?per_page=%d&page=%d",
 		c.baseURL, owner, repo, number, perPage, page)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, http.NoBody)
 	if err != nil {
-		return nil, fmt.Errorf("github: create timeline request: %w", err)
+		return nil, fmt.Errorf("github: create pull comments request: %w", err)
 	}
 
 	req.Header.Set("Authorization", "Bearer "+c.token)
@@ -528,30 +528,105 @@ func (c *clientImpl) FetchTimeline(
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("github: fetch timeline: %w", err)
+		return nil, fmt.Errorf("github: fetch pull comments: %w", err)
 	}
 	defer func() {
 		if closeErr := resp.Body.Close(); closeErr != nil {
-			// Error closing response body - log if we had a logger, but can't return it
 			_ = closeErr
 		}
 	}()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("github: read timeline body: %w", err)
+		return nil, fmt.Errorf("github: read pull comments body: %w", err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("github: timeline status %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("github: pull comments status %d: %s", resp.StatusCode, string(body))
 	}
+
+	var comments []types.PullRequestComment
+	if err := json.Unmarshal(body, &comments); err != nil {
+		return nil, fmt.Errorf("github: unmarshal pull comments: %w", err)
+	}
+
+	return comments, nil
+}
+
+// parseLinkHeader extracts the last page number from a GitHub Link response header.
+// GitHub format: <url?page=2>; rel="next", <url?page=5>; rel="last"
+// Returns 1 if no "last" rel is found (single page result).
+func parseLinkHeader(header string) int {
+	for _, part := range strings.Split(header, ",") {
+		part = strings.TrimSpace(part)
+		if !strings.Contains(part, `rel="last"`) {
+			continue
+		}
+		urlEnd := strings.Index(part, ">")
+		if urlEnd < 1 {
+			continue
+		}
+		rawURL := strings.TrimPrefix(part[:urlEnd], "<")
+		if idx := strings.Index(rawURL, "page="); idx >= 0 {
+			pageStr := rawURL[idx+5:]
+			if amp := strings.Index(pageStr, "&"); amp >= 0 {
+				pageStr = pageStr[:amp]
+			}
+			if n, err := strconv.Atoi(pageStr); err == nil && n > 0 {
+				return n
+			}
+		}
+	}
+	return 1
+}
+
+// FetchTimeline retrieves timeline events for an issue or pull request using the REST API.
+// Returns the events on the requested page, plus the last page number parsed from the
+// Link response header (1 if no Link header / single page result).
+func (c *clientImpl) FetchTimeline(
+	ctx context.Context,
+	owner, repo string,
+	number, perPage, page int,
+) ([]types.TimelineEvent, int, error) {
+	url := fmt.Sprintf("%s/repos/%s/%s/issues/%d/timeline?per_page=%d&page=%d",
+		c.baseURL, owner, repo, number, perPage, page)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, http.NoBody)
+	if err != nil {
+		return nil, 1, fmt.Errorf("github: create timeline request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, 1, fmt.Errorf("github: fetch timeline: %w", err)
+	}
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			_ = closeErr
+		}
+	}()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, 1, fmt.Errorf("github: read timeline body: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, 1, fmt.Errorf("github: timeline status %d: %s", resp.StatusCode, string(body))
+	}
+
+	lastPage := parseLinkHeader(resp.Header.Get("Link"))
 
 	var timeline []types.TimelineEvent
 	if err := json.Unmarshal(body, &timeline); err != nil {
-		return nil, fmt.Errorf("github: unmarshal timeline: %w", err)
+		return nil, lastPage, fmt.Errorf("github: unmarshal timeline: %w", err)
 	}
 
-	return timeline, nil
+	return timeline, lastPage, nil
 }
 
 // GraphQLRequest represents a GraphQL request payload.
@@ -582,7 +657,24 @@ type DiscussionComment struct {
 		Login     string `json:"login"`
 		AvatarURL string `json:"avatarUrl"`
 	} `json:"author"`
-	URL string `json:"url"`
+	URL     string `json:"url"`
+	Replies struct {
+		TotalCount int `json:"totalCount"`
+		Nodes      []struct {
+			ID        string    `json:"id"`
+			Body      string    `json:"body"`
+			CreatedAt time.Time `json:"createdAt"`
+			UpdatedAt time.Time `json:"updatedAt"`
+			Author    struct {
+				Login     string `json:"login"`
+				AvatarURL string `json:"avatarUrl"`
+			} `json:"author"`
+			URL string `json:"url"`
+		} `json:"nodes"`
+		PageInfo struct {
+			HasPreviousPage bool `json:"hasPreviousPage"`
+		} `json:"pageInfo"`
+	} `json:"replies"`
 }
 
 // DiscussionCommentsResponse represents the GraphQL response for discussion comments.
@@ -629,6 +721,23 @@ func (c *clientImpl) FetchDiscussionComments( //nolint:gocritic // Prefer in-lin
 								avatarUrl
 							}
 							url
+							replies(last: 5) {
+								totalCount
+								nodes {
+									id
+									body
+									createdAt
+									updatedAt
+									author {
+										login
+										avatarUrl
+									}
+									url
+								}
+								pageInfo {
+									hasPreviousPage
+								}
+							}
 						}
 						pageInfo {
 							hasPreviousPage
@@ -740,7 +849,7 @@ func (c *clientImpl) FetchDiscussionComments( //nolint:gocritic // Prefer in-lin
 		comment := comments[i]
 		createdAt := comment.CreatedAt
 		updatedAt := comment.UpdatedAt
-		timelineEvents[len(comments)-1-i] = types.TimelineEvent{
+		te := types.TimelineEvent{
 			Event:     "commented",
 			ID:        json.RawMessage(fmt.Sprintf(`%q`, comment.ID)),
 			CreatedAt: &createdAt,
@@ -752,6 +861,27 @@ func (c *clientImpl) FetchDiscussionComments( //nolint:gocritic // Prefer in-lin
 				AvatarURL: comment.Author.AvatarURL,
 			},
 		}
+		// Attach reply data
+		if comment.Replies.TotalCount > 0 {
+			te.ReplyCount = comment.Replies.TotalCount
+			te.HasMoreReplies = comment.Replies.PageInfo.HasPreviousPage
+			for _, r := range comment.Replies.Nodes {
+				rCreatedAt := r.CreatedAt
+				rUpdatedAt := r.UpdatedAt
+				te.Replies = append(te.Replies, types.DiscussionReplyData{
+					ID:        r.ID,
+					Body:      r.Body,
+					CreatedAt: &rCreatedAt,
+					UpdatedAt: &rUpdatedAt,
+					Author: types.SimpleUser{
+						Login:     r.Author.Login,
+						AvatarURL: r.Author.AvatarURL,
+					},
+					HTMLURL: r.URL,
+				})
+			}
+		}
+		timelineEvents[len(comments)-1-i] = te
 	}
 
 	return timelineEvents, hasNextPage, endCursor, nil

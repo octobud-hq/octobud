@@ -193,6 +193,7 @@ export interface NotificationSubjectSummary {
 	url?: string; // html_url from GitHub API
 	state?: string;
 	author?: string;
+	authorAvatarUrl?: string;
 	body?: string;
 	createdAt?: string;
 	updatedAt?: string;
@@ -280,12 +281,32 @@ export type TimelineEventType =
 	| "unlocked" // Conversation unlocked
 	| "head_ref_deleted" // PR head branch deleted
 	| "head_ref_restored" // PR head branch restored
+	| "head_ref_force_pushed" // PR head branch force pushed
+	| "base_ref_force_pushed" // PR base branch force pushed
+	| "base_ref_changed" // PR base branch changed
+	| "auto_merge_enabled" // Auto-merge enabled
+	| "auto_merge_disabled" // Auto-merge disabled
+	| "added_to_merge_queue" // Added to merge queue
+	| "removed_from_merge_queue" // Removed from merge queue
+	| "review_dismissed" // Review dismissed
 	| "connected" // Connected to another issue
 	| "disconnected" // Disconnected from another issue
 	| "added_to_project_v2" // Added to project
 	| "removed_from_project_v2" // Removed from project
 	| "project_v2_item_status_changed" // Project status changed
 	| string; // Fallback for unknown events
+
+// Inline review comment on a PR diff, fetched separately and merged into timeline items.
+export interface TimelineReviewComment {
+	id: string;
+	body: string;
+	path: string;
+	diffHunk?: string;
+	outdated?: boolean;
+	author: { login: string; avatarUrl: string };
+	createdAt?: string;
+	htmlUrl?: string;
+}
 
 export interface NotificationTimelineItem {
 	type: TimelineEventType;
@@ -312,6 +333,7 @@ export interface NotificationTimelineItem {
 	updatedAt?: string;
 	submittedAt?: string;
 	// Event-specific metadata
+	assignee?: string; // For assigned/unassigned
 	requestedReviewer?: string; // For review_requested
 	label?: {
 		name: string;
@@ -322,6 +344,27 @@ export interface NotificationTimelineItem {
 		from: string;
 		to: string;
 	};
+	// Cross-reference source
+	source?: {
+		type: string; // "Issue" or "PullRequest"
+		number: number;
+		title: string;
+		htmlUrl: string;
+	};
+	// Review comments (fetched separately, merged by timeline controller)
+	reviewComments?: TimelineReviewComment[];
+	reviewCommentCount?: number;
+	// Discussion replies
+	replies?: {
+		id: string;
+		body: string;
+		author: { login: string; avatarUrl: string };
+		createdAt?: string;
+		updatedAt?: string;
+		htmlUrl?: string;
+	}[];
+	replyCount?: number;
+	hasMoreReplies?: boolean;
 }
 
 export type NotificationThreadItem =

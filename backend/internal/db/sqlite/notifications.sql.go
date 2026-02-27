@@ -888,6 +888,7 @@ func (q *Queries) UnstarNotification(ctx context.Context, arg UnstarNotification
 
 const updateNotificationSubject = `-- name: UpdateNotificationSubject :exec
 UPDATE notifications SET
+    subject_title = ?,
     subject_raw = ?,
     subject_fetched_at = ?,
     pull_request_id = ?,
@@ -901,6 +902,7 @@ WHERE user_id = ? AND github_id = ?
 `
 
 type UpdateNotificationSubjectParams struct {
+	SubjectTitle       string
 	SubjectRaw         sql.NullString
 	SubjectFetchedAt   sql.NullString
 	PullRequestID      sql.NullInt64
@@ -916,6 +918,7 @@ type UpdateNotificationSubjectParams struct {
 
 func (q *Queries) UpdateNotificationSubject(ctx context.Context, arg UpdateNotificationSubjectParams) error {
 	_, err := q.db.ExecContext(ctx, updateNotificationSubject,
+		arg.SubjectTitle,
 		arg.SubjectRaw,
 		arg.SubjectFetchedAt,
 		arg.PullRequestID,

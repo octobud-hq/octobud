@@ -1301,7 +1301,7 @@ func TestFetchTimeline(t *testing.T) {
 			client := newTestClient(server.URL)
 			client.token = testToken
 
-			timeline, err := client.FetchTimeline(
+			timeline, _, err := client.FetchTimeline(
 				context.Background(),
 				tt.owner,
 				tt.repo,
@@ -1341,7 +1341,7 @@ func TestFetchTimeline_EventTypes(t *testing.T) {
 	client := newTestClient(server.URL)
 	client.token = testToken
 
-	timeline, err := client.FetchTimeline(context.Background(), "owner", "repo", 1, 100, 1)
+	timeline, _, err := client.FetchTimeline(context.Background(), "owner", "repo", 1, 100, 1)
 
 	require.NoError(t, err)
 	require.Len(t, timeline, 4)
@@ -1449,7 +1449,7 @@ func TestRequestHeaders(t *testing.T) {
 		{
 			name: "FetchTimeline sets correct headers",
 			fetchMethod: func(client *clientImpl, _ *httptest.Server) error {
-				_, err := client.FetchTimeline(context.Background(), "owner", "repo", 1, 10, 1)
+				_, _, err := client.FetchTimeline(context.Background(), "owner", "repo", 1, 10, 1)
 				return err
 			},
 			expectedURL: "/repos/owner/repo/issues/1/timeline",

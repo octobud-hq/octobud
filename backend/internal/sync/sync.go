@@ -467,7 +467,7 @@ func (s *Service) RefreshSubjectData(ctx context.Context, userID, githubID strin
 	// Skip refresh for CI activity and Discussions (no API endpoint available)
 	normalizedType := strings.ToLower(strings.ReplaceAll(notification.SubjectType, "_", ""))
 	if normalizedType == "checkrun" || normalizedType == "checksuite" ||
-		normalizedType == "discussion" {
+		normalizedType == "discussion" || normalizedType == "repositorydependabotalertsthread" {
 		s.logger.Debug(
 			"skipping subject refresh for unsupported type",
 			zap.String("githubID", githubID),
@@ -539,7 +539,12 @@ func (s *Service) RefreshSubjectData(ctx context.Context, userID, githubID strin
 	var subjectState sql.NullString
 	var subjectMerged sql.NullBool
 	var subjectStateReason sql.NullString
+	// Use existing title as default; override if fresh subject data has one
+	subjectTitle := notification.SubjectTitle
 	if subjectPayload.Valid {
+		if extracted := github.ExtractSubjectTitle(subjectPayload.RawMessage); extracted.Valid {
+			subjectTitle = extracted.String
+		}
 		authorLogin, authorID = github.ExtractAuthorFromSubject(subjectPayload.RawMessage)
 		subjectNumber = github.ExtractSubjectNumber(subjectPayload.RawMessage)
 		subjectState = github.ExtractSubjectState(subjectPayload.RawMessage)
@@ -553,6 +558,7 @@ func (s *Service) RefreshSubjectData(ctx context.Context, userID, githubID strin
 		userID,
 		db.UpdateNotificationSubjectParams{
 			GithubID:           githubID,
+			SubjectTitle:       subjectTitle,
 			SubjectRaw:         subjectPayload,
 			SubjectFetchedAt:   subjectFetchedAt,
 			PullRequestID:      pullRequestID,

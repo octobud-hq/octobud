@@ -14,14 +14,24 @@
 	// You should have received a copy of the GNU Affero General Public License
 	// along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-	import type { NotificationThreadItem } from "$lib/api/types";
+	import type { NotificationThreadItem, NotificationTimelineItem } from "$lib/api/types";
 	import { formatRelativeShort } from "$lib/utils/time";
 	import { renderMarkdown } from "$lib/utils/markdown";
-	import { computeAvatarUrl, isRedirectAvatarUrl, resolveAvatarRedirect } from "$lib/utils/avatar";
+	import { computeAvatarUrl, resolveAvatarRedirect } from "$lib/utils/avatar";
+	import ReviewComments from "./ReviewComments.svelte";
+	import DiscussionReplies from "./DiscussionReplies.svelte";
 
 	export let item: NotificationThreadItem;
 	export let showThread: boolean = true;
 	export let isLastItem: boolean = false;
+
+	// Safely extract review comments (only present on NotificationTimelineItem)
+	$: timelineItem = item as NotificationTimelineItem;
+	$: reviewComments = timelineItem.reviewComments;
+	$: reviewCommentCount = timelineItem.reviewCommentCount;
+	$: discussionReplies = timelineItem.replies;
+	$: replyCount = timelineItem.replyCount;
+	$: hasMoreReplies = timelineItem.hasMoreReplies;
 
 	$: authorName = item.author.login;
 	$: authorInitial = authorName.charAt(0).toUpperCase();
@@ -75,8 +85,11 @@
 	})();
 
 	// Check if this is a review without a body - should render as simple event
+	// Exception: reviews with inline comments still render as a card to show the comments
 	$: isReviewWithoutBody =
-		(item.type === "review" || item.type === "reviewed") && (!item.body || !item.body.trim());
+		(item.type === "review" || item.type === "reviewed") &&
+		(!item.body || !item.body.trim()) &&
+		!reviewComments?.length;
 
 	// Review state styling
 	$: reviewBadgeConfig =
@@ -226,7 +239,7 @@
 		</div>
 
 		<!-- Comment/Review content -->
-		<div class="flex-1">
+		<div class="flex-1 min-w-0">
 			<div class="border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden">
 				<!-- Header -->
 				<div
@@ -292,15 +305,39 @@
 				</div>
 
 				<!-- Body -->
-				<div class="p-4 leading-relaxed text-gray-900 dark:text-gray-200">
-					<div
-						class="prose dark:prose-invert prose-sm max-w-none prose-p:text-gray-700 dark:prose-p:text-gray-300 prose-headings:text-gray-900 dark:prose-headings:text-gray-300 prose-headings:font-semibold prose-a:text-indigo-600 dark:prose-a:text-indigo-300 prose-a:no-underline prose-link-hover prose-strong:text-gray-900 dark:prose-strong:text-gray-300 prose-strong:font-semibold prose-code:text-gray-800 dark:prose-code:text-gray-300 prose-code:bg-gray-100 dark:prose-code:bg-gray-900 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:before:content-[''] prose-code:after:content-[''] prose-pre:text-gray-800 dark:prose-pre:text-gray-300 prose-pre:bg-gray-100 dark:prose-pre:bg-[#161b22] prose-blockquote:text-gray-600 dark:prose-blockquote:text-gray-400 prose-ul:text-gray-700 dark:prose-ul:text-gray-300 prose-ol:text-gray-700 dark:prose-ol:text-gray-300 prose-li:text-gray-700 dark:prose-li:text-gray-300"
-					>
-						<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-						{@html renderMarkdown(item.body)}
+				{#if item.body?.trim()}
+					<div class="p-4 leading-relaxed text-gray-900 dark:text-gray-200">
+						<div
+							class="prose dark:prose-invert prose-sm max-w-none prose-p:text-gray-700 dark:prose-p:text-gray-300 prose-headings:text-gray-900 dark:prose-headings:text-gray-300 prose-headings:font-semibold prose-a:text-indigo-600 dark:prose-a:text-indigo-300 prose-a:no-underline prose-link-hover prose-strong:text-gray-900 dark:prose-strong:text-gray-300 prose-strong:font-semibold prose-code:text-gray-800 dark:prose-code:text-gray-300 prose-code:bg-gray-100 dark:prose-code:bg-gray-900 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:before:content-[''] prose-code:after:content-[''] prose-pre:text-gray-800 dark:prose-pre:text-gray-300 prose-pre:bg-gray-100 dark:prose-pre:bg-[#161b22] prose-blockquote:text-gray-600 dark:prose-blockquote:text-gray-400 prose-ul:text-gray-700 dark:prose-ul:text-gray-300 prose-ol:text-gray-700 dark:prose-ol:text-gray-300 prose-li:text-gray-700 dark:prose-li:text-gray-300"
+						>
+							<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+							{@html renderMarkdown(item.body)}
+						</div>
 					</div>
-				</div>
+				{/if}
+
+				{#if discussionReplies?.length}
+					{@const totalCount = replyCount ?? discussionReplies.length}
+					<div class="px-4 py-2 border-t border-gray-200 dark:border-gray-800 text-xs font-medium text-gray-500 dark:text-gray-400">
+						{totalCount} repl{totalCount === 1 ? "y" : "ies"}
+					</div>
+				{/if}
+
 			</div>
+
+			<!-- Discussion replies (separate container) -->
+			{#if discussionReplies?.length}
+				<DiscussionReplies
+					replies={discussionReplies}
+					{hasMoreReplies}
+					parentHtmlUrl={item.htmlUrl}
+				/>
+			{/if}
+
+			<!-- Inline review comments (outside the card) -->
+			{#if reviewComments?.length}
+				<ReviewComments comments={reviewComments} count={reviewCommentCount} />
+			{/if}
 		</div>
 	</div>
 {/if}

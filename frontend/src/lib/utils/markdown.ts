@@ -23,6 +23,23 @@ import hljs from "highlight.js";
 import "./markdown-styles.css"; // Custom styles with light/dark theme support
 import { replaceGitHubAttachmentImages } from "./imageProxy";
 
+/**
+ * Highlight @mentions in HTML by wrapping them in styled spans.
+ * Skips mentions inside HTML tags, code blocks, and anchor elements.
+ */
+function highlightMentions(html: string): string {
+	// Split HTML into tags and text segments, then only process text segments
+	return html.replace(
+		/(<code[\s\S]*?<\/code>|<a[\s\S]*?<\/a>|<[^>]+>)|@([a-zA-Z0-9](?:[a-zA-Z0-9]|-(?=[a-zA-Z0-9])){0,38}(?:\/[a-zA-Z0-9](?:[a-zA-Z0-9]|-(?=[a-zA-Z0-9])){0,38})?)/g,
+		(match, tag: string | undefined, username: string | undefined) => {
+			// If it matched an HTML tag/element, return it unchanged
+			if (tag) return tag;
+			// Otherwise wrap the @mention
+			return `<span class="mention">@${username}</span>`;
+		}
+	);
+}
+
 // Configure marked for GitHub Flavored Markdown
 marked.setOptions({
 	gfm: true,
@@ -94,8 +111,11 @@ export function renderMarkdown(content: string): string {
 		// Replace GitHub attachment images
 		const withImageProxies = replaceGitHubAttachmentImages(rawHtml);
 
+		// Highlight @mentions in text (outside of code blocks, links, and tags)
+		const withMentions = highlightMentions(withImageProxies);
+
 		// Sanitize HTML - use DOMPurify defaults (works fine for markdown + highlight.js)
-		const sanitized = DOMPurify.sanitize(withImageProxies);
+		const sanitized = DOMPurify.sanitize(withMentions);
 
 		return sanitized;
 	} catch (error) {

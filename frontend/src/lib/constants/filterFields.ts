@@ -57,7 +57,7 @@ export const FILTER_FIELDS: FilterFieldConfig[] = [
 	{
 		value: "type",
 		description: "Subject type (issue, pullrequest, etc.)",
-		valueSuggestions: ["issue", "pullrequest", "release", "discussion", "commit"],
+		valueSuggestions: ["issue", "pullrequest", "release", "discussion", "commit", "dependabot"],
 	},
 	{
 		value: "repo",

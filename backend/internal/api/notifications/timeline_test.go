@@ -33,264 +33,97 @@ func TestFetchAndFilterTimelineEvents(t *testing.T) {
 	now := time.Now()
 	service := timeline.NewService(zap.NewNop())
 
-	tests := []struct {
-		name          string
-		timelinePages [][]types.TimelineEvent
-		perPage       int
-		page          int
-		expectedCount int
-		description   string
-	}{
-		{
-			name: "filters out subscribed events",
-			timelinePages: [][]types.TimelineEvent{
-				{
-					{Event: "commented", CreatedAt: &now},
-					{Event: "subscribed", CreatedAt: &now},
-					{Event: "reviewed", CreatedAt: &now},
-					{Event: "subscribed", CreatedAt: &now},
-					{Event: "committed", CreatedAt: &now},
-				},
-			},
-			perPage:       10,
-			page:          1,
-			expectedCount: 3, // Should only get commented, reviewed, committed
-			description:   "should filter out 2 subscribed events and return 3",
-		},
-		{
-			name: "filters out cross-referenced events",
-			timelinePages: [][]types.TimelineEvent{
-				{
-					{Event: "commented", CreatedAt: &now},
-					{Event: "cross-referenced", CreatedAt: &now},
-					{Event: "reviewed", CreatedAt: &now},
-					{Event: "cross-referenced", CreatedAt: &now},
-					{Event: "committed", CreatedAt: &now},
-				},
-			},
-			perPage:       10,
-			page:          1,
-			expectedCount: 3, // Should only get commented, reviewed, committed
-			description:   "should filter out 2 cross-referenced events and return 3",
-		},
-		{
-			name: "filters out both subscribed and project events",
-			timelinePages: [][]types.TimelineEvent{
-				{
-					{Event: "commented", CreatedAt: &now},
-					{Event: "subscribed", CreatedAt: &now},
-					{Event: "added_to_project_v2", CreatedAt: &now},
-					{Event: "reviewed", CreatedAt: &now},
-					{Event: "subscribed", CreatedAt: &now},
-					{Event: "added_to_project_v2", CreatedAt: &now},
-					{Event: "committed", CreatedAt: &now},
-				},
-			},
-			perPage:       10,
-			page:          1,
-			expectedCount: 3, // Should only get commented, reviewed, committed
-			description:   "should filter out 2 subscribed and 2 project events and return 3",
-		},
-		{
-			name: "filters out project events",
-			timelinePages: [][]types.TimelineEvent{
-				{
-					{Event: "commented", CreatedAt: &now},
-					{Event: "added_to_project_v2", CreatedAt: &now},
-					{Event: "reviewed", CreatedAt: &now},
-					{Event: "project_v2_item_status_changed", CreatedAt: &now},
-					{Event: "committed", CreatedAt: &now},
-				},
-			},
-			perPage:       10,
-			page:          1,
-			expectedCount: 3, // Should only get commented, reviewed, committed
-			description:   "should filter out project-related events",
-		},
-		{
-			name: "filters out copilot events",
-			timelinePages: [][]types.TimelineEvent{
-				{
-					{Event: "commented", CreatedAt: &now},
-					{Event: "copilot_work_started", CreatedAt: &now},
-					{Event: "reviewed", CreatedAt: &now},
-					{Event: "copilot_work_finished", CreatedAt: &now},
-					{Event: "committed", CreatedAt: &now},
-				},
-			},
-			perPage:       10,
-			page:          1,
-			expectedCount: 3, // Should only get commented, reviewed, committed
-			description:   "should filter out copilot-related events",
-		},
-		{
-			name: "filters out connected events",
-			timelinePages: [][]types.TimelineEvent{
-				{
-					{Event: "commented", CreatedAt: &now},
-					{Event: "connected", CreatedAt: &now},
-					{Event: "reviewed", CreatedAt: &now},
-					{Event: "connected", CreatedAt: &now},
-					{Event: "committed", CreatedAt: &now},
-				},
-			},
-			perPage:       10,
-			page:          1,
-			expectedCount: 3, // Should only get commented, reviewed, committed
-			description:   "should filter out connected events",
-		},
-		{
-			name: "filters out base_ref_changed events",
-			timelinePages: [][]types.TimelineEvent{
-				{
-					{Event: "commented", CreatedAt: &now},
-					{Event: "base_ref_changed", CreatedAt: &now},
-					{Event: "reviewed", CreatedAt: &now},
-					{Event: "base_ref_changed", CreatedAt: &now},
-					{Event: "committed", CreatedAt: &now},
-				},
-			},
-			perPage:       10,
-			page:          1,
-			expectedCount: 3, // Should only get commented, reviewed, committed
-			description:   "should filter out base_ref_changed events",
-		},
-		{
-			name: "fetches multiple pages when needed",
-			timelinePages: func() [][]types.TimelineEvent {
-				// Page 1: mostly filtered events - only 1 valid event
-				// Need 100 events so service continues to next page
-				page1 := []types.TimelineEvent{
-					{Event: "subscribed", CreatedAt: &now},
-					{Event: "added_to_project_v2", CreatedAt: &now},
-					{Event: "commented", CreatedAt: &now},
-					{Event: "subscribed", CreatedAt: &now},
-					{Event: "added_to_project_v2", CreatedAt: &now},
-				}
-				// Pad with filtered events to reach 100
-				for len(page1) < 100 {
-					page1 = append(page1, types.TimelineEvent{Event: "subscribed", CreatedAt: &now})
-				}
+	subjectType := "issue"
 
-				// Page 2: more valid events - 3 more valid events
-				page2 := []types.TimelineEvent{
-					{Event: "reviewed", CreatedAt: &now},
-					{Event: "committed", CreatedAt: &now},
-					{Event: "merged", CreatedAt: &now},
-					{Event: "subscribed", CreatedAt: &now},
-					{Event: "added_to_project_v2", CreatedAt: &now},
-				}
-				// Pad with filtered events to reach 100
-				for len(page2) < 100 {
-					page2 = append(page2, types.TimelineEvent{Event: "subscribed", CreatedAt: &now})
-				}
+	t.Run("returns all events from single page", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		client := githubmocks.NewMockClient(ctrl)
+		subjectInfo := &types.SubjectInfo{Owner: "o", Repo: "r", Number: 1}
 
-				return [][]types.TimelineEvent{page1, page2}
-			}(),
-			perPage:       3,
-			page:          1,
-			expectedCount: 3, // Should return first 3 valid events (perPage limit)
-			description:   "should fetch multiple GitHub pages to satisfy the filtered result count",
-		},
-		{
-			name: "handles pagination correctly",
-			timelinePages: func() [][]types.TimelineEvent {
-				// Need 100 events so service doesn't stop early
-				page1 := []types.TimelineEvent{
-					{Event: "commented", CreatedAt: &now},
-					{Event: "reviewed", CreatedAt: &now},
-					{Event: "subscribed", CreatedAt: &now},
-					{Event: "committed", CreatedAt: &now},
-					{Event: "added_to_project_v2", CreatedAt: &now},
-					{Event: "merged", CreatedAt: &now},
-					{Event: "closed", CreatedAt: &now},
-					{Event: "reopened", CreatedAt: &now},
-				}
-				// Pad with filtered events to reach 100
-				for len(page1) < 100 {
-					page1 = append(page1, types.TimelineEvent{Event: "subscribed", CreatedAt: &now})
-				}
-				return [][]types.TimelineEvent{page1}
-			}(),
-			perPage:       3,
-			page:          2,
-			expectedCount: 3, // Should return items 4-6 (page 2, perPage 3)
-			description:   "should fetch enough events for the requested page and apply pagination",
-		},
-	}
+		events := []types.TimelineEvent{
+			{Event: "commented", CreatedAt: &now},
+			{Event: "reviewed", CreatedAt: &now},
+			{Event: "committed", CreatedAt: &now},
+		}
+		// Single page: page 1 discovers lastPage=1 and returns data in one call
+		client.EXPECT().
+			FetchTimeline(ctx, "o", "r", 1, 30, 1).
+			Return(events, 1, nil).
+			Times(1)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
+		result, err := service.FetchFilteredTimeline(ctx, client, subjectInfo, subjectType, 10, 1)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(result.Items) != 3 {
+			t.Errorf("expected 3 items, got %d", len(result.Items))
+		}
+	})
 
-			client := githubmocks.NewMockClient(ctrl)
-			subjectInfo := &types.SubjectInfo{
-				Owner:  "test-owner",
-				Repo:   "test-repo",
-				Number: 123,
-			}
+	t.Run("fetches pages backwards when multi-page", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		client := githubmocks.NewMockClient(ctrl)
+		subjectInfo := &types.SubjectInfo{Owner: "o", Repo: "r", Number: 1}
 
-			// Set up mock expectations for all pages we have data for
-			for page := 1; page <= len(tt.timelinePages); page++ {
-				events := tt.timelinePages[page-1]
-				client.EXPECT().
-					FetchTimeline(ctx, subjectInfo.Owner, subjectInfo.Repo, subjectInfo.Number, 100, page).
-					Return(events, nil).
-					AnyTimes()
-			}
+		page1Events := []types.TimelineEvent{
+			{Event: "commented", CreatedAt: &now},
+		}
+		page2Events := []types.TimelineEvent{
+			{Event: "committed", CreatedAt: &now},
+			{Event: "merged", CreatedAt: &now},
+		}
 
-			// Set up expectations for pages beyond what we have data for
-			for page := len(tt.timelinePages) + 1; page <= 10; page++ {
-				client.EXPECT().
-					FetchTimeline(ctx, subjectInfo.Owner, subjectInfo.Repo, subjectInfo.Number, 100, page).
-					Return([]types.TimelineEvent{}, nil).
-					AnyTimes()
-			}
+		// Page 1 probe returns lastPage=2
+		call1 := client.EXPECT().
+			FetchTimeline(ctx, "o", "r", 1, 30, 1).
+			Return(nil, 2, nil).
+			Times(1)
+		// Fetch page 2 (newest)
+		call2 := client.EXPECT().
+			FetchTimeline(ctx, "o", "r", 1, 30, 2).
+			Return(page2Events, 2, nil).
+			Times(1).
+			After(call1)
+		// Fetch page 1 (oldest)
+		client.EXPECT().
+			FetchTimeline(ctx, "o", "r", 1, 30, 1).
+			Return(page1Events, 2, nil).
+			Times(1).
+			After(call2)
 
-			// If no pages provided, service will try page 1 and get empty result
-			if len(tt.timelinePages) == 0 {
-				client.EXPECT().
-					FetchTimeline(ctx, subjectInfo.Owner, subjectInfo.Repo, subjectInfo.Number, 100, 1).
-					Return([]types.TimelineEvent{}, nil).
-					Times(1)
-			}
+		result, err := service.FetchFilteredTimeline(ctx, client, subjectInfo, subjectType, 10, 1)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(result.Items) != 3 {
+			t.Errorf("expected 3 items, got %d", len(result.Items))
+		}
+	})
 
-			result, err := service.FetchFilteredTimeline(
-				ctx,
-				client,
-				subjectInfo,
-				"issue", // subject type for test
-				tt.perPage,
-				tt.page,
-			)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+	t.Run("skips events without timestamps", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		client := githubmocks.NewMockClient(ctrl)
+		subjectInfo := &types.SubjectInfo{Owner: "o", Repo: "r", Number: 1}
 
-			if len(result.Items) != tt.expectedCount {
-				t.Errorf(
-					"%s: expected %d events, got %d",
-					tt.description,
-					tt.expectedCount,
-					len(result.Items),
-				)
-			}
+		events := []types.TimelineEvent{
+			{Event: "commented", CreatedAt: &now},
+			{Event: "labeled"}, // No timestamp
+			{Event: "committed", CreatedAt: &now},
+		}
+		client.EXPECT().
+			FetchTimeline(ctx, "o", "r", 1, 30, 1).
+			Return(events, 1, nil).
+			Times(1)
 
-			// Verify no filtered events are present
-			for _, item := range result.Items {
-				if timeline.FilteredEventTypes[item.Event] {
-					t.Errorf("%s: found filtered event type '%s'", tt.description, item.Event)
-				}
-			}
-
-			// Verify pagination metadata
-			if result.Page != tt.page {
-				t.Errorf("expected page %d, got %d", tt.page, result.Page)
-			}
-			if result.PerPage != tt.perPage {
-				t.Errorf("expected perPage %d, got %d", tt.perPage, result.PerPage)
-			}
-		})
-	}
+		result, err := service.FetchFilteredTimeline(ctx, client, subjectInfo, subjectType, 10, 1)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(result.Items) != 2 {
+			t.Errorf("expected 2 items, got %d", len(result.Items))
+		}
+	})
 }

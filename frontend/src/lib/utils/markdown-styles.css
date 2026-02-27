@@ -220,6 +220,20 @@ code.hljs {
 	line-height: 1.6;
 }
 
+/* @mention highlighting - solid blue pill */
+.mention {
+	font-weight: 500;
+	color: #ffffff;
+	background-color: #1d4ed8;
+	border-radius: 0.25rem;
+	padding: 0.05em 0.25em;
+}
+
+.dark .mention {
+	color: #ffffff;
+	background-color: #2563eb;
+}
+
 /* Ensure proper block display for code containers */
 .prose pre.hljs {
 	display: block;
