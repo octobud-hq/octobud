@@ -93,17 +93,23 @@ function getGroupSummary(group: TimelineGroup): SummaryPart[] {
 		}
 		case "review_requested": {
 			const names = items.map((i) => i.requestedReviewer).filter(Boolean) as string[];
-			return [
-				{ text: `requested review${items.length > 1 ? "s" : ""} from ` },
-				...mentionList(names),
-			];
+			if (names.length > 0) {
+				return [
+					{ text: `requested review${items.length > 1 ? "s" : ""} from ` },
+					...mentionList(names),
+				];
+			}
+			return [{ text: `requested ${items.length} review${items.length > 1 ? "s" : ""}` }];
 		}
 		case "review_request_removed": {
 			const names = items.map((i) => i.requestedReviewer).filter(Boolean) as string[];
-			return [
-				{ text: `removed review request${items.length > 1 ? "s" : ""} from ` },
-				...mentionList(names),
-			];
+			if (names.length > 0) {
+				return [
+					{ text: `removed review request${items.length > 1 ? "s" : ""} from ` },
+					...mentionList(names),
+				];
+			}
+			return [{ text: `removed ${items.length} review request${items.length > 1 ? "s" : ""}` }];
 		}
 		default:
 			return [{ text: `${items.length} events` }];

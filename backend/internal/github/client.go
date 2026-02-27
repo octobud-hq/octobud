@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -182,7 +183,7 @@ func (c *clientImpl) fetchNotificationPage(
 	since, before *time.Time,
 ) ([]types.NotificationThread, error) {
 	// Build URL with query parameters
-	url := fmt.Sprintf(
+	reqURL := fmt.Sprintf(
 		"%s/notifications?all=%t&per_page=%d&page=%d",
 		c.baseURL,
 		fetchAll,
@@ -190,13 +191,13 @@ func (c *clientImpl) fetchNotificationPage(
 		page,
 	)
 	if since != nil {
-		url += "&since=" + since.UTC().Format(time.RFC3339)
+		reqURL += "&since=" + since.UTC().Format(time.RFC3339)
 	}
 	if before != nil {
-		url += "&before=" + before.UTC().Format(time.RFC3339)
+		reqURL += "&before=" + before.UTC().Format(time.RFC3339)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "GET", url, http.NoBody)
+	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("github: create request: %w", err)
 	}
@@ -422,10 +423,10 @@ func (c *clientImpl) FetchIssueComments(
 	owner, repo string,
 	number, perPage, page int,
 ) ([]types.IssueComment, error) {
-	url := fmt.Sprintf("%s/repos/%s/%s/issues/%d/comments?per_page=%d&page=%d",
+	reqURL := fmt.Sprintf("%s/repos/%s/%s/issues/%d/comments?per_page=%d&page=%d",
 		c.baseURL, owner, repo, number, perPage, page)
 
-	req, err := http.NewRequestWithContext(ctx, "GET", url, http.NoBody)
+	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("github: create comments request: %w", err)
 	}
@@ -468,10 +469,10 @@ func (c *clientImpl) FetchPullRequestReviews(
 	owner, repo string,
 	number, perPage, page int,
 ) ([]types.PullRequestReview, error) {
-	url := fmt.Sprintf("%s/repos/%s/%s/pulls/%d/reviews?per_page=%d&page=%d",
+	reqURL := fmt.Sprintf("%s/repos/%s/%s/pulls/%d/reviews?per_page=%d&page=%d",
 		c.baseURL, owner, repo, number, perPage, page)
 
-	req, err := http.NewRequestWithContext(ctx, "GET", url, http.NoBody)
+	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("github: create reviews request: %w", err)
 	}
@@ -514,10 +515,10 @@ func (c *clientImpl) FetchPullRequestComments(
 	owner, repo string,
 	number, perPage, page int,
 ) ([]types.PullRequestComment, error) {
-	url := fmt.Sprintf("%s/repos/%s/%s/pulls/%d/comments?per_page=%d&page=%d",
+	reqURL := fmt.Sprintf("%s/repos/%s/%s/pulls/%d/comments?per_page=%d&page=%d",
 		c.baseURL, owner, repo, number, perPage, page)
 
-	req, err := http.NewRequestWithContext(ctx, "GET", url, http.NoBody)
+	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("github: create pull comments request: %w", err)
 	}
@@ -567,14 +568,13 @@ func parseLinkHeader(header string) int {
 			continue
 		}
 		rawURL := strings.TrimPrefix(part[:urlEnd], "<")
-		if idx := strings.Index(rawURL, "page="); idx >= 0 {
-			pageStr := rawURL[idx+5:]
-			if amp := strings.Index(pageStr, "&"); amp >= 0 {
-				pageStr = pageStr[:amp]
-			}
-			if n, err := strconv.Atoi(pageStr); err == nil && n > 0 {
-				return n
-			}
+		parsed, err := url.Parse(rawURL)
+		if err != nil {
+			continue
+		}
+		pageStr := parsed.Query().Get("page")
+		if n, err := strconv.Atoi(pageStr); err == nil && n > 0 {
+			return n
 		}
 	}
 	return 1
@@ -588,10 +588,10 @@ func (c *clientImpl) FetchTimeline(
 	owner, repo string,
 	number, perPage, page int,
 ) ([]types.TimelineEvent, int, error) {
-	url := fmt.Sprintf("%s/repos/%s/%s/issues/%d/timeline?per_page=%d&page=%d",
+	reqURL := fmt.Sprintf("%s/repos/%s/%s/issues/%d/timeline?per_page=%d&page=%d",
 		c.baseURL, owner, repo, number, perPage, page)
 
-	req, err := http.NewRequestWithContext(ctx, "GET", url, http.NoBody)
+	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, http.NoBody)
 	if err != nil {
 		return nil, 1, fmt.Errorf("github: create timeline request: %w", err)
 	}

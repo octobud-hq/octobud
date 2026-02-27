@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+Major timeline updates: 
+
+- **PR review comments**: Inline review comments are fetched and displayed alongside their corresponding review event in the timeline
+- **Discussion comment replies**: Discussion timelines now show threaded replies beneath each comment
+- **Cross-reference sources**: Cross-referenced events now display the linked issue or PR with title, number, and state
+- **Event grouping**: Consecutive events of the same type (labels, assignments, review requests) are grouped into a single compact row
 - **Live timeline refresh**: When viewing a notification's timeline, new activity from polling is automatically appended without requiring a page refresh
 - **"New activity" indicator**: A divider line and floating button appear when unseen timeline items arrive, with smooth scroll-to and auto-dismiss on scroll
 - **Timeline last-seen tracking**: Tracks the last-seen timeline timestamp per notification so the "New activity" indicator persists across sessions
@@ -17,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Fixed and improved backend timeline fetching
+- Discussion timelines now report `hasMore` when there are more than 100 comments
 - Service worker `NEW_NOTIFICATIONS` messages now include `githubIds` so the frontend can target refreshes to the currently-open notification
 - Timeline deduplication uses composite keys (`type-timestamp` fallback) to handle events with null IDs (e.g., commits, merges)
 

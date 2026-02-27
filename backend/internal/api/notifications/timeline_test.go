@@ -75,23 +75,18 @@ func TestFetchAndFilterTimelineEvents(t *testing.T) {
 			{Event: "merged", CreatedAt: &now},
 		}
 
-		// Page 1 probe returns lastPage=2
+		// Page 1 probe returns page1Events and lastPage=2
 		call1 := client.EXPECT().
 			FetchTimeline(ctx, "o", "r", 1, 30, 1).
-			Return(nil, 2, nil).
+			Return(page1Events, 2, nil).
 			Times(1)
 		// Fetch page 2 (newest)
-		call2 := client.EXPECT().
+		client.EXPECT().
 			FetchTimeline(ctx, "o", "r", 1, 30, 2).
 			Return(page2Events, 2, nil).
 			Times(1).
 			After(call1)
-		// Fetch page 1 (oldest)
-		client.EXPECT().
-			FetchTimeline(ctx, "o", "r", 1, 30, 1).
-			Return(page1Events, 2, nil).
-			Times(1).
-			After(call2)
+		// Page 1 is reused from probe — no second fetch
 
 		result, err := service.FetchFilteredTimeline(ctx, client, subjectInfo, subjectType, 10, 1)
 		if err != nil {

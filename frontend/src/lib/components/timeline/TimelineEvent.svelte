@@ -142,6 +142,15 @@
 					textClass: "text-white",
 					iconClass: "text-white",
 				};
+			case "convert_to_draft":
+				return {
+					label: "Converted to draft",
+					iconPath: getIconPath("git-pull-request-draft"),
+					useIcon: true,
+					bgClass: "bg-gray-600",
+					textClass: "text-white",
+					iconClass: "text-white",
+				};
 			case "marked_as_duplicate":
 				return {
 					label: "Marked as duplicate",
@@ -211,15 +220,6 @@
 					iconPath: getIconPath("issue-reopened"),
 					useIcon: true,
 					bgClass: "bg-green-600",
-					textClass: "text-white",
-					iconClass: "text-white",
-				};
-			case "converted_to_draft":
-				return {
-					label: "Converted to draft",
-					iconPath: getIconPath("git-pull-request-draft"),
-					useIcon: true,
-					bgClass: "bg-gray-600",
 					textClass: "text-white",
 					iconClass: "text-white",
 				};
@@ -318,7 +318,7 @@
 				return "mentioned this";
 			case "ready_for_review":
 				return "marked as ready for review";
-			case "converted_to_draft":
+			case "convert_to_draft":
 				return "converted to draft";
 			case "deployed":
 				return "deployed this";

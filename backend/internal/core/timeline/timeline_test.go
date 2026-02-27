@@ -170,21 +170,17 @@ func TestFetchFilteredTimeline_FetchesMorePages(t *testing.T) {
 		{Event: "reviewed", CreatedAt: &t1},
 	}
 
-	// Page 1 probe returns lastPage=2
+	// Page 1 probe returns page1Events and lastPage=2
 	client.EXPECT().
 		FetchTimeline(ctx, "o", "r", 1, 30, 1).
-		Return(nil, 2, nil).
+		Return(page1Events, 2, nil).
 		Times(1)
 	// Fetch page 2 (newest) — all filtered, 0 valid items
 	client.EXPECT().
 		FetchTimeline(ctx, "o", "r", 1, 30, 2).
 		Return(page2Events, 2, nil).
 		Times(1)
-	// Fetch page 1 — 2 valid items
-	client.EXPECT().
-		FetchTimeline(ctx, "o", "r", 1, 30, 1).
-		Return(page1Events, 2, nil).
-		Times(1)
+	// Page 1 is reused from probe — no second fetch
 
 	result, err := service.FetchFilteredTimeline(ctx, client, subjectInfo, subjectType, 10, 1)
 	if err != nil {
@@ -195,6 +191,55 @@ func TestFetchFilteredTimeline_FetchesMorePages(t *testing.T) {
 	}
 	if result.HasMore {
 		t.Error("expected hasMore=false (all pages fetched)")
+	}
+}
+
+func TestFetchFilteredTimeline_CapsToNewestPages(t *testing.T) {
+	ctx := context.Background()
+	now := time.Now()
+	service := NewService(zap.NewNop())
+	subjectType := "issue"
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	client := githubmocks.NewMockClient(ctrl)
+	subjectInfo := &types.SubjectInfo{Owner: "o", Repo: "r", Number: 1}
+
+	makeEvents := func(n int) []types.TimelineEvent {
+		events := make([]types.TimelineEvent, n)
+		for i := range events {
+			ts := now.Add(-time.Duration(i) * time.Minute)
+			events[i] = types.TimelineEvent{Event: "commented", CreatedAt: &ts}
+		}
+		return events
+	}
+
+	// Page 1 probe discovers lastPage=12 (exceeds restMaxPages=10)
+	client.EXPECT().
+		FetchTimeline(ctx, "o", "r", 1, 30, 1).
+		Return(makeEvents(5), 12, nil).
+		Times(1)
+
+	// Should fetch pages 12 down to 3 (stopPage = 12 - 10 + 1 = 3), skipping pages 2 and 1.
+	// Each page returns 5 events; needed = 10*100 = 1000 so we won't early-stop.
+	for p := 12; p >= 3; p-- {
+		client.EXPECT().
+			FetchTimeline(ctx, "o", "r", 1, 30, p).
+			Return(makeEvents(5), 12, nil).
+			Times(1)
+	}
+	// Pages 2 and 1 should NOT be fetched (page 1 probe is not reused since stopPage=3)
+
+	result, err := service.FetchFilteredTimeline(ctx, client, subjectInfo, subjectType, 100, 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// 10 pages * 5 events = 50 items
+	if len(result.Items) != 50 {
+		t.Errorf("expected 50 items, got %d", len(result.Items))
+	}
+	if !result.HasMore {
+		t.Error("expected hasMore=true (pages capped, older pages remain)")
 	}
 }
 

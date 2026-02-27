@@ -24,6 +24,25 @@
 	const commentIconPath = getIconPath("comment-discussion");
 	$: chevronPath = getIconPath(expanded ? "chevron-down" : "chevron-right");
 
+	function escapeHtml(text: string): string {
+		return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+	}
+
+	function formatDiffHunk(diffHunk: string): string {
+		return diffHunk
+			.split("\n")
+			.slice(-3)
+			.map((line) => {
+				const escaped = escapeHtml(line);
+				if (line.startsWith("+"))
+					return `<span class="text-green-700 dark:text-green-400">${escaped}</span>`;
+				if (line.startsWith("-"))
+					return `<span class="text-red-700 dark:text-red-400">${escaped}</span>`;
+				return escaped;
+			})
+			.join("\n");
+	}
+
 	function formatTimestamp(ts?: string): string {
 		if (!ts) return "";
 		const date = new Date(ts);
@@ -35,6 +54,7 @@
 <div class="mt-2 border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden">
 	<button
 		class="flex items-center gap-1.5 w-full px-3 py-2 text-xs text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors cursor-pointer"
+		aria-expanded={expanded}
 		on:click={() => (expanded = !expanded)}
 	>
 		<svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" class="flex-shrink-0">
@@ -103,14 +123,9 @@
 						class="border-b border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50 overflow-x-auto"
 					>
 						<pre
-							class="text-xs font-mono px-3 py-2 text-gray-600 dark:text-gray-400 leading-relaxed whitespace-pre">{#each comment.diffHunk
-								.split("\n")
-								.slice(-3) as line, i (i)}{#if line.startsWith("+")}<span
-										class="text-green-700 dark:text-green-400">{line}</span
-									>{:else if line.startsWith("-")}<span class="text-red-700 dark:text-red-400"
-										>{line}</span
-									>{:else}{line}{/if}
-							{/each}</pre>
+							class="text-xs font-mono px-3 py-2 text-gray-600 dark:text-gray-400 leading-relaxed whitespace-pre">{@html formatDiffHunk(
+								comment.diffHunk
+							)}</pre>
 					</div>
 				{/if}
 

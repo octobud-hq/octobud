@@ -1501,3 +1501,59 @@ func itoa(n int) string {
 	}
 	return result
 }
+
+func TestParseLinkHeader(t *testing.T) {
+	tests := []struct {
+		name     string
+		header   string
+		expected int
+	}{
+		{
+			name:     "standard last link with per_page before page",
+			header:   `<https://api.github.com/repos/o/r/issues/1/timeline?per_page=30&page=5>; rel="last"`,
+			expected: 5,
+		},
+		{
+			name:     "page before per_page",
+			header:   `<https://api.github.com/repos/o/r/issues/1/timeline?page=7&per_page=30>; rel="last"`,
+			expected: 7,
+		},
+		{
+			name:     "multiple rels with next and last",
+			header:   `<https://api.github.com/repos/o/r/issues/1/timeline?per_page=30&page=2>; rel="next", <https://api.github.com/repos/o/r/issues/1/timeline?per_page=30&page=12>; rel="last"`,
+			expected: 12,
+		},
+		{
+			name:     "empty header",
+			header:   "",
+			expected: 1,
+		},
+		{
+			name:     "no last rel",
+			header:   `<https://api.github.com/repos/o/r/issues/1/timeline?per_page=30&page=2>; rel="next"`,
+			expected: 1,
+		},
+		{
+			name:     "malformed URL",
+			header:   `<:not-a-url>; rel="last"`,
+			expected: 1,
+		},
+		{
+			name:     "missing page param",
+			header:   `<https://api.github.com/repos/o/r/issues/1/timeline?per_page=30>; rel="last"`,
+			expected: 1,
+		},
+		{
+			name:     "page=0",
+			header:   `<https://api.github.com/repos/o/r/issues/1/timeline?page=0>; rel="last"`,
+			expected: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := parseLinkHeader(tt.header)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}

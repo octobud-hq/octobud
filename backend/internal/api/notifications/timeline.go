@@ -19,7 +19,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -55,6 +54,9 @@ func (h *Handler) handleGetNotificationTimeline( //nolint:gocyclo // This is a c
 	if perPageStr != "" {
 		if val, err := strconv.Atoi(perPageStr); err == nil && val > 0 {
 			perPage = val
+			if perPage > 100 {
+				perPage = 100
+			}
 		}
 	}
 
@@ -120,11 +122,7 @@ func (h *Handler) handleGetNotificationTimeline( //nolint:gocyclo // This is a c
 			zap.String("subject_url", subjectURL),
 			zap.Error(errors.Join(ErrFailedToParseSubjectInfo, err)),
 		)
-		helpers.WriteError(
-			w,
-			http.StatusBadRequest,
-			fmt.Sprintf("could not parse subject info: %v", err),
-		)
+		helpers.WriteError(w, http.StatusBadRequest, "invalid notification subject")
 		return
 	}
 

@@ -42,52 +42,50 @@
 			{/if}
 
 			<div class="border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden">
-			<div class="divide-y divide-gray-100 dark:divide-gray-800">
-				{#each replies as reply (reply.id)}
-					{@const avatarUrl = computeAvatarUrl(reply.author.avatarUrl, reply.author.login)}
-					<div class="px-4 py-3 flex gap-2.5">
-						<!-- Reply avatar (smaller) -->
-						<div class="flex-shrink-0">
-							{#if avatarUrl}
-								<img
-									src={avatarUrl}
-									alt={`${reply.author.login}'s avatar`}
-									class="h-6 w-6 rounded-full bg-gray-300 dark:bg-gray-700"
-								/>
-							{:else}
-								<div
-									class="h-6 w-6 rounded-full bg-gray-300 dark:bg-gray-700 flex items-center justify-center"
-								>
-									<span class="text-[10px] font-bold text-gray-800 dark:text-gray-300">
-										{reply.author.login.charAt(0).toUpperCase()}
-									</span>
-								</div>
-							{/if}
-						</div>
-
-						<!-- Reply content -->
-						<div class="flex-1 min-w-0">
-							<div
-								class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mb-1"
-							>
-								<span class="font-semibold text-gray-700 dark:text-gray-300"
-									>{reply.author.login}</span
-								>
-								{#if reply.createdAt}
-									<span>{formatTimestamp(reply.createdAt)}</span>
+				<div class="divide-y divide-gray-100 dark:divide-gray-800">
+					{#each replies as reply (reply.id)}
+						{@const avatarUrl = computeAvatarUrl(reply.author.avatarUrl, reply.author.login)}
+						<div class="px-4 py-3 flex gap-2.5">
+							<!-- Reply avatar (smaller) -->
+							<div class="flex-shrink-0">
+								{#if avatarUrl}
+									<img
+										src={avatarUrl}
+										alt={`${reply.author.login}'s avatar`}
+										class="h-6 w-6 rounded-full bg-gray-300 dark:bg-gray-700"
+									/>
+								{:else}
+									<div
+										class="h-6 w-6 rounded-full bg-gray-300 dark:bg-gray-700 flex items-center justify-center"
+									>
+										<span class="text-[10px] font-bold text-gray-800 dark:text-gray-300">
+											{reply.author.login.charAt(0).toUpperCase()}
+										</span>
+									</div>
 								{/if}
 							</div>
-							<div
-								class="prose dark:prose-invert prose-sm max-w-none prose-p:text-gray-700 dark:prose-p:text-gray-400 prose-p:my-0.5 text-sm"
-							>
-								<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-								{@html renderMarkdown(reply.body)}
+
+							<!-- Reply content -->
+							<div class="flex-1 min-w-0">
+								<div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mb-1">
+									<span class="font-semibold text-gray-700 dark:text-gray-300"
+										>{reply.author.login}</span
+									>
+									{#if reply.createdAt}
+										<span>{formatTimestamp(reply.createdAt)}</span>
+									{/if}
+								</div>
+								<div
+									class="prose dark:prose-invert prose-sm max-w-none prose-p:text-gray-700 dark:prose-p:text-gray-400 prose-p:my-0.5 text-sm"
+								>
+									<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+									{@html renderMarkdown(reply.body)}
+								</div>
 							</div>
 						</div>
-					</div>
-				{/each}
+					{/each}
+				</div>
 			</div>
-		</div>
 		</div>
 	</div>
 </div>

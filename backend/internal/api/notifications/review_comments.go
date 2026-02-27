@@ -19,7 +19,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -91,11 +90,7 @@ func (h *Handler) handleGetReviewComments(
 			zap.String("github_id", githubID),
 			zap.Error(errors.Join(ErrFailedToParseSubjectInfo, err)),
 		)
-		helpers.WriteError(
-			w,
-			http.StatusBadRequest,
-			fmt.Sprintf("could not parse subject info: %v", err),
-		)
+		helpers.WriteError(w, http.StatusBadRequest, "invalid notification subject")
 		return
 	}
 

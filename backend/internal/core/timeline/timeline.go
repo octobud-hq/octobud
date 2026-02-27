@@ -138,7 +138,12 @@ func (s *Service) FetchFilteredTimeline(
 
 	if normalizedType == "discussion" {
 		// Discussions: fetch all via GraphQL, sort, paginate client-side
-		allItems, err = fetchDiscussionTimelineEvents(ctx, s.logger, client, subjectInfo)
+		allItems, hasMorePages, err = fetchDiscussionTimelineEvents(
+			ctx,
+			s.logger,
+			client,
+			subjectInfo,
+		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch timeline events: %w", err)
 		}
@@ -239,26 +244,34 @@ func fetchRESTTimelineEvents(
 		return items, false, nil
 	}
 
-	// Multi-page: fetch from lastPage backwards to collect newest events first
+	// Multi-page: fetch from lastPage backwards to collect newest events first.
+	// Cap total pages fetched but always start from lastPage (newest).
 	var allItems []models.TimelineItem
 	hasMorePages := false
 	startPage := lastPage
+	stopPage := 1
 
-	// Cap to safety limit
-	if startPage > restMaxPages {
-		startPage = restMaxPages
-		hasMorePages = true // We're capping, so there are definitely more pages
+	if lastPage > restMaxPages {
+		stopPage = lastPage - restMaxPages + 1
+		hasMorePages = true // We're capping, so older pages remain unfetched
 	}
 
-	for p := startPage; p >= 1; p-- {
-		events, _, err := client.FetchTimeline(
-			ctx, subjectInfo.Owner, subjectInfo.Repo, subjectInfo.Number,
-			restMaxPerPage, p,
-		)
-		if err != nil {
-			logger.Warn("failed to fetch timeline page",
-				zap.Int("page", p), zap.Error(err))
-			continue
+	for p := startPage; p >= stopPage; p-- {
+		// Reuse probe result for page 1 instead of re-fetching
+		var events []types.TimelineEvent
+		if p == 1 {
+			events = firstPageEvents
+		} else {
+			var err error
+			events, _, err = client.FetchTimeline(
+				ctx, subjectInfo.Owner, subjectInfo.Repo, subjectInfo.Number,
+				restMaxPerPage, p,
+			)
+			if err != nil {
+				logger.Warn("failed to fetch timeline page",
+					zap.Int("page", p), zap.Error(err))
+				continue
+			}
 		}
 
 		logger.Debug(
@@ -282,7 +295,7 @@ func fetchRESTTimelineEvents(
 		}
 
 		// Stop if we have enough items
-		if len(allItems) >= needed && p > 1 {
+		if len(allItems) >= needed && p > stopPage {
 			hasMorePages = true
 			break
 		}
@@ -308,7 +321,7 @@ func fetchDiscussionTimelineEvents(
 	logger *zap.Logger,
 	client githubinterfaces.Client,
 	subjectInfo *types.SubjectInfo,
-) ([]models.TimelineItem, error) {
+) ([]models.TimelineItem, bool, error) {
 	const maxCommentsToFetch = 100 // GitHub GraphQL caps `last` at 100
 
 	logger.Debug(
@@ -335,7 +348,7 @@ func fetchDiscussionTimelineEvents(
 			zap.Int("number", subjectInfo.Number),
 			zap.Error(err),
 		)
-		return nil, fmt.Errorf("failed to fetch discussion timeline events: %w", err)
+		return nil, false, fmt.Errorf("failed to fetch discussion timeline events: %w", err)
 	}
 
 	logger.Debug(
@@ -364,7 +377,7 @@ func fetchDiscussionTimelineEvents(
 		zap.Int("total_items", len(allItems)),
 	)
 
-	return allItems, nil
+	return allItems, hasNextPage, nil
 }
 
 // convertTimelineEvent converts a GitHub timeline event to a normalized TimelineItem.
@@ -409,33 +422,8 @@ func convertTimelineEvent(event types.TimelineEvent) *models.TimelineItem {
 		item.RenameTo = event.Rename.To
 	}
 
-	// Cross-reference source: parse from REST JSON (SourceRaw) or use pre-parsed Source
-	if event.SourceRaw != nil {
-		var restSource struct {
-			Type  string `json:"type"`
-			Issue *struct {
-				Number  int    `json:"number"`
-				Title   string `json:"title"`
-				HTMLURL string `json:"html_url"`
-				State   string `json:"state"`
-			} `json:"issue"`
-		}
-		if json.Unmarshal(event.SourceRaw, &restSource) == nil && restSource.Issue != nil {
-			sourceType := "Issue"
-			if strings.Contains(restSource.Issue.HTMLURL, "/pull/") {
-				sourceType = "PullRequest"
-			}
-			item.SourceType = sourceType
-			item.SourceNumber = restSource.Issue.Number
-			item.SourceTitle = restSource.Issue.Title
-			item.SourceHTMLURL = restSource.Issue.HTMLURL
-		}
-	} else if event.Source != nil {
-		item.SourceType = event.Source.Type
-		item.SourceNumber = event.Source.Number
-		item.SourceTitle = event.Source.Title
-		item.SourceHTMLURL = event.Source.HTMLURL
-	}
+	// Cross-reference source
+	setCrossReferenceSource(item, event)
 
 	// Discussion replies
 	if len(event.Replies) > 0 {
@@ -474,4 +462,35 @@ func convertTimelineEvent(event types.TimelineEvent) *models.TimelineItem {
 	}
 
 	return item
+}
+
+// setCrossReferenceSource parses cross-reference source data from REST JSON (SourceRaw)
+// or uses the pre-parsed Source field (GraphQL).
+func setCrossReferenceSource(item *models.TimelineItem, event types.TimelineEvent) {
+	if event.Event == "cross-referenced" && event.SourceRaw != nil {
+		var restSource struct {
+			Type  string `json:"type"`
+			Issue *struct {
+				Number  int    `json:"number"`
+				Title   string `json:"title"`
+				HTMLURL string `json:"html_url"`
+				State   string `json:"state"`
+			} `json:"issue"`
+		}
+		if json.Unmarshal(event.SourceRaw, &restSource) == nil && restSource.Issue != nil {
+			sourceType := "Issue"
+			if strings.Contains(restSource.Issue.HTMLURL, "/pull/") {
+				sourceType = "PullRequest"
+			}
+			item.SourceType = sourceType
+			item.SourceNumber = restSource.Issue.Number
+			item.SourceTitle = restSource.Issue.Title
+			item.SourceHTMLURL = restSource.Issue.HTMLURL
+		}
+	} else if event.Source != nil {
+		item.SourceType = event.Source.Type
+		item.SourceNumber = event.Source.Number
+		item.SourceTitle = event.Source.Title
+		item.SourceHTMLURL = event.Source.HTMLURL
+	}
 }
