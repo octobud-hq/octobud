@@ -101,6 +101,10 @@
 		isLoadingMore.set(true);
 		try {
 			await loadTimeline(githubId, 10);
+			// Ensure review comments are loaded for PRs (no-op if already fetched)
+			if (subjectType === "pull_request") {
+				loadReviewComments(githubId);
+			}
 			await tick();
 		} finally {
 			isLoadingMore.set(false);

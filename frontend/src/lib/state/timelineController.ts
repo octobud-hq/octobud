@@ -301,7 +301,13 @@ export function createTimelineController(): TimelineController {
 	 * Designed to be fired in parallel with timeline loading — when results arrive,
 	 * they are merged into existing items (or cached for when items arrive).
 	 */
-	async function loadReviewComments(githubId: string): Promise<void> {
+	async function loadReviewComments(githubId: string, force: boolean = false): Promise<void> {
+		// Skip if already fetched (unless forced)
+		if (reviewCommentsData && !force) {
+			mergeReviewComments();
+			return;
+		}
+
 		try {
 			const data = await fetchReviewComments(githubId);
 

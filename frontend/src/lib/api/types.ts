@@ -268,7 +268,7 @@ export type TimelineEventType =
 	| "review_requested" // Review requested
 	| "review_request_removed" // Review request removed
 	| "ready_for_review" // Draft PR marked ready
-	| "converted_to_draft" // PR converted to draft
+	| "convert_to_draft" // PR converted to draft
 	| "deployed" // Deployment
 	| "referenced" // Referenced from another issue/PR
 	| "cross-referenced" // Cross-referenced
