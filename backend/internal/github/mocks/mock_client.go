@@ -90,6 +90,21 @@ func (mr *MockClientMockRecorder) FetchNotifications(ctx, since, before, unreadO
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FetchNotifications", reflect.TypeOf((*MockClient)(nil).FetchNotifications), ctx, since, before, unreadOnly)
 }
 
+// FetchPRCommits mocks base method.
+func (m *MockClient) FetchPRCommits(ctx context.Context, owner, repo string, number int) ([]types.PRCommit, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FetchPRCommits", ctx, owner, repo, number)
+	ret0, _ := ret[0].([]types.PRCommit)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FetchPRCommits indicates an expected call of FetchPRCommits.
+func (mr *MockClientMockRecorder) FetchPRCommits(ctx, owner, repo, number any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FetchPRCommits", reflect.TypeOf((*MockClient)(nil).FetchPRCommits), ctx, owner, repo, number)
+}
+
 // FetchPullRequestComments mocks base method.
 func (m *MockClient) FetchPullRequestComments(ctx context.Context, owner, repo string, number, perPage, page int) ([]types.PullRequestComment, error) {
 	m.ctrl.T.Helper()

@@ -401,6 +401,9 @@ func convertTimelineEvent(event types.TimelineEvent) *models.TimelineItem {
 	} else if event.Actor != nil {
 		item.AuthorLogin = event.Actor.Login
 		item.AuthorAvatarURL = event.Actor.AvatarURL
+	} else if event.CommitAuthor != nil {
+		// Committed events have a git identity (name/email) instead of a GitHub user
+		item.AuthorLogin = event.CommitAuthor.Name
 	}
 
 	// Set event-specific metadata
@@ -454,6 +457,10 @@ func convertTimelineEvent(event types.TimelineEvent) *models.TimelineItem {
 	} else if event.UpdatedAt != nil {
 		item.Timestamp = *event.UpdatedAt
 		item.UpdatedAt = event.UpdatedAt
+	} else if event.CommitAuthor != nil && event.CommitAuthor.Date != nil {
+		// Committed events store their timestamp in author.date
+		item.Timestamp = *event.CommitAuthor.Date
+		item.CreatedAt = event.CommitAuthor.Date
 	} else {
 		// No timestamp available - skip this event
 		return nil

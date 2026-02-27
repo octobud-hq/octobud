@@ -81,6 +81,13 @@ type SimpleUser struct {
 	HTMLURL   string `json:"html_url"`
 }
 
+// PRCommit represents a commit from the PR commits endpoint.
+// Contains the GitHub user (login + avatar) linked to the git author.
+type PRCommit struct {
+	SHA    string      `json:"sha"`
+	Author *SimpleUser `json:"author"`
+}
+
 // SubjectInfo contains extracted location information about a notification's subject.
 // Used to make GitHub API calls for the subject (e.g., fetching timeline).
 // Note: Subject type should come from the notification's SubjectType field, not from URL parsing.
@@ -110,6 +117,14 @@ type PullRequestReview struct {
 	HTMLURL     string     `json:"html_url"`
 }
 
+// GitIdentity represents a git author/committer identity (name, email, date).
+// Used by "committed" timeline events whose author/committer fields differ from SimpleUser.
+type GitIdentity struct {
+	Name  string     `json:"name"`
+	Email string     `json:"email"`
+	Date  *time.Time `json:"date,omitempty"`
+}
+
 // TimelineEvent represents a single event in a PR/issue timeline.
 type TimelineEvent struct {
 	Event       string          `json:"event"`
@@ -126,6 +141,9 @@ type TimelineEvent struct {
 	HTMLURL     string          `json:"html_url,omitempty"`
 	CommitID    string          `json:"commit_id,omitempty"`  // For some events
 	CommitURL   string          `json:"commit_url,omitempty"` // For some events
+	// Git identity for committed events (different JSON shape from SimpleUser)
+	CommitAuthor    *GitIdentity `json:"author,omitempty"`
+	CommitCommitter *GitIdentity `json:"committer,omitempty"`
 	// Event-specific metadata
 	Assignee          *SimpleUser      `json:"assignee,omitempty"`           // For assigned/unassigned
 	RequestedReviewer *SimpleUser      `json:"requested_reviewer,omitempty"` // For review_requested (user)

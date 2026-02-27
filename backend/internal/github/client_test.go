@@ -1566,6 +1566,14 @@ func TestRequestHeaders(t *testing.T) {
 			},
 			expectedURL: "/repos/owner/repo/issues/1/timeline",
 		},
+		{
+			name: "FetchPRCommits sets correct headers",
+			fetchMethod: func(client *clientImpl, _ *httptest.Server) error {
+				_, err := client.FetchPRCommits(context.Background(), "owner", "repo", 1)
+				return err
+			},
+			expectedURL: "/repos/owner/repo/pulls/1/commits",
+		},
 	}
 
 	for _, tt := range tests {
@@ -1612,6 +1620,118 @@ func itoa(n int) string {
 		result = "-" + result
 	}
 	return result
+}
+
+func TestFetchPRCommits(t *testing.T) {
+	tests := []struct {
+		name           string
+		owner          string
+		repo           string
+		number         int
+		serverStatus   int
+		serverResponse string
+		wantCount      int
+		wantErr        bool
+		errContains    string
+	}{
+		{
+			name:         "successful fetch with authors",
+			owner:        "testowner",
+			repo:         "testrepo",
+			number:       42,
+			serverStatus: http.StatusOK,
+			serverResponse: `[
+				{"sha": "abc1234", "author": {"login": "alice", "avatar_url": "https://avatars.githubusercontent.com/u/1"}},
+				{"sha": "def5678", "author": {"login": "bob", "avatar_url": "https://avatars.githubusercontent.com/u/2"}}
+			]`,
+			wantCount: 2,
+			wantErr:   false,
+		},
+		{
+			name:           "empty commits",
+			owner:          "testowner",
+			repo:           "testrepo",
+			number:         42,
+			serverStatus:   http.StatusOK,
+			serverResponse: `[]`,
+			wantCount:      0,
+			wantErr:        false,
+		},
+		{
+			name:         "commit with nil author",
+			owner:        "testowner",
+			repo:         "testrepo",
+			number:       42,
+			serverStatus: http.StatusOK,
+			serverResponse: `[
+				{"sha": "abc1234", "author": {"login": "alice", "avatar_url": "https://avatars.githubusercontent.com/u/1"}},
+				{"sha": "def5678", "author": null}
+			]`,
+			wantCount: 2,
+			wantErr:   false,
+		},
+		{
+			name:           "not found",
+			owner:          "testowner",
+			repo:           "testrepo",
+			number:         999,
+			serverStatus:   http.StatusNotFound,
+			serverResponse: `{"message": "Not Found"}`,
+			wantErr:        true,
+			errContains:    "pr commits status 404",
+		},
+		{
+			name:           "invalid JSON",
+			owner:          "testowner",
+			repo:           "testrepo",
+			number:         42,
+			serverStatus:   http.StatusOK,
+			serverResponse: `{invalid}`,
+			wantErr:        true,
+			errContains:    "unmarshal pr commits",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(
+				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					expectedPath := "/repos/" + tt.owner + "/" + tt.repo + "/pulls/" + strconv.Itoa(
+						tt.number,
+					) + "/commits"
+					require.Equal(t, expectedPath, r.URL.Path)
+					assert.Equal(t, "Bearer "+testToken, r.Header.Get("Authorization"))
+					assert.Equal(t, "application/vnd.github+json", r.Header.Get("Accept"))
+					assert.Equal(t, "100", r.URL.Query().Get("per_page"))
+
+					w.WriteHeader(tt.serverStatus)
+					_, err := w.Write([]byte(tt.serverResponse))
+					assert.NoError(t, err, "failed to write response in test server")
+				}),
+			)
+			defer server.Close()
+
+			client := newTestClient(server.URL)
+			client.token = testToken
+
+			commits, err := client.FetchPRCommits(
+				context.Background(),
+				tt.owner,
+				tt.repo,
+				tt.number,
+			)
+
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.errContains != "" {
+					require.Contains(t, err.Error(), tt.errContains)
+				}
+			} else {
+				require.NoError(t, err)
+				require.Len(t, commits, tt.wantCount)
+			}
+		})
+	}
 }
 
 func TestParseLinkHeader(t *testing.T) {

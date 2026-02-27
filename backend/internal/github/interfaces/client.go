@@ -65,6 +65,13 @@ type Client interface {
 		owner, repo string,
 		number, perPage, page int,
 	) ([]types.PullRequestComment, error)
+	// FetchPRCommits retrieves commits for a pull request.
+	// Used to enrich "committed" timeline events with GitHub user info (login + avatar).
+	FetchPRCommits(
+		ctx context.Context,
+		owner, repo string,
+		number int,
+	) ([]types.PRCommit, error)
 	// FetchDiscussionComments retrieves comments for a discussion using GraphQL API.
 	// Returns comments as TimelineEvents, hasNextPage, endCursor, and error.
 	// This method converts discussion comments to TimelineEvent format for consistency.

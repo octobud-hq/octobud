@@ -323,22 +323,18 @@
 					>
 						{totalCount} repl{totalCount === 1 ? "y" : "ies"}
 					</div>
+					<DiscussionReplies
+						replies={discussionReplies}
+						{hasMoreReplies}
+						parentHtmlUrl={item.htmlUrl}
+					/>
+				{/if}
+
+				<!-- Inline review comments (inside the card) -->
+				{#if reviewComments?.length}
+					<ReviewComments comments={reviewComments} count={reviewCommentCount} />
 				{/if}
 			</div>
-
-			<!-- Discussion replies (separate container) -->
-			{#if discussionReplies?.length}
-				<DiscussionReplies
-					replies={discussionReplies}
-					{hasMoreReplies}
-					parentHtmlUrl={item.htmlUrl}
-				/>
-			{/if}
-
-			<!-- Inline review comments (outside the card) -->
-			{#if reviewComments?.length}
-				<ReviewComments comments={reviewComments} count={reviewCommentCount} />
-			{/if}
 		</div>
 	</div>
 {/if}

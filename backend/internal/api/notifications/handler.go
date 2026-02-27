@@ -79,6 +79,7 @@ func (h *Handler) Register(r chi.Router) {
 		r.Get("/{githubID}", h.handleGetNotification)
 		r.Get("/{githubID}/timeline", h.handleGetNotificationTimeline)
 		r.Get("/{githubID}/review-comments", h.handleGetReviewComments)
+		r.Get("/{githubID}/pr-commits", h.handleGetPRCommits)
 		r.Post("/{githubID}/refresh-subject", h.handleRefreshNotificationSubject)
 
 		// Bulk operations - MUST come before individual routes to avoid "bulk" being treated as a githubID
