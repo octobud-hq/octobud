@@ -61,6 +61,7 @@ interface UpdateRuleRequest {
 	viewId?: string;
 	actions?: RuleActions;
 	enabled?: boolean;
+	applyToExisting?: boolean;
 }
 
 import { fetchWithAuth, buildApiUrl } from "./fetch";

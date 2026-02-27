@@ -36,6 +36,7 @@
 
 	let showRuleDialog = false;
 	let editingRule: Rule | null = null;
+	let duplicatingRule: Rule | null = null;
 	let ruleDeleteConfirmOpen = false;
 	let ruleDeleting = false;
 	let views: NotificationView[] = [];
@@ -91,13 +92,26 @@
 		} catch (error) {}
 	});
 
+	// Reset duplicatingRule when dialog closes
+	$: if (!showRuleDialog) {
+		duplicatingRule = null;
+	}
+
 	function handleNewRule() {
 		editingRule = null;
+		duplicatingRule = null;
 		showRuleDialog = true;
 	}
 
 	function handleEditRule(rule: Rule) {
 		editingRule = rule;
+		duplicatingRule = null;
+		showRuleDialog = true;
+	}
+
+	function handleDuplicateRule(rule: Rule) {
+		editingRule = null;
+		duplicatingRule = rule;
 		showRuleDialog = true;
 	}
 
@@ -555,7 +569,7 @@
 									<div>
 										<div class="text-sm font-medium text-gray-900 dark:text-gray-200">Actions</div>
 										<p class="text-xs text-gray-600 dark:text-gray-500 mt-1">
-											Select one or more actions to apply to matching notifications
+											Actions applied by this rule
 										</p>
 									</div>
 									<!-- Action chips -->
@@ -659,14 +673,8 @@
 								</div>
 							</div>
 
-							<!-- Edit/Delete buttons -->
-							<div class="flex items-center justify-end gap-2 pt-1">
-								<button
-									on:click|stopPropagation={() => handleEditRule(rule)}
-									class="px-3 py-1.5 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors cursor-pointer"
-								>
-									Edit
-								</button>
+							<!-- Delete / Edit / Duplicate buttons -->
+							<div class="flex items-center justify-between pt-1">
 								<button
 									on:click|stopPropagation={() => {
 										editingRule = rule;
@@ -676,6 +684,20 @@
 								>
 									Delete
 								</button>
+								<div class="flex items-center gap-2">
+									<button
+										on:click|stopPropagation={() => handleEditRule(rule)}
+										class="px-3 py-1.5 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors cursor-pointer"
+									>
+										Edit
+									</button>
+									<button
+										on:click|stopPropagation={() => handleDuplicateRule(rule)}
+										class="px-3 py-1.5 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors cursor-pointer"
+									>
+										Duplicate
+									</button>
+								</div>
 							</div>
 						</div>
 					{/if}
@@ -721,6 +743,7 @@
 <RuleDialog
 	bind:open={showRuleDialog}
 	rule={editingRule}
+	duplicateFrom={duplicatingRule}
 	onDelete={editingRule ? requestRuleDelete : null}
 />
 

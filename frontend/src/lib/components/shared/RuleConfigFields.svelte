@@ -176,7 +176,7 @@
 		</label>
 	</div>
 
-	<!-- Apply to existing (create only) -->
+	<!-- Apply to existing notifications -->
 	{#if showApplyToExisting}
 		<div
 			class="flex items-center justify-between py-3 border-t border-gray-200 dark:border-gray-800"

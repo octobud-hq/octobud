@@ -21,8 +21,14 @@ Major timeline updates:
 - **Auto-mark-read on new activity**: Notifications marked unread by incoming activity are automatically marked read when the user views the new items
 - **Auto-scroll to new timeline activity**: Optional setting to automatically scroll to unseen timeline activity when opening the detail view (disabled by default)
 
+Rule improvements:
+
+- **Duplicate rule**: Duplicate an existing rule from the expanded rule card to quickly create variations with pre-filled settings
+- **Re-apply rule to existing notifications**: The "Apply to existing notifications" toggle is now available when editing rules, not just when creating them
+
 ### Changed
 
+- Rule, tag, and view dialogs no longer close when clicking outside, preventing accidental loss of in-progress edits
 - Fixed and improved backend timeline fetching
 - Discussion timelines now report `hasMore` when there are more than 100 comments
 - Service worker `NEW_NOTIFICATIONS` messages now include `githubIds` so the frontend can target refreshes to the currently-open notification
