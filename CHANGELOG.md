@@ -33,6 +33,10 @@ Rule improvements:
 - Discussion timelines now report `hasMore` when there are more than 100 comments
 - Service worker `NEW_NOTIFICATIONS` messages now include `githubIds` so the frontend can target refreshes to the currently-open notification
 - Timeline deduplication uses composite keys (`type-timestamp` fallback) to handle events with null IDs (e.g., commits, merges)
+- Multiselect is redesigned to be much easier to use:
+  - No jarring layout movements - bulk action bar replaces the query input
+  - Enter multiselect just by clicking the select area for a notification
+  - Much bigger/easier click targets for checkboxes
 
 ## [0.2.1]
 

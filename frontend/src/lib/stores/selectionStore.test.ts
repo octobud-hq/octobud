@@ -163,6 +163,27 @@ describe("SelectionStore", () => {
 		});
 	});
 
+	describe("enterMultiselectMode", () => {
+		it("sets multiselect mode to true", () => {
+			const { selectionStore } = createStores();
+
+			selectionStore.enterMultiselectMode();
+
+			expect(get(selectionStore.multiselectMode)).toBe(true);
+		});
+
+		it("does not affect existing selection state", () => {
+			const { selectionStore } = createStores();
+
+			selectionStore.toggleSelection("gh-1");
+			selectionStore.enterMultiselectMode();
+
+			expect(get(selectionStore.multiselectMode)).toBe(true);
+			expect(get(selectionStore.selectedIds).has("gh-1")).toBe(true);
+			expect(get(selectionStore.selectAllMode)).toBe("none");
+		});
+	});
+
 	describe("toggleMultiselectMode", () => {
 		it("toggles multiselect mode on", () => {
 			const { selectionStore } = createStores();

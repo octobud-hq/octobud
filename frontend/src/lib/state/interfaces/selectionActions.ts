@@ -25,6 +25,7 @@ export interface SelectionActions {
 	selectAllPage: () => void;
 	selectAllAcrossPages: () => void;
 	clearSelectAllMode: () => void;
+	enterMultiselectMode: () => void;
 	toggleMultiselectMode: () => void;
 	exitMultiselectMode: () => void;
 	setSelectedIds: (ids: Set<string>) => void;

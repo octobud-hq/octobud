@@ -16,7 +16,12 @@
 
 	import UnifiedSearchInput from "../shared/UnifiedSearchInput.svelte";
 	import CompactPagination from "../shared/CompactPagination.svelte";
-	import type { UnifiedSearchInputComponent } from "$lib/types/components";
+	import BulkSelectionBar from "./BulkSelectionBar.svelte";
+	import type { Tag } from "$lib/api/types";
+	import type {
+		UnifiedSearchInputComponent,
+		BulkSelectionBarComponent,
+	} from "$lib/types/components";
 
 	// Combined query string (free text + structured filters)
 	export let combinedQuery = "";
@@ -42,11 +47,39 @@
 	export let splitModeEnabled: boolean = false;
 	export let onToggleSplitMode: () => void = () => {};
 
+	// Bulk selection props
+	export let tags: Tag[] = [];
+
 	let unifiedSearchComponent: UnifiedSearchInputComponent | null = null;
+	let bulkSelectionBarComponent: BulkSelectionBarComponent | null = null;
 
 	export function focusSearchInput(): boolean {
 		unifiedSearchComponent?.focus();
 		return unifiedSearchComponent !== null;
+	}
+
+	// Bulk selection bar proxy methods
+	export function openBulkTagDropdown() {
+		bulkSelectionBarComponent?.openTagDropdown();
+		return true;
+	}
+	export function closeBulkTagDropdown() {
+		bulkSelectionBarComponent?.closeTagDropdown();
+		return true;
+	}
+	export function getBulkTagDropdownOpen(): boolean {
+		return bulkSelectionBarComponent?.isTagDropdownOpenState() ?? false;
+	}
+	export function openBulkSnoozeDropdown() {
+		bulkSelectionBarComponent?.openSnoozeDropdown();
+		return true;
+	}
+	export function closeBulkSnoozeDropdown() {
+		bulkSelectionBarComponent?.closeSnoozeDropdown();
+		return true;
+	}
+	export function getBulkSnoozeDropdownOpen(): boolean {
+		return bulkSelectionBarComponent?.isSnoozeDropdownOpenState() ?? false;
 	}
 
 	function handleQueryChange(newQuery: string) {
@@ -87,20 +120,26 @@
 		</svg>
 	</button>
 
-	<!-- Unified search input with query modified indicator -->
-	<div class="relative flex-1">
-		<UnifiedSearchInput
-			bind:this={unifiedSearchComponent}
-			value={combinedQuery}
-			onChange={handleQueryChange}
-			onSubmit={handleQuerySubmit}
-			placeholder="Search or filter notifications"
-			{showSaveButton}
-			{canUpdateView}
-			onSaveAsNew={onSaveAsNewView}
-			{onUpdateView}
-		/>
-	</div>
+	<!-- Search input OR bulk selection bar -->
+	{#if multiselectMode}
+		<div class="flex-1 min-w-0">
+			<BulkSelectionBar bind:this={bulkSelectionBarComponent} {tags} />
+		</div>
+	{:else}
+		<div class="relative flex-1">
+			<UnifiedSearchInput
+				bind:this={unifiedSearchComponent}
+				value={combinedQuery}
+				onChange={handleQueryChange}
+				onSubmit={handleQuerySubmit}
+				placeholder="Search or filter notifications"
+				{showSaveButton}
+				{canUpdateView}
+				onSaveAsNew={onSaveAsNewView}
+				{onUpdateView}
+			/>
+		</div>
+	{/if}
 
 	<!-- Compact Pagination (hidden in focus mode) -->
 

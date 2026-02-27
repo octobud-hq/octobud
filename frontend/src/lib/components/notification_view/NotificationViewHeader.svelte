@@ -15,12 +15,8 @@
 	// along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 	import NotificationToolbar from "./NotificationToolbar.svelte";
-	import BulkSelectionBar from "./BulkSelectionBar.svelte";
 	import type { Tag } from "$lib/api/types";
-	import type {
-		NotificationToolbarComponent,
-		BulkSelectionBarComponent,
-	} from "$lib/types/components";
+	import type { NotificationToolbarComponent } from "$lib/types/components";
 
 	// Toolbar props
 	export let combinedQuery: string;
@@ -46,34 +42,24 @@
 		return toolbarComponent?.focusSearchInput() ?? false;
 	}
 
-	// Export bulk selection bar ref for parent access
-	let bulkSelectionBarComponent: BulkSelectionBarComponent | null = null;
+	// Bulk selection bar methods - proxied through toolbar
 	export function openBulkTagDropdown() {
-		bulkSelectionBarComponent?.openTagDropdown();
-		return true;
+		return toolbarComponent?.openBulkTagDropdown() ?? false;
 	}
-
 	export function closeBulkTagDropdown() {
-		bulkSelectionBarComponent?.closeTagDropdown();
-		return true;
+		return toolbarComponent?.closeBulkTagDropdown() ?? false;
 	}
-
 	export function getBulkTagDropdownOpen(): boolean {
-		return bulkSelectionBarComponent?.isTagDropdownOpenState() ?? false;
+		return toolbarComponent?.getBulkTagDropdownOpen() ?? false;
 	}
-
 	export function openBulkSnoozeDropdown() {
-		bulkSelectionBarComponent?.openSnoozeDropdown();
-		return true;
+		return toolbarComponent?.openBulkSnoozeDropdown() ?? false;
 	}
-
 	export function closeBulkSnoozeDropdown() {
-		bulkSelectionBarComponent?.closeSnoozeDropdown();
-		return true;
+		return toolbarComponent?.closeBulkSnoozeDropdown() ?? false;
 	}
-
 	export function getBulkSnoozeDropdownOpen(): boolean {
-		return bulkSelectionBarComponent?.isSnoozeDropdownOpenState() ?? false;
+		return toolbarComponent?.getBulkSnoozeDropdownOpen() ?? false;
 	}
 </script>
 
@@ -95,12 +81,6 @@
 		{onToggleMultiselect}
 		{splitModeEnabled}
 		{onToggleSplitMode}
+		{tags}
 	/>
-
-	<!-- BulkSelectionBar - conditional based on multiselect mode -->
-	{#if multiselectMode}
-		<div class="mt-2">
-			<BulkSelectionBar bind:this={bulkSelectionBarComponent} {tags} />
-		</div>
-	{/if}
 </div>
