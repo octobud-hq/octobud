@@ -101,7 +101,7 @@
 </script>
 
 <section
-	class="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden pl-4 pr-2 bg-transparent dark:bg-transparent {isSplitView
+	class="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden pl-2 pr-2 bg-transparent dark:bg-transparent {isSplitView
 		? 'border-t border-gray-200 dark:border-gray-800 pt-4'
 		: ''}"
 >

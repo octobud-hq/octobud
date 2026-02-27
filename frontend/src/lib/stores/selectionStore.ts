@@ -121,10 +121,14 @@ export function createSelectionStore(notificationStore: NotificationStore) {
 			selectAllMode.set("none");
 			selectedIds.set(new Set());
 		},
+		enterMultiselectMode: () => {
+			multiselectMode.set(true);
+		},
 		toggleMultiselectMode: () => {
 			multiselectMode.update((mode) => !mode);
-			// Reset select all mode when toggling multiselect off
+			// Clear selection when toggling multiselect off
 			if (!get(multiselectMode)) {
+				selectedIds.set(new Set());
 				selectAllMode.set("none");
 			}
 		},

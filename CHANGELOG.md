@@ -33,6 +33,7 @@ Rule improvements:
 - Discussion timelines now report `hasMore` when there are more than 100 comments
 - Service worker `NEW_NOTIFICATIONS` messages now include `githubIds` so the frontend can target refreshes to the currently-open notification
 - Timeline deduplication uses composite keys (`type-timestamp` fallback) to handle events with null IDs (e.g., commits, merges)
+- Minor quality of life improvements to multiselect, with some initial implementation of bigger changes later.
 
 ## [0.2.1]
 

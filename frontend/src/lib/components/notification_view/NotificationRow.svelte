@@ -318,51 +318,61 @@
 		: null;
 </script>
 
-<div class="relative flex items-start gap-2 pl-2">
-	<!-- Checkbox (outside card, to the left of everything) -->
+<div class="group/row relative flex items-start gap-1">
+	<!-- Status Bar / Checkbox Area -->
 	{#if selectionEnabled}
-		<div class="flex items-center self-center">
-			<label class="relative flex cursor-pointer items-center">
-				<input
-					type="checkbox"
-					class="peer sr-only"
-					checked={selected}
-					disabled={selectionDisabled}
-					on:click|stopPropagation
-					on:change|stopPropagation={() => pageController.actions.toggleSelection(notification)}
-					aria-label={`Select notification ${notification.subjectTitle}`}
-				/>
-				<div
-					class="h-5 w-5 rounded border transition-all peer-disabled:cursor-not-allowed peer-disabled:opacity-50 {selected
-						? 'border-indigo-500 bg-indigo-500'
-						: 'border-gray-400 bg-transparent hover:border-gray-500 dark:border-gray-600 dark:hover:border-gray-500'}"
-					title={selectionDisabled
-						? "Individual selection is disabled when selecting all across pages"
-						: ""}
-				>
-					{#if selected}
-						<svg
-							class="h-full w-full text-white p-0.5"
-							viewBox="0 0 16 16"
-							fill="none"
-							xmlns="http://www.w3.org/2000/svg"
-						>
-							<path
-								d="M13 4L6 11L3 8"
-								stroke="currentColor"
-								stroke-width="2.5"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-							/>
-						</svg>
-					{/if}
-				</div>
-			</label>
+		<div
+			class="flex w-5 shrink-0 items-start justify-center self-stretch cursor-pointer rounded transition-colors hover:bg-gray-200/60 dark:hover:bg-gray-700/40 pt-2.5"
+			role="checkbox"
+			aria-checked={selected}
+			aria-label={`Select notification ${notification.subjectTitle}`}
+			tabindex="-1"
+			title={selectionDisabled
+				? "Individual selection is disabled when selecting all across pages"
+				: ""}
+			on:click|stopPropagation={() => {
+				if (selectionDisabled) return;
+				pageController.actions.toggleSelection(notification);
+			}}
+			on:keydown|stopPropagation={(e) => {
+				if (e.key === " " || e.key === "Enter") {
+					e.preventDefault();
+					if (selectionDisabled) return;
+					pageController.actions.toggleSelection(notification);
+				}
+			}}
+		>
+			<div
+				class="h-4 w-4 rounded border transition-all flex items-center justify-center {selectionDisabled
+					? 'cursor-not-allowed opacity-50'
+					: ''} {selected
+					? 'border-indigo-500 bg-indigo-500'
+					: 'border-gray-400 bg-transparent hover:border-gray-500 dark:border-gray-600 dark:hover:border-gray-500'}"
+			>
+				{#if selected}
+					<svg
+						class="h-full w-full text-white p-0.5"
+						viewBox="0 0 16 16"
+						fill="none"
+						xmlns="http://www.w3.org/2000/svg"
+					>
+						<path
+							d="M13 4L6 11L3 8"
+							stroke="currentColor"
+							stroke-width="2.5"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						/>
+					</svg>
+				{/if}
+			</div>
+		</div>
+	{:else}
+		<!-- Vertical Status Bar -->
+		<div class="flex w-5 shrink-0 items-start justify-center pt-2.5">
+			<div class="ml-auto mr-1 w-1 h-10 rounded-full {statusBarColor}" aria-hidden="true"></div>
 		</div>
 	{/if}
-
-	<!-- Vertical Status Bar (outside card) -->
-	<div class="w-1 h-12 mt-2 rounded-full {statusBarColor}" aria-hidden="true"></div>
 
 	<div
 		bind:this={rootElement}

@@ -210,6 +210,7 @@ export function createNotificationPageController(
 		selectAllPage: selectionStore.selectAllPage,
 		selectAllAcrossPages: selectionStore.selectAllAcrossPages,
 		clearSelectAllMode: selectionStore.clearSelectAllMode,
+		enterMultiselectMode: selectionStore.enterMultiselectMode,
 		toggleMultiselectMode: selectionStore.toggleMultiselectMode,
 		exitMultiselectMode: selectionStore.exitMultiselectMode,
 		setSelectedIds: (ids: Set<string>) => selectionStore.selectedIds.set(ids),
