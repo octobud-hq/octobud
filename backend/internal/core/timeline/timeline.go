@@ -31,7 +31,9 @@ import (
 )
 
 const (
-	// restMaxPerPage is the maximum number of events per REST API page.
+	// restMaxPerPage is the configured number of events per REST API page for the timeline.
+	// It could be higher but we keep it lower because the frontend only displays ~10 events
+	// per batch.
 	restMaxPerPage = 30
 	// restMaxPages is the safety limit on total pages fetched.
 	restMaxPages = 10
