@@ -629,6 +629,53 @@ func (c *clientImpl) FetchTimeline(
 	return timeline, lastPage, nil
 }
 
+// FetchPRCommits retrieves commits for a pull request.
+// Used to enrich "committed" timeline events with GitHub user info (login + avatar).
+func (c *clientImpl) FetchPRCommits(
+	ctx context.Context,
+	owner, repo string,
+	number int,
+) ([]types.PRCommit, error) {
+	// Fetch up to 100 commits (covers most PRs in a single call)
+	reqURL := fmt.Sprintf("%s/repos/%s/%s/pulls/%d/commits?per_page=100",
+		c.baseURL, owner, repo, number)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, http.NoBody)
+	if err != nil {
+		return nil, fmt.Errorf("github: create pr commits request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("github: fetch pr commits: %w", err)
+	}
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			_ = closeErr
+		}
+	}()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("github: read pr commits body: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("github: pr commits status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var commits []types.PRCommit
+	if err := json.Unmarshal(body, &commits); err != nil {
+		return nil, fmt.Errorf("github: unmarshal pr commits: %w", err)
+	}
+
+	return commits, nil
+}
+
 // GraphQLRequest represents a GraphQL request payload.
 type GraphQLRequest struct {
 	Query     string                 `json:"query"`

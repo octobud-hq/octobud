@@ -1036,6 +1036,24 @@ export async function fetchReviewComments(
 	return payload.reviewComments;
 }
 
+// Fetch PR commit authors keyed by SHA (for enriching committed timeline events)
+export type PRCommitAuthorsBySHA = Record<string, { login: string; avatarUrl: string }>;
+
+export async function fetchPRCommits(
+	githubId: string,
+	fetchImpl?: typeof fetch
+): Promise<PRCommitAuthorsBySHA> {
+	const url = `/api/notifications/${encodeURIComponent(githubId)}/pr-commits`;
+	const response = await fetchWithAuth(url, {}, fetchImpl);
+
+	if (!response.ok) {
+		throw new Error(`Failed to fetch PR commits (${response.status})`);
+	}
+
+	const payload: { commits: PRCommitAuthorsBySHA } = await response.json();
+	return payload.commits;
+}
+
 // Update timeline last seen timestamp for a notification
 export async function updateTimelineLastSeen(
 	githubId: string,

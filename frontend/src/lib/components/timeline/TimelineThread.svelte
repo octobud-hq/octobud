@@ -40,7 +40,7 @@
 	export let onNewActivityViewed: (() => void) | undefined = undefined;
 
 	const { items, isLoading, error, pagination, hasAttemptedAutoLoad } = timelineController.stores;
-	const { autoLoadTimeline, loadTimeline, loadMoreTimeline, loadReviewComments } =
+	const { autoLoadTimeline, loadTimeline, loadMoreTimeline, loadReviewComments, loadPRCommits } =
 		timelineController.actions;
 
 	let hasLoaded = false;
@@ -81,9 +81,10 @@
 		autoLoadDebounceTimer = setTimeout(() => {
 			if (!$hasAttemptedAutoLoad && githubId) {
 				autoLoadTimeline(githubId, 10);
-				// Fire review comments fetch in parallel for PRs
+				// Fire parallel fetches for PRs
 				if (subjectType === "pull_request") {
 					loadReviewComments(githubId);
+					loadPRCommits(githubId);
 				}
 			}
 		}, 300);
@@ -101,9 +102,10 @@
 		isLoadingMore.set(true);
 		try {
 			await loadTimeline(githubId, 10);
-			// Ensure review comments are loaded for PRs (no-op if already fetched)
+			// Ensure parallel data is loaded for PRs (no-op if already fetched)
 			if (subjectType === "pull_request") {
 				loadReviewComments(githubId);
+				loadPRCommits(githubId);
 			}
 			await tick();
 		} finally {
@@ -194,18 +196,35 @@
 		return -1; // All items have been seen
 	})();
 
-	// Sticky divider position — persists even after items are marked as seen,
-	// so the divider line stays visible for the session. Only updates when
-	// new unseen items arrive at a different position.
-	let stickyDividerIndex = -1;
-
-	$: if (firstUnseenIndex >= 0) {
-		stickyDividerIndex = firstUnseenIndex;
-	}
-
 	// Track if user has scrolled to unseen items
 	let hasScrolledToUnseen = false;
 	let previousFirstUnseenIndex = -1;
+
+	// Freeze effectiveLastSeenAt when unseen items are first detected so the
+	// divider stays visible for the session even after the user dismisses.
+	// Reset when effectiveLastSeenAt changes (e.g. dismiss + live refresh).
+	let frozenLastSeenAt: string | null = null;
+
+	$: {
+		if (firstUnseenIndex >= 0 && effectiveLastSeenAt) {
+			if (!frozenLastSeenAt || frozenLastSeenAt !== effectiveLastSeenAt) {
+				frozenLastSeenAt = effectiveLastSeenAt;
+			}
+		}
+	}
+
+	// Compute divider index directly from displayItems using the frozen
+	// timestamp. Re-runs whenever items change (e.g. load-more prepend),
+	// so the position stays correct without relying on key lookups.
+	$: stickyDividerIndex = (() => {
+		if (!frozenLastSeenAt) return -1;
+		const threshold = new Date(frozenLastSeenAt);
+		for (let i = 0; i < displayItems.length; i++) {
+			const ts = getItemTimestamp(displayItems[i]);
+			if (ts && new Date(ts) > threshold) return i;
+		}
+		return -1;
+	})();
 
 	// Reset state when new unseen items arrive (e.g. live refresh)
 	$: {
@@ -541,7 +560,7 @@
 		<!-- Timeline items list -->
 		{#each itemsWithKeys as { displayItem, key }, index (key)}
 			<!-- New activity divider -->
-			{#if index === stickyDividerIndex && stickyDividerIndex > 0}
+			{#if index === stickyDividerIndex && stickyDividerIndex >= 0}
 				<div class="new-activity-divider flex items-center gap-3 my-4">
 					<div class="flex flex-col items-center flex-shrink-0 relative z-10" style="width: 40px;">
 						<!-- Thread line through divider -->
