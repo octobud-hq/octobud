@@ -342,35 +342,61 @@
 				}
 			}}
 		>
-			<div
-				class="h-4 w-4 rounded border transition-all flex items-center justify-center {selectionDisabled
-					? 'cursor-not-allowed opacity-50'
-					: ''} {selected
-					? 'border-indigo-500 bg-indigo-500'
-					: 'border-gray-400 bg-transparent hover:border-gray-500 dark:border-gray-600 dark:hover:border-gray-500'}"
-			>
-				{#if selected}
-					<svg
-						class="h-full w-full text-white p-0.5"
-						viewBox="0 0 16 16"
-						fill="none"
-						xmlns="http://www.w3.org/2000/svg"
-					>
-						<path
-							d="M13 4L6 11L3 8"
-							stroke="currentColor"
-							stroke-width="2.5"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-						/>
-					</svg>
-				{/if}
+			<div class="flex items-center justify-center">
+				<div
+					class="h-3.5 w-3.5 rounded border transition-all flex items-center justify-center {selectionDisabled
+						? 'cursor-not-allowed opacity-50'
+						: ''} {selected
+						? 'border-indigo-500 bg-indigo-500'
+						: 'border-gray-400 bg-transparent dark:border-gray-600'}"
+				>
+					{#if selected}
+						<svg
+							class="h-full w-full text-white p-0.5"
+							viewBox="0 0 16 16"
+							fill="none"
+							xmlns="http://www.w3.org/2000/svg"
+						>
+							<path
+								d="M13 4L6 11L3 8"
+								stroke="currentColor"
+								stroke-width="2.5"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							/>
+						</svg>
+					{/if}
+				</div>
 			</div>
 		</div>
 	{:else}
 		<!-- Vertical Status Bar -->
-		<div class="flex w-5 shrink-0 items-start justify-center pt-2.5">
-			<div class="ml-auto mr-1 w-1 h-10 rounded-full {statusBarColor}" aria-hidden="true"></div>
+		<div
+			class="group/status flex w-5 shrink-0 items-start justify-center pt-2.5 cursor-pointer self-stretch rounded transition-colors hover:bg-gray-200/60 dark:hover:bg-gray-700/40"
+			role="button"
+			aria-label="Enter multiselect mode"
+			tabindex="-1"
+			on:click|stopPropagation={() => {
+				pageController.actions.enterMultiselectMode();
+				pageController.actions.toggleSelection(notification);
+			}}
+			on:keydown|stopPropagation={(e) => {
+				if (e.key === "Enter" || e.key === " ") {
+					e.preventDefault();
+					pageController.actions.enterMultiselectMode();
+					pageController.actions.toggleSelection(notification);
+				}
+			}}
+		>
+			<div
+				class="ml-auto mr-1 w-1 h-10 rounded-full {statusBarColor} group-hover/status:hidden"
+				aria-hidden="true"
+			></div>
+			<div class="hidden group-hover/status:flex items-center justify-center">
+				<div
+					class="h-3.5 w-3.5 rounded border transition-all flex items-center justify-center border-gray-400 bg-transparent dark:border-gray-600"
+				></div>
+			</div>
 		</div>
 	{/if}
 

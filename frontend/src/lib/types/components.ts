@@ -24,6 +24,12 @@
  */
 export interface NotificationToolbarComponent {
 	focusSearchInput(): boolean;
+	openBulkTagDropdown(): boolean;
+	closeBulkTagDropdown(): boolean;
+	getBulkTagDropdownOpen(): boolean;
+	openBulkSnoozeDropdown(): boolean;
+	closeBulkSnoozeDropdown(): boolean;
+	getBulkSnoozeDropdownOpen(): boolean;
 }
 
 /**

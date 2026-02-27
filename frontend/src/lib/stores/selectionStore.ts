@@ -89,6 +89,10 @@ export function createSelectionStore(notificationStore: NotificationStore) {
 				const newIds = new Set(ids);
 				if (newIds.has(id)) {
 					newIds.delete(id);
+					if (newIds.size === 0) {
+						multiselectMode.set(false);
+						selectAllMode.set("none");
+					}
 				} else {
 					newIds.add(id);
 				}

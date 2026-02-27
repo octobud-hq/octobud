@@ -143,7 +143,7 @@
 			<!-- Empty state with vertical centering -->
 			<div class="flex flex-col h-full">
 				<!-- Page range indicator -->
-				<div class="mb-2 pl-2 flex items-center justify-between flex-shrink-0">
+				<div class="mb-2 pl-4 flex items-center justify-between flex-shrink-0">
 					<span class="text-xs text-gray-600 dark:text-gray-500">
 						{totalCount}
 						{totalCount === 1 ? "notification" : "notifications"}
@@ -165,7 +165,7 @@
 			</div>
 		{:else if !apiError}
 			<!-- Page range indicator (scrolls with content) -->
-			<div class="mb-2 pl-2 flex items-center justify-between">
+			<div class="mb-2.5 pl-3 flex items-center justify-between">
 				<span class="text-xs text-gray-500">
 					{totalCount}
 					{totalCount === 1 ? "notification" : "notifications"}

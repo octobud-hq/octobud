@@ -73,7 +73,7 @@
 <div id="select-all-dropdown" class="relative">
 	<button
 		type="button"
-		class="flex items-center gap-2 rounded-full border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-1.5 text-xs font-semibold text-gray-700 dark:text-white transition hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer"
+		class="flex h-9 items-center gap-2 rounded-full border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 text-xs font-semibold text-gray-700 dark:text-white transition hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer"
 		on:click={toggleDropdown}
 	>
 		<div class="flex items-center gap-1.5">
