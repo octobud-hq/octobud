@@ -1580,6 +1580,9 @@ func TestRequestHeaders(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			server := httptest.NewServer(
 				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					// Verify request path matches expected URL
+					require.Equal(t, tt.expectedURL, r.URL.Path)
+
 					// Verify common headers are set correctly
 					require.Equal(t, "Bearer test_token", r.Header.Get("Authorization"))
 					require.Equal(t, "application/vnd.github+json", r.Header.Get("Accept"))

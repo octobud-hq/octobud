@@ -357,7 +357,7 @@ export function createTimelineController(): TimelineController {
 			reviewCommentsData = data;
 			mergeReviewComments();
 		} catch (err) {
-			// Silent failure — review comments are non-critical
+			// Non-critical — log and continue
 			if (currentGithubId === githubId) {
 				console.error("[TimelineController] Failed to load review comments:", err);
 			}
@@ -385,7 +385,7 @@ export function createTimelineController(): TimelineController {
 			commitAuthorsData = data;
 			mergeCommitAuthors();
 		} catch (err) {
-			// Silent failure — commit author enrichment is non-critical
+			// Non-critical — log and continue
 			if (currentGithubId === githubId) {
 				console.error("[TimelineController] Failed to load PR commits:", err);
 			}
