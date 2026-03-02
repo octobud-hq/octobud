@@ -73,6 +73,12 @@ export function createNotificationSettingsStore() {
 		notificationsEnabled: notificationsEnabled as Writable<boolean>,
 		faviconBadgeEnabled: faviconBadgeEnabled as Writable<boolean>,
 		timelineAutoScroll: timelineAutoScroll as Writable<boolean>,
+		syncFromStorage: () => {
+			if (typeof window === "undefined") return;
+			notificationsEnabled.set(localStorage.getItem(NOTIFICATIONS_ENABLED_KEY) !== "false");
+			faviconBadgeEnabled.set(localStorage.getItem(FAVICON_BADGE_ENABLED_KEY) !== "false");
+			timelineAutoScroll.set(localStorage.getItem(TIMELINE_AUTO_SCROLL_KEY) === "true");
+		},
 		setEnabled: (enabled: boolean) => {
 			notificationsEnabled.set(enabled);
 		},

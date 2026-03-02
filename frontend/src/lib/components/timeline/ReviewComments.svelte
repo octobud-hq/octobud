@@ -114,7 +114,7 @@
 						: info.type === "del"
 							? "diff-line-del"
 							: "diff-line-ctx";
-				return `<span class="${bgClass}">${content}</span>`;
+				return `<div class="${bgClass}">${content}</div>`;
 			})
 			.join("");
 	}
@@ -197,11 +197,10 @@
 					<!-- Diff hunk preview -->
 					{#if comment.diffHunk}
 						<div class="diff-hunk border-b border-gray-200 dark:border-gray-800 overflow-x-auto">
-							<pre
-								class="hljs text-xs font-mono !p-0 leading-relaxed whitespace-pre !rounded-none">{@html formatDiffHunk(
-									comment.diffHunk,
-									comment.path
-								)}</pre>
+							<div class="hljs text-xs font-mono !p-0 leading-relaxed whitespace-pre !rounded-none">
+								<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+								{@html formatDiffHunk(comment.diffHunk, comment.path)}
+							</div>
 						</div>
 					{/if}
 

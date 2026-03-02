@@ -704,6 +704,10 @@
 
 	// Restore UI state from browser history when navigating back/forward
 	afterNavigate(({ from, to, type }) => {
+		// Sync settings stores from localStorage after navigation
+		// Ensures writable stores reflect any changes made on other pages (e.g. /settings)
+		getNotificationSettingsStore().syncFromStorage();
+
 		// Re-read sync start time on every navigation
 		// This handles the case where setup page sets localStorage then navigates
 		readSyncStartTime();
