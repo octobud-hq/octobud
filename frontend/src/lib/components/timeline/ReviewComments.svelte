@@ -11,9 +11,10 @@
 
 	let expanded = false;
 
-	// Count includes replies nested under each comment
-	$: totalCount = count ?? comments.reduce((sum, c) => sum + 1 + (c.replies?.length ?? 0), 0);
-	$: hasMore = totalCount > comments.length;
+	// visibleCount counts all rendered comments: top-level + their replies
+	$: visibleCount = comments.reduce((sum, c) => sum + 1 + (c.replies?.length ?? 0), 0);
+	$: totalCount = count ?? visibleCount;
+	$: hasMore = totalCount > visibleCount;
 
 	function getIconPath(iconName: string): string {
 		const icon = octicons[iconName];
@@ -113,7 +114,7 @@
 						: info.type === "del"
 							? "diff-line-del"
 							: "diff-line-ctx";
-				return `<div class="${bgClass}">${content}</div>`;
+				return `<span class="${bgClass}">${content}</span>`;
 			})
 			.join("");
 	}
