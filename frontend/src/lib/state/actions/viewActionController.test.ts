@@ -74,6 +74,7 @@ describe("ViewActionController", () => {
 				notificationStore.pageData.set(data);
 			}),
 			updateNotification: vi.fn(),
+			hasPendingMarkRead: vi.fn().mockReturnValue(false),
 		} as any;
 
 		paginationStore = {

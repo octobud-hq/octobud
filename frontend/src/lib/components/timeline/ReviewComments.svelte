@@ -4,13 +4,15 @@
 	import { formatRelativeShort } from "$lib/utils/time";
 	import { computeAvatarUrl } from "$lib/utils/avatar";
 	import octicons from "@primer/octicons";
+	import hljs from "highlight.js";
 
 	export let comments: TimelineReviewComment[];
 	export let count: number | undefined = undefined;
 
 	let expanded = false;
 
-	$: totalCount = count ?? comments.length;
+	// Count includes replies nested under each comment
+	$: totalCount = count ?? comments.reduce((sum, c) => sum + 1 + (c.replies?.length ?? 0), 0);
 	$: hasMore = totalCount > comments.length;
 
 	function getIconPath(iconName: string): string {
@@ -24,23 +26,96 @@
 	const commentIconPath = getIconPath("comment-discussion");
 	$: chevronPath = getIconPath(expanded ? "chevron-down" : "chevron-right");
 
-	function escapeHtml(text: string): string {
-		return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+	const extToLang: Record<string, string> = {
+		ts: "typescript",
+		tsx: "typescript",
+		js: "javascript",
+		jsx: "javascript",
+		py: "python",
+		rb: "ruby",
+		rs: "rust",
+		yml: "yaml",
+		md: "markdown",
+		sh: "bash",
+		zsh: "bash",
+	};
+
+	function langFromPath(path: string): string | undefined {
+		const ext = path.split(".").pop()?.toLowerCase();
+		if (!ext) return undefined;
+		const mapped = extToLang[ext] ?? ext;
+		return hljs.getLanguage(mapped) ? mapped : undefined;
 	}
 
-	function formatDiffHunk(diffHunk: string): string {
-		return diffHunk
-			.split("\n")
-			.slice(-3)
-			.map((line) => {
-				const escaped = escapeHtml(line);
-				if (line.startsWith("+"))
-					return `<span class="text-green-700 dark:text-green-400">${escaped}</span>`;
-				if (line.startsWith("-"))
-					return `<span class="text-red-700 dark:text-red-400">${escaped}</span>`;
-				return escaped;
+	/**
+	 * Split highlighted HTML on newlines while keeping <span> tags balanced.
+	 * hljs only emits <span class="...">...</span> so we only track those.
+	 */
+	function splitHighlightedLines(html: string): string[] {
+		const rawLines = html.split("\n");
+		const result: string[] = [];
+		let openTags: string[] = []; // stack of full opening tags e.g. '<span class="hljs-keyword">'
+
+		for (const raw of rawLines) {
+			// Re-open any spans still open from previous lines
+			const prefix = openTags.join("");
+
+			// Track opens and closes in this line
+			const tagRe = /<\/?span[^>]*>/g;
+			let m: RegExpExecArray | null;
+			while ((m = tagRe.exec(raw)) !== null) {
+				if (m[0].startsWith("</")) {
+					openTags.pop();
+				} else {
+					openTags.push(m[0]);
+				}
+			}
+
+			// Close any still-open spans at end of this line
+			const suffix = "</span>".repeat(openTags.length);
+			result.push(prefix + raw + suffix);
+		}
+		return result;
+	}
+
+	function formatDiffHunk(diffHunk: string, path: string): string {
+		const lines = diffHunk.split("\n").slice(-3);
+
+		// Classify each line and strip the +/- prefix for highlighting
+		const classified = lines.map((line) => {
+			if (line.startsWith("+")) return { type: "add" as const, code: line.slice(1) };
+			if (line.startsWith("-")) return { type: "del" as const, code: line.slice(1) };
+			if (line.startsWith(" ")) return { type: "ctx" as const, code: line.slice(1) };
+			return { type: "ctx" as const, code: line };
+		});
+
+		// Highlight the joined code block
+		const codeBlock = classified.map((l) => l.code).join("\n");
+		const lang = langFromPath(path);
+		let highlighted: string;
+		try {
+			highlighted = lang
+				? hljs.highlight(codeBlock, { language: lang }).value
+				: hljs.highlightAuto(codeBlock).value;
+		} catch {
+			highlighted = codeBlock.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+		}
+
+		// Split back into individual lines with balanced tags
+		const hlLines = splitHighlightedLines(highlighted);
+
+		return classified
+			.map((info, i) => {
+				const content = hlLines[i] ?? "";
+				const bgClass =
+					info.type === "add"
+						? "diff-line-add"
+						: info.type === "del"
+							? "diff-line-del"
+							: "diff-line-ctx";
+				return `<div class="${bgClass}">${content}</div>`;
 			})
-			.join("\n");
+			.join("");
 	}
 
 	function formatTimestamp(ts?: string): string {
@@ -48,6 +123,8 @@
 		const date = new Date(ts);
 		return !isNaN(date.getTime()) ? formatRelativeShort(date) : "";
 	}
+
+	const maxVisibleReplies = 5;
 </script>
 
 <!-- Toggle section -->
@@ -75,6 +152,8 @@
 		<div class="px-3 pb-3 pt-1 flex flex-col gap-3 min-w-0 overflow-hidden">
 			{#each comments as comment (comment.id)}
 				{@const avatarUrl = computeAvatarUrl(comment.author.avatarUrl, comment.author.login)}
+				{@const replies = comment.replies ?? []}
+				{@const hasHiddenReplies = replies.length > maxVisibleReplies}
 				<div class="border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden">
 					<!-- Header: file path (tinted) -->
 					<div
@@ -116,12 +195,11 @@
 
 					<!-- Diff hunk preview -->
 					{#if comment.diffHunk}
-						<div
-							class="border-b border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50 overflow-x-auto"
-						>
+						<div class="diff-hunk border-b border-gray-200 dark:border-gray-800 overflow-x-auto">
 							<pre
-								class="text-xs font-mono px-3 py-2 text-gray-600 dark:text-gray-400 leading-relaxed whitespace-pre">{@html formatDiffHunk(
-									comment.diffHunk
+								class="hljs text-xs font-mono !p-0 leading-relaxed whitespace-pre !rounded-none">{@html formatDiffHunk(
+									comment.diffHunk,
+									comment.path
 								)}</pre>
 						</div>
 					{/if}
@@ -165,6 +243,72 @@
 							{@html renderMarkdown(comment.body)}
 						</div>
 					</div>
+
+					<!-- Replies -->
+					{#if replies.length > 0}
+						<div
+							class="divide-y divide-gray-100 dark:divide-gray-800 border-t border-gray-200 dark:border-gray-800"
+						>
+							{#if hasHiddenReplies && comment.htmlUrl}
+								<div class="px-4 py-2">
+									<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
+									<a
+										href={comment.htmlUrl}
+										target="_blank"
+										rel="noreferrer"
+										class="text-xs text-indigo-500 dark:text-indigo-400 hover:underline"
+									>
+										View earlier replies on GitHub
+									</a>
+								</div>
+							{/if}
+
+							{#each replies.slice(-maxVisibleReplies) as reply (reply.id)}
+								{@const replyAvatarUrl = computeAvatarUrl(
+									reply.author.avatarUrl,
+									reply.author.login
+								)}
+								<div class="px-4 py-3 flex gap-2.5">
+									<div class="flex-shrink-0">
+										{#if replyAvatarUrl}
+											<img
+												src={replyAvatarUrl}
+												alt={`${reply.author.login}'s avatar`}
+												class="h-6 w-6 rounded-full bg-gray-300 dark:bg-gray-700"
+											/>
+										{:else}
+											<div
+												class="h-6 w-6 rounded-full bg-gray-300 dark:bg-gray-700 flex items-center justify-center"
+											>
+												<span class="text-[10px] font-bold text-gray-800 dark:text-gray-300">
+													{reply.author.login.charAt(0).toUpperCase()}
+												</span>
+											</div>
+										{/if}
+									</div>
+
+									<div class="flex-1 min-w-0">
+										<div
+											class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mb-1"
+										>
+											<span class="font-semibold text-gray-700 dark:text-gray-300"
+												>{reply.author.login}</span
+											>
+											{#if reply.createdAt}
+												<span>{formatTimestamp(reply.createdAt)}</span>
+											{/if}
+										</div>
+										<div
+											class="overflow-x-auto prose dark:prose-invert prose-sm max-w-none prose-p:text-gray-700 dark:prose-p:text-gray-400 prose-p:my-0.5 text-sm"
+										>
+											<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+											{@html renderMarkdown(reply.body)}
+										</div>
+									</div>
+								</div>
+							{/each}
+						</div>
+					{/if}
 				</div>
 			{/each}
 			{#if hasMore}

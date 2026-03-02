@@ -237,3 +237,31 @@ code.hljs {
 .prose pre.hljs code.hljs {
 	display: block;
 }
+
+/* Diff hunk line backgrounds */
+.diff-hunk .diff-line-add,
+.diff-hunk .diff-line-del,
+.diff-hunk .diff-line-ctx {
+	display: block;
+	padding: 0 0.75rem; /* px-3 */
+}
+
+.diff-hunk .diff-line-add {
+	background: rgba(46, 160, 67, 0.15);
+}
+
+.diff-hunk .diff-line-del {
+	background: rgba(248, 81, 73, 0.15);
+}
+
+.diff-hunk .diff-line-ctx {
+	background: transparent;
+}
+
+.dark .diff-hunk .diff-line-add {
+	background: rgba(46, 160, 67, 0.2);
+}
+
+.dark .diff-hunk .diff-line-del {
+	background: rgba(248, 81, 73, 0.2);
+}

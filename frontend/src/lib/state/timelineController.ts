@@ -320,8 +320,20 @@ export function createTimelineController(): TimelineController {
 			if (newItems.length > 0) {
 				// Append new items to the end (they're the newest)
 				items.update((current) => [...current, ...newItems]);
-				mergeReviewComments();
-				mergeCommitAuthors();
+
+				// Re-fetch review comments and commit authors if they were previously
+				// loaded (i.e. this is a PR). New activity may include new reviews/commits
+				// that weren't in the initial cache.
+				if (reviewCommentsData) {
+					loadReviewComments(githubId, true);
+				} else {
+					mergeReviewComments();
+				}
+				if (commitAuthorsData) {
+					loadPRCommits(githubId, true);
+				} else {
+					mergeCommitAuthors();
+				}
 
 				// Update total count but preserve page/hasMore (which track the oldest loaded page)
 				pagination.update((p) => ({ ...p, total: response.total }));

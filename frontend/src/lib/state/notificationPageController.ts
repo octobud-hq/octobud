@@ -232,6 +232,9 @@ export function createNotificationPageController(
 		closeCustomSnoozeDialog: uiStore.closeCustomSnoozeDialog,
 		openTagDropdown: uiStore.openTagDropdown,
 		closeTagDropdown: uiStore.closeTagDropdown,
+		// Pending mark-read tracking
+		addPendingMarkRead: notificationStore.addPendingMarkRead,
+		removePendingMarkRead: notificationStore.removePendingMarkRead,
 		// Utility/helper actions
 		destroy: () => {
 			debounceManager.clearAll();

@@ -316,12 +316,19 @@
 						};
 						pageController.actions.updateNotification(optimisticUpdate);
 
-						// Fire-and-forget API call
-						pageController.actions.markRead(detail.notification).catch((err) => {
-							console.error("Failed to mark notification as read", err);
-							// Revert optimistic update on error
-							pageController.actions.updateNotification(detail.notification);
-						});
+						// Fire-and-forget API call (track pending to prevent polling race)
+						const markReadKey = detail.notification.githubId ?? detail.notification.id;
+						if (markReadKey) pageController.actions.addPendingMarkRead(markReadKey);
+						pageController.actions
+							.markRead(detail.notification)
+							.catch((err) => {
+								console.error("Failed to mark notification as read", err);
+								// Revert optimistic update on error
+								pageController.actions.updateNotification(detail.notification);
+							})
+							.finally(() => {
+								if (markReadKey) pageController.actions.removePendingMarkRead(markReadKey);
+							});
 					}
 				}
 				return detail;

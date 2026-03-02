@@ -26,6 +26,9 @@ export function createNotificationStore(initialPage: NotificationPage) {
 	// Normalized storage - all notifications by ID
 	const notificationsById = writable<Map<string, Notification>>(new Map());
 
+	// Track notifications with in-flight mark-read API calls
+	const pendingMarkReadIds = new Set<string>();
+
 	// Current page data (references normalized store)
 	const pageData = writable<NotificationPage>(initialPage);
 
@@ -203,6 +206,9 @@ export function createNotificationStore(initialPage: NotificationPage) {
 		getNotification,
 		removeNotification,
 		restoreNotification,
+		addPendingMarkRead: (id: string) => pendingMarkReadIds.add(id),
+		removePendingMarkRead: (id: string) => pendingMarkReadIds.delete(id),
+		hasPendingMarkRead: (id: string) => pendingMarkReadIds.has(id),
 	};
 }
 

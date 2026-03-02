@@ -11,7 +11,7 @@ GOLANGCI_LINT := $(GO_TOOL_BIN)/golangci-lint
 .PHONY: install-tools dev test test-integration lint format generate-sqlc generate-mocks generate
 
 # Pinned tool versions - update these when upgrading tools
-GOOSE_VERSION := v3.26.0
+GOOSE_VERSION := v3.27.0
 SQLC_VERSION := v1.30.0
 MOCKGEN_VERSION := v0.6.0
 GOLANGCI_LINT_VERSION := v2.7.0

@@ -151,6 +151,24 @@
 					textClass: "text-white",
 					iconClass: "text-white",
 				};
+			case "converted_to_draft":
+				return {
+					label: "Converted to draft",
+					iconPath: getIconPath("issue-draft"),
+					useIcon: true,
+					bgClass: "bg-gray-600",
+					textClass: "text-white",
+					iconClass: "text-white",
+				};
+			case "converted_from_draft":
+				return {
+					label: "Converted from draft",
+					iconPath: getIconPath("issue-opened"),
+					useIcon: true,
+					bgClass: "bg-green-600",
+					textClass: "text-white",
+					iconClass: "text-white",
+				};
 			case "marked_as_duplicate":
 				return {
 					label: "Marked as duplicate",
@@ -319,7 +337,10 @@
 			case "ready_for_review":
 				return "marked as ready for review";
 			case "convert_to_draft":
+			case "converted_to_draft":
 				return "converted to draft";
+			case "converted_from_draft":
+				return "converted from draft";
 			case "deployed":
 				return "deployed this";
 			case "referenced":
@@ -368,6 +389,12 @@
 				return "removed this from a project";
 			case "project_v2_item_status_changed":
 				return "changed the project status";
+			case "parent_issue_removed":
+				return "removed the parent issue";
+			case "issue_field_added":
+				return "added a field";
+			case "issue_field_removed":
+				return "removed a field";
 			default:
 				return type;
 		}

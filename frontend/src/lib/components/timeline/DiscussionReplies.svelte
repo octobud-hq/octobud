@@ -67,7 +67,7 @@
 					{/if}
 				</div>
 				<div
-					class="prose dark:prose-invert prose-sm max-w-none prose-p:text-gray-700 dark:prose-p:text-gray-400 prose-p:my-0.5 text-sm"
+					class="overflow-x-auto prose dark:prose-invert prose-sm max-w-none prose-p:text-gray-700 dark:prose-p:text-gray-400 prose-p:my-0.5 text-sm"
 				>
 					<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 					{@html renderMarkdown(reply.body)}

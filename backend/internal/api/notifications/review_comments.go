@@ -29,6 +29,7 @@ import (
 
 	"github.com/octobud-hq/octobud/backend/internal/api/helpers"
 	"github.com/octobud-hq/octobud/backend/internal/github"
+	"github.com/octobud-hq/octobud/backend/internal/github/types"
 )
 
 // ReviewCommentsResponse is the response structure for the review comments endpoint.
@@ -124,12 +125,24 @@ func (h *Handler) handleGetReviewComments(
 		return
 	}
 
-	// Group comments by pull_request_review_id and convert to response format
-	result := make(map[string][]ThreadReviewComment)
-	for _, c := range comments {
-		reviewKey := strconv.FormatInt(c.PullRequestReviewID, 10)
-		trc := ThreadReviewComment{
-			ID:       strconv.FormatInt(c.ID, 10),
+	helpers.WriteJSON(w, http.StatusOK, ReviewCommentsResponse{
+		ReviewComments: threadReviewComments(comments),
+	})
+}
+
+// threadReviewComments groups PR review comments by review ID and threads
+// replies under their parent comment (including cross-review replies).
+// Reply threads are trimmed to the last 6 entries.
+func threadReviewComments(comments []types.PullRequestComment) map[string][]ThreadReviewComment {
+	// Convert all comments to response format, indexed by their own ID.
+	allComments := make(map[string]*ThreadReviewComment, len(comments))
+	commentReviewKey := make(map[string]string, len(comments)) // comment ID → review key
+
+	for i := range comments {
+		c := &comments[i]
+		id := strconv.FormatInt(c.ID, 10)
+		trc := &ThreadReviewComment{
+			ID:       id,
 			Body:     c.Body,
 			Path:     c.Path,
 			DiffHunk: c.DiffHunk,
@@ -144,10 +157,48 @@ func (h *Handler) handleGetReviewComments(
 			ts := c.CreatedAt.Format(time.RFC3339)
 			trc.CreatedAt = &ts
 		}
-		result[reviewKey] = append(result[reviewKey], trc)
+		allComments[id] = trc
+		commentReviewKey[id] = strconv.FormatInt(c.PullRequestReviewID, 10)
 	}
 
-	helpers.WriteJSON(w, http.StatusOK, ReviewCommentsResponse{
-		ReviewComments: result,
-	})
+	// Thread replies under their parent comment.
+	// Replies from different reviews are moved to the parent's review group.
+	topLevel := make(map[string][]string) // review key → ordered top-level comment IDs
+	for i := range comments {
+		c := &comments[i]
+		id := strconv.FormatInt(c.ID, 10)
+
+		if c.InReplyToID != nil {
+			parentID := strconv.FormatInt(*c.InReplyToID, 10)
+			if parent, ok := allComments[parentID]; ok {
+				parent.Replies = append(parent.Replies, *allComments[id])
+				delete(allComments, id) // consumed as a reply
+				continue
+			}
+		}
+
+		// Top-level comment: add to its review group
+		reviewKey := commentReviewKey[id]
+		topLevel[reviewKey] = append(topLevel[reviewKey], id)
+	}
+
+	// Trim reply threads to the last 6 entries
+	const maxReplies = 6
+	for _, trc := range allComments {
+		if len(trc.Replies) > maxReplies {
+			trc.Replies = trc.Replies[len(trc.Replies)-maxReplies:]
+		}
+	}
+
+	// Build the result grouped by review key
+	result := make(map[string][]ThreadReviewComment, len(topLevel))
+	for reviewKey, ids := range topLevel {
+		for _, id := range ids {
+			if trc, ok := allComments[id]; ok {
+				result[reviewKey] = append(result[reviewKey], *trc)
+			}
+		}
+	}
+
+	return result
 }
