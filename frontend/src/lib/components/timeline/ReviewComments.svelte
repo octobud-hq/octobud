@@ -79,7 +79,14 @@
 		return result;
 	}
 
+	// eslint-disable-next-line svelte/prefer-svelte-reactivity -- internal cache, not used in template
+	const diffHunkCache = new Map<string, string>();
+
 	function formatDiffHunk(diffHunk: string, path: string): string {
+		const cacheKey = `${path}\0${diffHunk}`;
+		const cached = diffHunkCache.get(cacheKey);
+		if (cached) return cached;
+
 		const lines = diffHunk.split("\n").slice(-3);
 
 		// Classify each line and strip the +/- prefix for highlighting
@@ -105,7 +112,7 @@
 		// Split back into individual lines with balanced tags
 		const hlLines = splitHighlightedLines(highlighted);
 
-		return classified
+		const result = classified
 			.map((info, i) => {
 				const content = hlLines[i] ?? "";
 				const bgClass =
@@ -117,6 +124,9 @@
 				return `<div class="${bgClass}">${content}</div>`;
 			})
 			.join("");
+
+		diffHunkCache.set(cacheKey, result);
+		return result;
 	}
 
 	function formatTimestamp(ts?: string): string {

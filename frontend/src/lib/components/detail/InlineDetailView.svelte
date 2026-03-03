@@ -375,6 +375,7 @@
 	let resolvedAvatarUrl: string | null = null;
 	let avatarLoadFailed = false;
 	let previousGithubId: string | null = null;
+	let scrollContainer: HTMLDivElement;
 
 	// Reset avatar error state and timeline when switching to a different notification
 	$: if (notification) {
@@ -385,6 +386,7 @@
 		const currentGithubId = notification.githubId;
 		if (timelineController && currentGithubId !== previousGithubId) {
 			timelineController.actions.reset();
+			scrollContainer?.scrollTo(0, 0);
 			previousGithubId = currentGithubId;
 		}
 	}
@@ -492,7 +494,7 @@
 		<DetailActionBar {notification} {isSplitView} {markingRead} {archiving} {hideBackButton} />
 
 		<!-- Scrollable Content -->
-		<div class="flex-1 overflow-y-auto">
+		<div bind:this={scrollContainer} class="flex-1 overflow-y-auto">
 			<div class="px-8 pb-16">
 				<div class="mx-auto max-w-7xl">
 					<!-- Header section - use notification data (always available) not detail (loaded async) -->
