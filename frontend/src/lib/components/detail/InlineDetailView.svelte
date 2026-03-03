@@ -142,12 +142,15 @@
 			// causes DOM reflows that can dismiss the "New Activity" button.
 			autoMarkReadTimeoutId = setTimeout(() => {
 				if (!notification) return;
-				const key = notification.githubId ?? notification.id;
+				// Capture snapshot — by the time the API call resolves, the reactive
+				// `notification` variable may point to a different notification.
+				const original = notification;
+				const key = original.githubId ?? original.id;
 				if (!key) return;
 
 				// Optimistically update the UI
 				pageController.actions.updateNotification({
-					...notification,
+					...original,
 					isRead: true,
 				});
 
@@ -158,9 +161,7 @@
 				markNotificationRead(key)
 					.catch(() => {
 						// Revert optimistic update on error
-						if (notification) {
-							pageController.actions.updateNotification(notification);
-						}
+						pageController.actions.updateNotification(original);
 					})
 					.finally(() => {
 						pageController.actions.removePendingMarkRead(key);
@@ -461,12 +462,15 @@
 	// causing the "New Activity" button to reappear.
 	function handleNewActivityViewed() {
 		if (notification && !notification.isRead) {
-			const key = notification.githubId ?? notification.id;
+			// Capture snapshot — by the time the API call resolves, the reactive
+			// `notification` variable may point to a different notification.
+			const original = notification;
+			const key = original.githubId ?? original.id;
 			if (!key) return;
 
 			// Optimistically update the UI
 			pageController.actions.updateNotification({
-				...notification,
+				...original,
 				isRead: true,
 			});
 
@@ -477,9 +481,7 @@
 			markNotificationRead(key)
 				.catch(() => {
 					// Revert optimistic update on error
-					if (notification) {
-						pageController.actions.updateNotification(notification);
-					}
+					pageController.actions.updateNotification(original);
 				})
 				.finally(() => {
 					pageController.actions.removePendingMarkRead(key);

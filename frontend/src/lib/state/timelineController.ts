@@ -80,7 +80,7 @@ export function createTimelineController(): TimelineController {
 	// Composite key for deduplication — some event types (committed, merged) have null IDs,
 	// so deduplicating by id alone would treat them all as the same item.
 	const itemKey = (item: NotificationTimelineItem) =>
-		item.id != null ? String(item.id) : `${item.type}-${item.timestamp || ""}`;
+		item.id != null ? String(item.id) : `${item.type}-${item.sha || item.timestamp || ""}`;
 
 	/**
 	 * Merge cached review comments into the items store.
