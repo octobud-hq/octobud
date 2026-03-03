@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import { writable, type Writable } from "svelte/store";
+import { writable, get, type Writable } from "svelte/store";
 import { browser } from "$app/environment";
 
 const NOTIFICATIONS_ENABLED_KEY = "octobud:notifications:enabled";
@@ -75,9 +75,12 @@ export function createNotificationSettingsStore() {
 		timelineAutoScroll: timelineAutoScroll as Writable<boolean>,
 		syncFromStorage: () => {
 			if (typeof window === "undefined") return;
-			notificationsEnabled.set(localStorage.getItem(NOTIFICATIONS_ENABLED_KEY) !== "false");
-			faviconBadgeEnabled.set(localStorage.getItem(FAVICON_BADGE_ENABLED_KEY) !== "false");
-			timelineAutoScroll.set(localStorage.getItem(TIMELINE_AUTO_SCROLL_KEY) === "true");
+			const newEnabled = localStorage.getItem(NOTIFICATIONS_ENABLED_KEY) !== "false";
+			const newFaviconBadge = localStorage.getItem(FAVICON_BADGE_ENABLED_KEY) !== "false";
+			const newAutoScroll = localStorage.getItem(TIMELINE_AUTO_SCROLL_KEY) === "true";
+			if (newEnabled !== get(notificationsEnabled)) notificationsEnabled.set(newEnabled);
+			if (newFaviconBadge !== get(faviconBadgeEnabled)) faviconBadgeEnabled.set(newFaviconBadge);
+			if (newAutoScroll !== get(timelineAutoScroll)) timelineAutoScroll.set(newAutoScroll);
 		},
 		setEnabled: (enabled: boolean) => {
 			notificationsEnabled.set(enabled);

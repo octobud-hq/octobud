@@ -376,7 +376,7 @@
 	let resolvedAvatarUrl: string | null = null;
 	let avatarLoadFailed = false;
 	let previousGithubId: string | null = null;
-	let scrollContainer: HTMLDivElement;
+	let scrollContainer: HTMLDivElement | null = null;
 
 	// Reset avatar error state and timeline when switching to a different notification
 	$: if (notification) {
