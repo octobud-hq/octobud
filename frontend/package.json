@@ -15,7 +15,7 @@
         "test:watch": "vitest"
     },
     "devDependencies": {
-        "@eslint/compat": "^2.0.0",
+        "@eslint/compat": "^2.0.2",
         "@opentelemetry/api": "^1.9.0",
         "@skeletonlabs/skeleton": "^4.9.0",
         "@sveltejs/adapter-auto": "^3.3.1",
