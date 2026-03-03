@@ -35,7 +35,7 @@
 	import { currentTime } from "$lib/stores/timeStore";
 	import octicons from "@primer/octicons";
 	import { computeAvatarUrl, isRedirectAvatarUrl, resolveAvatarRedirect } from "$lib/utils/avatar";
-	import { updateTimelineLastSeen } from "$lib/api/notifications";
+	import { updateTimelineLastSeen, markNotificationRead } from "$lib/api/notifications";
 
 	// Subscribe to time store to trigger re-renders when time updates
 	// This ensures relative timestamps for same-day notifications stay fresh
@@ -136,11 +136,36 @@
 			!notification.isRead &&
 			autoMarkReadTimeoutId === null
 		) {
-			// Set up new timer for 2 seconds
-			autoMarkReadTimeoutId = setTimeout(async () => {
-				try {
-					await pageController.actions.markRead(notification);
-				} catch (err) {}
+			// Set up new timer for 1.5 seconds
+			// Use lightweight mark-read (optimistic update + fire-and-forget API)
+			// instead of the full action pipeline to avoid invalidateAll() which
+			// causes DOM reflows that can dismiss the "New Activity" button.
+			autoMarkReadTimeoutId = setTimeout(() => {
+				if (!notification) return;
+				// Capture snapshot — by the time the API call resolves, the reactive
+				// `notification` variable may point to a different notification.
+				const original = notification;
+				const key = original.githubId ?? original.id;
+				if (!key) return;
+
+				// Optimistically update the UI
+				pageController.actions.updateNotification({
+					...original,
+					isRead: true,
+				});
+
+				// Guard against polling race condition (same pattern as single mode)
+				pageController.actions.addPendingMarkRead(key);
+
+				// Fire-and-forget API call
+				markNotificationRead(key)
+					.catch(() => {
+						// Revert optimistic update on error
+						pageController.actions.updateNotification(original);
+					})
+					.finally(() => {
+						pageController.actions.removePendingMarkRead(key);
+					});
 			}, 1500);
 		} else if (!isSplitView) {
 			// Clear timer if we switch out of split mode
@@ -351,6 +376,7 @@
 	let resolvedAvatarUrl: string | null = null;
 	let avatarLoadFailed = false;
 	let previousGithubId: string | null = null;
+	let scrollContainer: HTMLDivElement | null = null;
 
 	// Reset avatar error state and timeline when switching to a different notification
 	$: if (notification) {
@@ -361,6 +387,7 @@
 		const currentGithubId = notification.githubId;
 		if (timelineController && currentGithubId !== previousGithubId) {
 			timelineController.actions.reset();
+			scrollContainer?.scrollTo(0, 0);
 			previousGithubId = currentGithubId;
 		}
 	}
@@ -429,12 +456,36 @@
 	}
 
 	// Handler for when user views new activity (scrolled to it or clicked the button)
-	// Uses the same trigger as the "New activity" button dismissal
+	// Uses the same trigger as the "New activity" button dismissal.
+	// Uses lightweight mark-read (optimistic update + fire-and-forget API) to avoid
+	// invalidateAll() which can revert timelineLastSeenAt before the DB write completes,
+	// causing the "New Activity" button to reappear.
 	function handleNewActivityViewed() {
 		if (notification && !notification.isRead) {
-			pageController.actions.markRead(notification).catch((err) => {
-				console.error("Failed to mark notification read on new activity:", err);
+			// Capture snapshot — by the time the API call resolves, the reactive
+			// `notification` variable may point to a different notification.
+			const original = notification;
+			const key = original.githubId ?? original.id;
+			if (!key) return;
+
+			// Optimistically update the UI
+			pageController.actions.updateNotification({
+				...original,
+				isRead: true,
 			});
+
+			// Guard against polling race condition (same pattern as single mode)
+			pageController.actions.addPendingMarkRead(key);
+
+			// Fire-and-forget API call
+			markNotificationRead(key)
+				.catch(() => {
+					// Revert optimistic update on error
+					pageController.actions.updateNotification(original);
+				})
+				.finally(() => {
+					pageController.actions.removePendingMarkRead(key);
+				});
 		}
 	}
 </script>
@@ -445,7 +496,7 @@
 		<DetailActionBar {notification} {isSplitView} {markingRead} {archiving} {hideBackButton} />
 
 		<!-- Scrollable Content -->
-		<div class="flex-1 overflow-y-auto">
+		<div bind:this={scrollContainer} class="flex-1 overflow-y-auto">
 			<div class="px-8 pb-16">
 				<div class="mx-auto max-w-7xl">
 					<!-- Header section - use notification data (always available) not detail (loaded async) -->

@@ -89,14 +89,15 @@ type ThreadCrossReference struct {
 
 // ThreadReviewComment represents an inline review comment on a PR diff.
 type ThreadReviewComment struct {
-	ID        string       `json:"id"`
-	Body      string       `json:"body"`
-	Path      string       `json:"path"`
-	DiffHunk  string       `json:"diffHunk,omitempty"`
-	Outdated  bool         `json:"outdated"`
-	Author    ThreadAuthor `json:"author"`
-	CreatedAt *string      `json:"createdAt,omitempty"`
-	HTMLURL   string       `json:"htmlUrl"`
+	ID        string                `json:"id"`
+	Body      string                `json:"body"`
+	Path      string                `json:"path"`
+	DiffHunk  string                `json:"diffHunk,omitempty"`
+	Outdated  bool                  `json:"outdated"`
+	Author    ThreadAuthor          `json:"author"`
+	CreatedAt *string               `json:"createdAt,omitempty"`
+	HTMLURL   string                `json:"htmlUrl"`
+	Replies   []ThreadReviewComment `json:"replies,omitempty"`
 }
 
 // ThreadReply represents a reply to a discussion comment.

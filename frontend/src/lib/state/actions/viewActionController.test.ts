@@ -74,6 +74,7 @@ describe("ViewActionController", () => {
 				notificationStore.pageData.set(data);
 			}),
 			updateNotification: vi.fn(),
+			hasPendingMarkRead: vi.fn().mockReturnValue(false),
 		} as any;
 
 		paginationStore = {
@@ -288,6 +289,29 @@ describe("ViewActionController", () => {
 			expect(fetchNotificationDetail).toHaveBeenCalledWith("gh-1", { query: "" });
 			expect(notificationStore.updateNotification).toHaveBeenCalledWith(updatedNotification, {
 				preserveOptimisticRead: false,
+			});
+		});
+
+		it("preserves optimistic read when mark-read is in-flight during poll refresh", async () => {
+			vi.mocked(fetchViews).mockResolvedValue([]);
+			paginationStore.page.set(2);
+			(uiStore.splitModeEnabled as any).set(false);
+			(detailStore.detailOpen as any).set(true);
+			(detailStore.detailNotificationId as any).set("gh-1");
+
+			const updatedNotification = { id: "1", githubId: "gh-1", title: "Updated" };
+			vi.mocked(fetchNotificationDetail).mockResolvedValue({
+				notification: updatedNotification,
+				subject: {},
+			} as any);
+
+			// Simulate an in-flight mark-read request
+			vi.mocked(notificationStore.hasPendingMarkRead).mockReturnValue(true);
+
+			await controller.handleSyncNewNotifications(["gh-1"]);
+
+			expect(notificationStore.updateNotification).toHaveBeenCalledWith(updatedNotification, {
+				preserveOptimisticRead: true,
 			});
 		});
 

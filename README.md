@@ -85,7 +85,7 @@ Official releases with embedded assets are currently only available for macOS. F
 
 ### Build from Source
 
-**Prerequisites:** [Go 1.24+](https://go.dev/dl/) and [Node.js 24+](https://nodejs.org/)
+**Prerequisites:** [Go 1.26+](https://go.dev/dl/) and [Node.js 24+](https://nodejs.org/)
 
 ```bash
 git clone https://github.com/octobud-hq/octobud.git && cd octobud
@@ -170,7 +170,6 @@ See the [Views & Rules guide](docs/guides/views-and-rules.md) for detailed instr
 - [Views & Rules](docs/guides/views-and-rules.md) - Organize your inbox
 - [Concepts](docs/concepts/) - How syncing, queries, and actions work
 - [Architecture](docs/ARCHITECTURE.md) - Technical architecture overview
-- [Troubleshooting](docs/TROUBLESHOOTING.md) - Common issues and solutions
 - [Migration Guide](docs/MIGRATION.md) - Upgrading and database migrations
 
 ## Roadmap

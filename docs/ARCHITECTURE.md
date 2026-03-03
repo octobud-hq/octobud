@@ -207,7 +207,7 @@ make generate  # Runs sqlc and mockgen
 
 ### Backend
 
-- Go 1.24+
+- Go 1.26+
 - SQLite (via modernc.org/sqlite)
 - Chi (HTTP router)
 - Zap (logging)

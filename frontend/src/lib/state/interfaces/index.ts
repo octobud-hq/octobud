@@ -58,6 +58,9 @@ export interface NotificationPageControllerActions
 		NotificationActions,
 		KeyboardShortcutActions,
 		BulkActions {
+	// Pending mark-read tracking (prevents polling from overwriting optimistic reads)
+	addPendingMarkRead: (id: string) => void;
+	removePendingMarkRead: (id: string) => void;
 	// UI state actions (exposed directly from store)
 	toggleSidebar: () => void;
 	openSnoozeDropdown: (notificationId: string, source: string) => void;

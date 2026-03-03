@@ -77,11 +77,18 @@ export function createTimelineController(): TimelineController {
 	// PR commit authors fetched in parallel — merged into committed items when both are ready
 	let commitAuthorsData: PRCommitAuthorsBySHA | null = null;
 
+	// Composite key for deduplication — some event types (committed, merged) have null IDs,
+	// so deduplicating by id alone would treat them all as the same item.
+	const itemKey = (item: NotificationTimelineItem) =>
+		item.id != null ? String(item.id) : `${item.type}-${item.sha || item.timestamp || ""}`;
+
 	/**
 	 * Merge cached review comments into the items store.
 	 * Idempotent — safe to call after either timeline items or review comments arrive.
+	 * When forceReplace is true, always replaces existing comments (picks up new replies
+	 * which are nested inside comments and don't change the top-level count).
 	 */
-	function mergeReviewComments(): void {
+	function mergeReviewComments(forceReplace: boolean = false): void {
 		if (!reviewCommentsData) return;
 		const currentItems = get(items);
 		if (currentItems.length === 0) return;
@@ -95,8 +102,10 @@ export function createTimelineController(): TimelineController {
 			if (!reviewId) return item;
 			const comments = data[reviewId];
 			if (!comments || comments.length === 0) return item;
-			// Skip if already merged
-			if (item.reviewComments && item.reviewComments.length > 0) return item;
+			// On force replace (refetch), always update — new replies are nested
+			// inside comments so the top-level count alone can't detect changes.
+			// On regular merge, skip if already populated with the same count.
+			if (!forceReplace && item.reviewCommentCount === comments.length) return item;
 			changed = true;
 			return { ...item, reviewComments: comments, reviewCommentCount: comments.length };
 		});
@@ -249,9 +258,14 @@ export function createTimelineController(): TimelineController {
 			// Reverse new items to show oldest first
 			const reversedNewItems = [...response.items].reverse();
 
-			// Prepend older items to the beginning of the list (since we're showing oldest first)
+			// Deduplicate: pagination can shift when new events are added between
+			// page loads, causing the same item to appear on adjacent pages.
 			const currentItems = get(items);
-			items.set([...reversedNewItems, ...currentItems]);
+			const existingKeys = new Set(currentItems.map(itemKey));
+			const dedupedNewItems = reversedNewItems.filter((item) => !existingKeys.has(itemKey(item)));
+
+			// Prepend older items to the beginning of the list (since we're showing oldest first)
+			items.set([...dedupedNewItems, ...currentItems]);
 			mergeReviewComments();
 			mergeCommitAuthors();
 
@@ -309,10 +323,6 @@ export function createTimelineController(): TimelineController {
 			// Deduplicate: only keep items not already in the list.
 			// Re-read the store (not the stale capture) so concurrent callers
 			// that slipped past the guard still see the latest items.
-			// Uses a composite key because some event types (committed, merged)
-			// have null IDs — deduplicating by id alone would treat them all as the same item.
-			const itemKey = (item: NotificationTimelineItem) =>
-				item.id != null ? String(item.id) : `${item.type}-${item.timestamp || ""}`;
 			const latestItems = get(items);
 			const existingKeys = new Set(latestItems.map(itemKey));
 			const newItems = reversedNewItems.filter((item) => !existingKeys.has(itemKey(item)));
@@ -320,11 +330,24 @@ export function createTimelineController(): TimelineController {
 			if (newItems.length > 0) {
 				// Append new items to the end (they're the newest)
 				items.update((current) => [...current, ...newItems]);
-				mergeReviewComments();
-				mergeCommitAuthors();
 
 				// Update total count but preserve page/hasMore (which track the oldest loaded page)
 				pagination.update((p) => ({ ...p, total: response.total }));
+			}
+
+			// Always re-fetch review comments and commit authors if they were
+			// previously loaded (i.e. this is a PR). New replies to existing
+			// reviews don't create new timeline events, so we must refetch
+			// even when newItems is empty.
+			if (reviewCommentsData) {
+				loadReviewComments(githubId, true);
+			} else {
+				mergeReviewComments();
+			}
+			if (commitAuthorsData) {
+				loadPRCommits(githubId, true);
+			} else {
+				mergeCommitAuthors();
 			}
 		} catch (err) {
 			// Silent failure for background refresh
@@ -355,7 +378,7 @@ export function createTimelineController(): TimelineController {
 			if (currentGithubId !== githubId) return;
 
 			reviewCommentsData = data;
-			mergeReviewComments();
+			mergeReviewComments(force);
 		} catch (err) {
 			// Non-critical — log and continue
 			if (currentGithubId === githubId) {

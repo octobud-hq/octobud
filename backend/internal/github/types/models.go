@@ -197,6 +197,7 @@ type CrossReferenceSource struct {
 type PullRequestComment struct {
 	ID                  int64      `json:"id"`
 	PullRequestReviewID int64      `json:"pull_request_review_id"`
+	InReplyToID         *int64     `json:"in_reply_to_id"`
 	Body                string     `json:"body"`
 	Path                string     `json:"path"`
 	DiffHunk            string     `json:"diff_hunk"`

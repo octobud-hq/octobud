@@ -294,6 +294,11 @@ export type TimelineEventType =
 	| "added_to_project_v2" // Added to project
 	| "removed_from_project_v2" // Removed from project
 	| "project_v2_item_status_changed" // Project status changed
+	| "converted_to_draft" // Issue converted to draft
+	| "converted_from_draft" // Issue converted from draft
+	| "parent_issue_removed" // Parent issue link removed
+	| "issue_field_added" // Issue field added
+	| "issue_field_removed" // Issue field removed
 	| string; // Fallback for unknown events
 
 // Inline review comment on a PR diff, fetched separately and merged into timeline items.
@@ -306,6 +311,7 @@ export interface TimelineReviewComment {
 	author: { login: string; avatarUrl: string };
 	createdAt?: string;
 	htmlUrl?: string;
+	replies?: TimelineReviewComment[];
 }
 
 export interface NotificationTimelineItem {

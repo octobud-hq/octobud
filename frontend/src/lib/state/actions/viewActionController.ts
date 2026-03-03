@@ -229,10 +229,11 @@ export function createViewActionController(
 				const detail = await fetchNotificationDetail(currentDetailId, {
 					query: currentQuery,
 				});
-				// Bypass optimistic read protection: the server legitimately changed the
-				// read state (e.g. new activity marked the notification unread on GitHub).
+				// Bypass optimistic read protection unless a mark-read API call is
+				// still in-flight — in that case the server state is stale and we
+				// must preserve the optimistic read to avoid a read→unread flicker.
 				notificationStore.updateNotification(detail.notification, {
-					preserveOptimisticRead: false,
+					preserveOptimisticRead: notificationStore.hasPendingMarkRead(currentDetailId),
 				});
 				// Directly trigger timeline refresh via registered handler.
 				// This bypasses the reactive effectiveSortDate detection which can
