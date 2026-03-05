@@ -62,7 +62,10 @@ export function createNotificationActionController(
 	stores: StoreCollection,
 	options: ControllerOptions,
 	optimisticUpdateHelpers: OptimisticUpdateHelpers,
-	sharedHelpers: SharedHelpers
+	sharedHelpers: SharedHelpers,
+	/** Targeted view count refresh (fetchViews + setViews) — NOT invalidateAll().
+	 *  Used by softMarkRead to avoid full page invalidation. */
+	refreshViewCounts: () => Promise<void>
 ): NotificationActions {
 	const { notificationStore, paginationStore, detailStore, selectionStore, keyboardStore } = stores;
 
@@ -208,6 +211,33 @@ export function createNotificationActionController(
 		}
 	}
 
+	function softMarkRead(notification: Notification): void {
+		if (notification.isRead) return;
+
+		const key = notification.githubId ?? notification.id;
+		if (!key) return;
+
+		// Optimistically update the UI
+		notificationStore.updateNotification({ ...notification, isRead: true });
+
+		// Refresh sidebar unread counts (targeted fetch, NOT invalidateAll)
+		refreshViewCounts();
+
+		// Guard against polling race condition
+		notificationStore.addPendingMarkRead(key);
+
+		// Fire-and-forget API call
+		markNotificationRead(key)
+			.catch(() => {
+				// Revert optimistic update on error
+				notificationStore.updateNotification(notification);
+				refreshViewCounts();
+			})
+			.finally(() => {
+				notificationStore.removePendingMarkRead(key);
+			});
+	}
+
 	async function markRead(notification: Notification): Promise<void> {
 		const isCurrentlyRead = notification.isRead;
 
@@ -295,11 +325,7 @@ export function createNotificationActionController(
 		await handleAction({
 			notification,
 			actionName: "snooze",
-			performAction: async (k) => {
-				await snoozeNotification(k, until);
-				// Snooze API doesn't return updated notification, so return original
-				return notification;
-			},
+			performAction: (k) => snoozeNotification(k, until),
 			successToast: "Snoozed",
 			errorToast: "Failed to snooze notification",
 			undoConfig: key
@@ -472,6 +498,7 @@ export function createNotificationActionController(
 
 	return {
 		markRead,
+		softMarkRead,
 		archive,
 		mute,
 		unmute,

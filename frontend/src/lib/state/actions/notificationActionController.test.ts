@@ -186,7 +186,8 @@ describe("NotificationActionController", () => {
 			},
 			options,
 			optimisticUpdateHelpers,
-			sharedHelpers
+			sharedHelpers,
+			vi.fn(async () => {})
 		);
 	});
 

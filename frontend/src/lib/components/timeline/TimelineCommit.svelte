@@ -26,7 +26,10 @@
 	$: directAvatarUrl = item.author?.avatarUrl || item.actor?.avatarUrl;
 	$: authorInitial = authorLogin.charAt(0).toUpperCase();
 	$: shortSha = item.sha?.substring(0, 7) || "";
-	$: commitMessage = item.message || "";
+	$: commitMessage = (() => {
+		const msg = item.message || "";
+		return msg.length > 100 ? msg.substring(0, 100) + "…" : msg;
+	})();
 	$: timestamp = item.createdAt || item.timestamp;
 
 	// Compute base avatar URL (direct or redirect)

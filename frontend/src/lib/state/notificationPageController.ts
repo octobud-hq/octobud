@@ -144,7 +144,8 @@ export function createNotificationPageController(
 		},
 		options,
 		optimisticUpdateHelpers,
-		sharedHelpers
+		sharedHelpers,
+		viewActions.refreshViewCounts
 	);
 
 	// Create detail controller with markRead from notificationActions (clean dependency order)

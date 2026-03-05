@@ -21,6 +21,24 @@ import type { Notification } from "$lib/api/types";
  */
 export interface NotificationActions {
 	markRead: (notification: Notification) => Promise<void>;
+	/**
+	 * Lightweight mark-read for auto-mark-read scenarios (split mode timer,
+	 * single mode detail open, new-activity-viewed).
+	 *
+	 * Unlike the full `markRead` pipeline, this does NOT replace the notification
+	 * with the server response. This avoids a race condition where the server
+	 * response carries a stale `timelineLastSeenAt` (because the
+	 * `updateTimelineLastSeen` DB write may still be in-flight), which would
+	 * revert the optimistic update and cause the "New Activity" button to
+	 * reappear.
+	 *
+	 * What it does:
+	 * 1. Optimistic UI update (isRead: true)
+	 * 2. Refresh sidebar/view unread counts
+	 * 3. Fire-and-forget API call with pending-mark-read guard
+	 * 4. Revert on error
+	 */
+	softMarkRead: (notification: Notification) => void;
 	archive: (notification: Notification) => Promise<void>;
 	mute: (notification: Notification) => Promise<void>;
 	unmute: (notification: Notification) => Promise<void>;

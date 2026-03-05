@@ -9,7 +9,7 @@
 <h1 align="center">Octobud</h1>
 
 <p align="center">
-  <strong>Like Gmail, but for your GitHub notifications.</strong>
+  <strong>Superfast GitHub Notification Inbox.</strong>
 </p>
 
 <p align="center">
@@ -46,29 +46,34 @@ Built with **Go** and **Svelte 5**. Runs as a single binary with SQLite - no ext
 
 If you manage many GitHub notifications, you know that organizing and triaging them efficiently can be a major challenge.
 
-Octobud builds on GitHub's notification system and provides a Gmail-like experience for notification management: rich filtering and querying, custom filter views, keyboard shortcuts, automation rules, and more, all running locally on your machine.
+Octobud builds on GitHub's notification system and provides a smart, dedicated inbox experience: rich filtering and querying, custom views, keyboard shortcuts, automation rules, and more, all running locally on your machine.
 
 ## Features
 
-### Gmail-inspired Notification Inbox
-![Default Inbox View](docs/media/hero_inbox.gif)
+![Smart Notification Inbox](docs/media/hero_split.gif)
 
-### Split Pane Mode
-![Split Pane Mode](docs/media/hero_split_detail.gif)
+#### ⚡ Super Fast Loading
+Issue, PR, and Discussion data is stored locally for instant lookup and filtering
+
+#### 📜 Rich Timeline
+See the full story of an issue or PR: commits, reviews, comments, and status changes
+
+#### 📥 Full Lifecycle Management
+Star, Snooze, Archive, Tag, and Mute notifications
 
 ### More
 
 | Feature | Description |
 |---------|-------------|
-| **Full lifecycle management** | Star, Snooze, Archive, Tag, and Mute notifications |
-| **Inline Issue and PR details** | View status, comments, and more inline |
-| **Super fast loading** | Issue, PR, and Discussion data is stored locally for fast lookup and filtering |
-| **Custom Views** | Create filtered views with a rich query language |
-| **Keyboard-First** | Navigate and manage notifications without touching your mouse |
-| **Automation Rules** | Automatically archive, filter, or tag notifications based on criteria |
-| **Tags** | Organize notifications with custom tags and colors |
-| **Real-Time Sync** | Background sync keeps notifications up to date |
-| **Desktop notifications** | Never miss a review request or issue reply |
+| **Rich Querying** | Filter with a powerful query language |
+| **Custom Views** | Create saved filtered views for your workflow |
+| **Automation Rules** | Filter, tag, archive and more with query-based rules |
+| **Keyboard-First** | Vim-style navigation and intuitive shortcuts |
+| **Desktop Notifications** | Never miss a review request or issue reply |
+| **Inline Details** | View issue and PR status, comments, and more inline |
+| **Split Pane Mode** | View details side by side with your inbox |
+| **Tags** | Organize with custom tags and colors |
+| **Real-Time Sync** | Background sync keeps everything up to date |
 | **Privacy-First** | Local-first, your data stays on your machine |
 
 ## Quick Start
@@ -207,5 +212,5 @@ Octobud is an independent, open-source project. It is **not affiliated with, end
 ---
 
 <p align="center">
-  Made with ❤️ by someone who hates reading GitHub notifications in plain text and managing a million Gmail filters.
+  Made with ❤️ by someone who wanted a better way to stay on top of GitHub notifications.
 </p>

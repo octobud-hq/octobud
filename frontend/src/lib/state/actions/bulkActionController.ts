@@ -167,8 +167,6 @@ export function createBulkActionController(
 			// Perform the bulk action
 			const actualCount = await performAction(ids, useQuery ? currentQuery : undefined);
 
-			await options.onRefreshViewCounts?.();
-
 			// Sync query to URL before refreshing to preserve it
 			await sharedHelpers.syncQueryToUrl();
 

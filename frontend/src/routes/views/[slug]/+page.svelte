@@ -305,30 +305,10 @@
 					detailLoading.set(false);
 					detailShowingStaleData.set(false);
 
-					// SINGLE MODE: Mark as read when detail loads (fire-and-forget)
-					// This happens after detail is loaded, so we can optimistically update
+					// SINGLE MODE: Mark as read when detail loads
 					const isSplitMode = get(splitModeEnabled);
-					if (!isSplitMode && !detail.notification.isRead) {
-						// Optimistically update the UI immediately
-						const optimisticUpdate = {
-							...detail.notification,
-							isRead: true,
-						};
-						pageController.actions.updateNotification(optimisticUpdate);
-
-						// Fire-and-forget API call (track pending to prevent polling race)
-						const markReadKey = detail.notification.githubId ?? detail.notification.id;
-						if (markReadKey) pageController.actions.addPendingMarkRead(markReadKey);
-						pageController.actions
-							.markRead(detail.notification)
-							.catch((err) => {
-								console.error("Failed to mark notification as read", err);
-								// Revert optimistic update on error
-								pageController.actions.updateNotification(detail.notification);
-							})
-							.finally(() => {
-								if (markReadKey) pageController.actions.removePendingMarkRead(markReadKey);
-							});
+					if (!isSplitMode) {
+						pageController.actions.softMarkRead(detail.notification);
 					}
 				}
 				return detail;
