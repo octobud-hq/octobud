@@ -37,6 +37,7 @@ interface TagEnvelope {
 }
 
 import { fetchWithAuth, buildApiUrl, ApiUnreachableError, isProxyConnectionError } from "./fetch";
+import { fromBackendNotification } from "./notifications";
 
 export async function fetchTags(fetchImpl: typeof fetch = fetch): Promise<Tag[]> {
 	const response = await fetchWithAuth("/api/tags", {}, fetchImpl);
@@ -140,7 +141,7 @@ export async function assignTagToNotification(
 		throw new Error(`Failed to assign tag: ${response.statusText}`);
 	}
 	const data = await response.json();
-	return data.notification;
+	return fromBackendNotification(data.notification);
 }
 
 export async function assignTagToNotificationByName(
@@ -164,7 +165,7 @@ export async function assignTagToNotificationByName(
 		throw new Error(`Failed to assign tag: ${response.statusText}`);
 	}
 	const data = await response.json();
-	return data.notification;
+	return fromBackendNotification(data.notification);
 }
 
 export async function removeTagFromNotification(
@@ -184,7 +185,7 @@ export async function removeTagFromNotification(
 		throw new Error(`Failed to remove tag: ${response.statusText}`);
 	}
 	const data = await response.json();
-	return data.notification;
+	return fromBackendNotification(data.notification);
 }
 
 export async function reorderTags(

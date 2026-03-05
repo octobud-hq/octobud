@@ -441,7 +441,9 @@ export function createOptimisticUpdateHelpers(
 				// NON-DISMISSIVE ACTION
 				// Update in place - notificationStore.updateNotification handles both normalized store and pageData
 				if (updated) {
-					notificationStore.updateNotification(updated);
+					// This is an authoritative server response from a user-initiated action,
+					// so allow read→unread transitions (don't preserve optimistic read status).
+					notificationStore.updateNotification(updated, { preserveOptimisticRead: false });
 					// currentDetailNotification is derived, so it updates automatically!
 					// No manual sync needed
 
@@ -461,7 +463,7 @@ export function createOptimisticUpdateHelpers(
 						}
 					}
 
-					// Refresh view counts (this is async but doesn't affect the detail view)
+					// Refresh page data and view counts
 					await options.onRefreshViewCounts?.();
 
 					// Restore keyboard focus if this item was focused

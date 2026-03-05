@@ -4,21 +4,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Octobud - GitHub Notification Manager</title>
+    <title>Octobud - Smart GitHub Inbox</title>
     <meta name="description"
-        content="A keyboard-driven GitHub notification manager. Like Gmail for your GitHub notifications.">
+        content="A smart GitHub inbox with automation rules, custom views, rich timelines, and keyboard-first triage.">
     <meta name="theme-color" content="#0d1117">
 
     <!-- Open Graph -->
-    <meta property="og:title" content="Octobud - GitHub Notification Manager">
+    <meta property="og:title" content="Octobud - Smart GitHub Inbox">
     <meta property="og:description"
-        content="A keyboard-driven GitHub notification manager. Like Gmail for your GitHub notifications.">
+        content="A smart GitHub inbox with automation rules, custom views, rich timelines, and keyboard-first triage.">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://octobud.io">
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="Octobud - GitHub Notification Manager">
+    <meta name="twitter:title" content="Octobud - Smart GitHub Inbox">
     <meta name="twitter:description" content="A keyboard-driven GitHub notification manager.">
 
     <link rel="icon" type="image/png" href="favicon.png">
@@ -182,28 +182,75 @@
 
         /* Showcase */
         .showcase {
-            padding: 80px 0;
+            padding: 80px 0 20px;
             border-top: 1px solid var(--border);
         }
 
         .showcase h2 {
             font-size: 32px;
-            margin-bottom: 48px;
+            margin-bottom: 32px;
             text-align: center;
         }
 
         .showcase-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
-            gap: 32px;
             max-width: 1000px;
             margin: 0 auto;
         }
 
+        .showcase-item-wrapper {
+            position: relative;
+            border-radius: 16px;
+            padding: 2px;
+        }
+
+        .showcase-item-wrapper::before {
+            content: '';
+            position: absolute;
+            inset: -2px;
+            border-radius: 18px;
+            background: conic-gradient(from var(--glow-angle, 0deg),
+                    transparent 0%,
+                    rgba(124, 58, 237, 0.35) 5%,
+                    rgba(167, 139, 250, 0.5) 12%,
+                    rgba(124, 58, 237, 0.3) 20%,
+                    transparent 35%,
+                    transparent 100%);
+            animation: glow-rotate 6s linear infinite;
+            filter: blur(4px);
+        }
+
+        .showcase-item-wrapper::after {
+            content: '';
+            position: absolute;
+            inset: -30px;
+            border-radius: 40px;
+            background: conic-gradient(from var(--glow-angle, 0deg),
+                    transparent 0%,
+                    rgba(124, 58, 237, 0.1) 5%,
+                    rgba(167, 139, 250, 0.12) 12%,
+                    rgba(124, 58, 237, 0.08) 20%,
+                    transparent 35%,
+                    transparent 100%);
+            animation: glow-rotate 6s linear infinite;
+            filter: blur(30px);
+            z-index: -1;
+        }
+
+        @property --glow-angle {
+            syntax: '<angle>';
+            initial-value: 0deg;
+            inherits: false;
+        }
+
+        @keyframes glow-rotate {
+            to {
+                --glow-angle: 360deg;
+            }
+        }
+
         .showcase-item {
-            background: var(--bg-secondary);
-            border: 1px solid var(--border);
-            border-radius: 12px;
+            position: relative;
+            border-radius: 14px;
             overflow: hidden;
             display: flex;
             flex-direction: column;
@@ -215,24 +262,16 @@
             display: block;
         }
 
-        .showcase-item h3 {
-            padding: 24px;
-            font-size: 20px;
-            border-top: 1px solid var(--border);
-            text-align: center;
-            margin: 0;
-            font-weight: 600;
-        }
-
         /* Features */
         .features {
             padding: 80px 0;
         }
 
-        .features-grid {
+        .features-prominent {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            grid-template-columns: repeat(3, 1fr);
             gap: 24px;
+            margin-bottom: 24px;
         }
 
         .feature-card {
@@ -247,26 +286,89 @@
             border-color: var(--accent);
         }
 
+        .feature-card.prominent {
+            border-color: rgba(124, 58, 237, 0.3);
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, rgba(124, 58, 237, 0.06) 100%);
+            padding: 28px 24px;
+        }
+
+        .feature-card.prominent:hover {
+            border-color: rgba(124, 58, 237, 0.6);
+        }
+
+        .feature-card.prominent .feature-icon {
+            background: rgba(124, 58, 237, 0.15);
+            width: 44px;
+            height: 44px;
+            font-size: 22px;
+        }
+
+        .feature-card.prominent h3 {
+            font-size: 17px;
+        }
+
+        .feature-card.prominent p {
+            font-size: 14px;
+        }
+
+
+        .features-list {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .feature-list-item {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            column-gap: 14px;
+            row-gap: 2px;
+            padding: 14px 18px;
+            background: rgba(22, 27, 34, 0.5);
+            border-radius: 14px;
+            align-items: baseline;
+        }
+
+        .feature-list-icon {
+            font-size: 18px;
+            grid-row: 1 / 3;
+        }
+
+        .feature-list-item h3 {
+            font-size: 15px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .feature-list-item p {
+            color: var(--text-muted);
+            font-size: 15px;
+            line-height: 1.4;
+        }
+
         .feature-icon {
-            width: 48px;
-            height: 48px;
+            width: 36px;
+            height: 36px;
             background: var(--bg-tertiary);
-            border-radius: 10px;
+            border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
-            margin-bottom: 20px;
-            font-size: 24px;
+            margin-bottom: 14px;
+            font-size: 18px;
         }
 
         .feature-card h3 {
-            font-size: 18px;
-            margin-bottom: 12px;
+            font-size: 15px;
+            margin-bottom: 8px;
         }
 
         .feature-card p {
             color: var(--text-secondary);
-            font-size: 14px;
+            font-size: 13px;
+            line-height: 1.5;
         }
 
         /* Quick Start */
@@ -350,7 +452,12 @@
                 display: none;
             }
 
-            .showcase-grid {
+
+            .features-prominent {
+                grid-template-columns: 1fr;
+            }
+
+            .features-list {
                 grid-template-columns: 1fr;
             }
         }
@@ -380,8 +487,9 @@
     <main>
         <section class="hero">
             <div class="container">
-                <h1>Gmail for your<br>GitHub notifications</h1>
-                <p>Octobud is a Mac desktop application that helps you manage the flood of GitHub notifications with
+                <h1>Superfast Inbox For Your GitHub Notifications</h1>
+                <p>Octobud is an open source Mac desktop app that lets you manage the flood of GitHub notifications
+                    with
                     advanced filtering, custom views, keyboard shortcuts, and automation rules.</p>
 
                 <div class="hero-buttons">
@@ -409,15 +517,11 @@
 
         <section class="showcase">
             <div class="container">
-                <h2>See It In Action</h2>
                 <div class="showcase-grid">
-                    <div class="showcase-item">
-                        <img src="hero_inbox.gif" alt="Gmail-like Notification Inbox">
-                        <h3>Gmail-like Notification Inbox</h3>
-                    </div>
-                    <div class="showcase-item">
-                        <img src="hero_split_detail.gif" alt="Split Pane Mode">
-                        <h3>Split Pane Mode</h3>
+                    <div class="showcase-item-wrapper">
+                        <div class="showcase-item">
+                            <img src="hero_split.gif" alt="Octobud Smart Notification Inbox">
+                        </div>
                     </div>
                 </div>
             </div>
@@ -425,60 +529,78 @@
 
         <section class="features">
             <div class="container">
-                <div class="features-grid">
-                    <div class="feature-card">
+                <h2 style="font-size: 32px; margin-bottom: 40px; text-align: center;">Fully featured inbox with maximum
+                    speed
+                </h2>
+                <div class="features-prominent">
+                    <div class="feature-card prominent">
+                        <div class="feature-icon">⚡</div>
+                        <h3>Super Fast Loading</h3>
+                        <p>Issue, PR, and Discussion data is stored locally for instant lookup and filtering.</p>
+                    </div>
+                    <div class="feature-card prominent">
+                        <div class="feature-icon">📜</div>
+                        <h3>Rich Timeline</h3>
+                        <p>See the full story of an issue or PR: commits, reviews, comments, and status changes in a
+                            rich timeline view.</p>
+                    </div>
+                    <div class="feature-card prominent">
                         <div class="feature-icon">📥</div>
                         <h3>Full Lifecycle Management</h3>
                         <p>Star, Snooze, Archive, Tag, and Mute notifications. Keep your inbox clean and focused.</p>
                     </div>
-                    <div class="feature-card">
-                        <div class="feature-icon">💬</div>
-                        <h3>Inline Issue and PR Details</h3>
-                        <p>View status, comments, and more inline without leaving your inbox.</p>
+                </div>
+
+                <div class="features-list">
+                    <div class="feature-list-item">
+                        <span class="feature-list-icon">🔍</span>
+                        <h3>Rich Querying</h3>
+                        <p>Filter with a powerful query language</p>
                     </div>
-                    <div class="feature-card">
-                        <div class="feature-icon">📑</div>
-                        <h3>Split Pane Mode</h3>
-                        <p>View details side by side with your inbox for efficient triage.</p>
-                    </div>
-                    <div class="feature-card">
-                        <div class="feature-icon">🔍</div>
+                    <div class="feature-list-item">
+                        <span class="feature-list-icon">✨</span>
                         <h3>Custom Views</h3>
-                        <p>Create filtered views with a query language (e.g.,
-                            <code>repo:octobud,traefik,vscode AND (reason:review_requested OR tags:followup)</code>).
-                        </p>
+                        <p>Create saved filtered views for your workflow</p>
                     </div>
-                    <div class="feature-card">
-                        <div class="feature-icon">⌨️</div>
-                        <h3>Keyboard-First</h3>
-                        <p>Navigate and manage notifications without touching your mouse. Vim-style j/k navigation and
-                            intuitive shortcuts.</p>
-                    </div>
-                    <div class="feature-card">
-                        <div class="feature-icon">⚡</div>
+                    <div class="feature-list-item">
+                        <span class="feature-list-icon">🤖</span>
                         <h3>Automation Rules</h3>
-                        <p>Automatically archive, filter, or tag notifications based on criteria. Skip the noise,
-                            surface what matters.</p>
+                        <p>Filter, tag, archive and more with query-based rules</p>
                     </div>
-                    <div class="feature-card">
-                        <div class="feature-icon">🏷️</div>
-                        <h3>Tags</h3>
-                        <p>Organize notifications with custom tags and colors for better organization.</p>
+                    <div class="feature-list-item">
+                        <span class="feature-list-icon">⌨️</span>
+                        <h3>Keyboard-First</h3>
+                        <p>Vim-style navigation and intuitive shortcuts</p>
                     </div>
-                    <div class="feature-card">
-                        <div class="feature-icon">🔄</div>
-                        <h3>Real-Time Sync</h3>
-                        <p>Background worker keeps notifications up to date automatically.</p>
-                    </div>
-                    <div class="feature-card">
-                        <div class="feature-icon">🔔</div>
+                    <div class="feature-list-item">
+                        <span class="feature-list-icon">🔔</span>
                         <h3>Desktop Notifications</h3>
-                        <p>Never miss a review request or issue reply with desktop notifications.</p>
+                        <p>Never miss a review request or issue reply</p>
                     </div>
-                    <div class="feature-card">
-                        <div class="feature-icon">🔒</div>
+                    <div class="feature-list-item">
+                        <span class="feature-list-icon">💬</span>
+                        <h3>Inline Details</h3>
+                        <p>View issue and PR status, comments, and more inline</p>
+                    </div>
+                    <div class="feature-list-item">
+                        <span class="feature-list-icon">📑</span>
+                        <h3>Split Pane Mode</h3>
+                        <p>View details side by side with your inbox</p>
+                    </div>
+                    <div class="feature-list-item">
+                        <span class="feature-list-icon">🏷️</span>
+                        <h3>Tags</h3>
+                        <p>Organize with custom tags and colors</p>
+                    </div>
+                    <div class="feature-list-item">
+                        <span class="feature-list-icon">🔄</span>
+                        <h3>Real-Time Sync</h3>
+                        <p>Background sync keeps everything up to date</p>
+                    </div>
+                    <div class="feature-list-item">
+                        <span class="feature-list-icon">🔒</span>
                         <h3>Privacy-First</h3>
-                        <p>Local-first desktop app, your data stays on your machine. Open source under AGPL-3.0.</p>
+                        <p>Local-first, your data stays on your machine</p>
                     </div>
                 </div>
             </div>
@@ -521,8 +643,7 @@
                 <a href="https://github.com/octobud-hq/octobud/blob/main/LICENSE.txt">License</a>
             </div>
             <p class="footer-text">
-                Made with ❤️ by someone who hates reading GitHub notifications in plain text and managing a million
-                Gmail filters.
+                Made with ❤️ by someone who wanted a better way to stay on top of GitHub notifications.
             </p>
         </div>
     </footer>

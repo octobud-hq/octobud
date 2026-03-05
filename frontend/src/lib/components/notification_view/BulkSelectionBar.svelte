@@ -151,7 +151,7 @@
 </script>
 
 {#if multiselectMode}
-	<div class="ml-1 flex items-center gap-1 text-sm overflow-x-auto">
+	<div class="ml-1 flex items-center gap-1 text-sm">
 		<SelectAllDropdown
 			currentMode={$selectAllMode}
 			{pageCount}
@@ -161,7 +161,7 @@
 			onClearSelection={pageController.actions.clearSelection}
 		/>
 
-		<div class="ml-2 flex items-center gap-2">
+		<div class="ml-2 flex items-center gap-2 overflow-x-auto">
 			<button
 				class={iconButtonClass}
 				type="button"
