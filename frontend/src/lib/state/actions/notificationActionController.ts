@@ -217,11 +217,16 @@ export function createNotificationActionController(
 		const key = notification.githubId ?? notification.id;
 		if (!key) return;
 
+		// Read the freshest copy from the store so we don't overwrite
+		// fields that may have changed since the caller obtained its reference
+		// (e.g. new-activity state that arrived while a timeout was pending).
+		const current = notificationStore.getNotification(key) ?? notification;
+
 		// Optimistically update the UI
-		notificationStore.updateNotification({ ...notification, isRead: true });
+		notificationStore.updateNotification({ ...current, isRead: true });
 
 		// Refresh sidebar unread counts (targeted fetch, NOT invalidateAll)
-		refreshViewCounts();
+		void refreshViewCounts().catch(() => {});
 
 		// Guard against polling race condition
 		notificationStore.addPendingMarkRead(key);
@@ -230,8 +235,8 @@ export function createNotificationActionController(
 		markNotificationRead(key)
 			.catch(() => {
 				// Revert optimistic update on error
-				notificationStore.updateNotification(notification);
-				refreshViewCounts();
+				notificationStore.updateNotification(current);
+				void refreshViewCounts().catch(() => {});
 			})
 			.finally(() => {
 				notificationStore.removePendingMarkRead(key);

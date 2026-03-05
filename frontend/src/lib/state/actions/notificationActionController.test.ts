@@ -97,6 +97,7 @@ describe("NotificationActionController", () => {
 	let optimisticUpdateHelpers: ReturnType<typeof createOptimisticUpdateHelpers>;
 	let sharedHelpers: ReturnType<typeof createSharedHelpers>;
 	let controller: ReturnType<typeof createNotificationActionController>;
+	let refreshViewCounts: () => Promise<void>;
 
 	beforeEach(() => {
 		vi.clearAllMocks();
@@ -116,6 +117,10 @@ describe("NotificationActionController", () => {
 			updateNotification: vi.fn(),
 			removeNotification: vi.fn(),
 			restoreNotification: vi.fn(),
+			getNotification: vi.fn(() => null),
+			addPendingMarkRead: vi.fn(),
+			removePendingMarkRead: vi.fn(),
+			hasPendingMarkRead: vi.fn(),
 		} as any;
 
 		paginationStore = {
@@ -176,6 +181,7 @@ describe("NotificationActionController", () => {
 			sharedHelpers
 		);
 
+		refreshViewCounts = vi.fn<() => Promise<void>>(async () => {});
 		controller = createNotificationActionController(
 			{
 				notificationStore,
@@ -187,7 +193,7 @@ describe("NotificationActionController", () => {
 			options,
 			optimisticUpdateHelpers,
 			sharedHelpers,
-			vi.fn(async () => {})
+			refreshViewCounts
 		);
 	});
 
@@ -289,6 +295,111 @@ describe("NotificationActionController", () => {
 
 			// Should use the one from store
 			expect(markNotificationRead).toHaveBeenCalledWith("gh-1");
+		});
+	});
+
+	describe("softMarkRead", () => {
+		it("skips already-read notifications", () => {
+			const notification = createMockNotification({ isRead: true });
+
+			controller.softMarkRead(notification);
+
+			expect(notificationStore.updateNotification).not.toHaveBeenCalled();
+			expect(markNotificationRead).not.toHaveBeenCalled();
+		});
+
+		it("skips notifications without a key", () => {
+			const notification = createMockNotification({ id: "", githubId: undefined } as any);
+
+			controller.softMarkRead(notification);
+
+			expect(notificationStore.updateNotification).not.toHaveBeenCalled();
+			expect(markNotificationRead).not.toHaveBeenCalled();
+		});
+
+		it("optimistically updates isRead and adds pending key", () => {
+			const notification = createMockNotification({ isRead: false });
+			vi.mocked(markNotificationRead).mockResolvedValue({} as any);
+
+			controller.softMarkRead(notification);
+
+			expect(notificationStore.updateNotification).toHaveBeenCalledWith(
+				expect.objectContaining({ isRead: true })
+			);
+			expect(notificationStore.addPendingMarkRead).toHaveBeenCalledWith("gh-1");
+		});
+
+		it("calls refreshViewCounts after optimistic update", () => {
+			const notification = createMockNotification({ isRead: false });
+			vi.mocked(markNotificationRead).mockResolvedValue({} as any);
+
+			controller.softMarkRead(notification);
+
+			expect(refreshViewCounts).toHaveBeenCalled();
+		});
+
+		it("calls markNotificationRead with the correct key", () => {
+			const notification = createMockNotification({ isRead: false });
+			vi.mocked(markNotificationRead).mockResolvedValue({} as any);
+
+			controller.softMarkRead(notification);
+
+			expect(markNotificationRead).toHaveBeenCalledWith("gh-1");
+		});
+
+		it("uses id as fallback key when githubId is absent", () => {
+			const notification = createMockNotification({ id: "local-1", githubId: undefined } as any);
+			vi.mocked(markNotificationRead).mockResolvedValue({} as any);
+
+			controller.softMarkRead(notification);
+
+			expect(markNotificationRead).toHaveBeenCalledWith("local-1");
+			expect(notificationStore.addPendingMarkRead).toHaveBeenCalledWith("local-1");
+		});
+
+		it("reverts optimistic update and refreshes view counts on API failure", async () => {
+			const notification = createMockNotification({ isRead: false });
+			vi.mocked(markNotificationRead).mockRejectedValue(new Error("Network error"));
+
+			controller.softMarkRead(notification);
+
+			// Wait for the fire-and-forget promise chain to settle
+			await vi.waitFor(() => {
+				expect(notificationStore.updateNotification).toHaveBeenCalledTimes(2);
+			});
+
+			// First call: optimistic update (isRead: true)
+			expect(notificationStore.updateNotification).toHaveBeenNthCalledWith(
+				1,
+				expect.objectContaining({ isRead: true })
+			);
+			// Second call: revert (original notification with isRead: false)
+			expect(notificationStore.updateNotification).toHaveBeenNthCalledWith(2, notification);
+
+			// refreshViewCounts called twice: once optimistic, once on revert
+			expect(refreshViewCounts).toHaveBeenCalledTimes(2);
+		});
+
+		it("removes pending key in finally block on success", async () => {
+			const notification = createMockNotification({ isRead: false });
+			vi.mocked(markNotificationRead).mockResolvedValue({} as any);
+
+			controller.softMarkRead(notification);
+
+			await vi.waitFor(() => {
+				expect(notificationStore.removePendingMarkRead).toHaveBeenCalledWith("gh-1");
+			});
+		});
+
+		it("removes pending key in finally block on failure", async () => {
+			const notification = createMockNotification({ isRead: false });
+			vi.mocked(markNotificationRead).mockRejectedValue(new Error("fail"));
+
+			controller.softMarkRead(notification);
+
+			await vi.waitFor(() => {
+				expect(notificationStore.removePendingMarkRead).toHaveBeenCalledWith("gh-1");
+			});
 		});
 	});
 
