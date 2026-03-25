@@ -705,8 +705,7 @@
                     }
                 }
 
-                // Fallback to first asset
-                return assets.length > 0 ? assets[0] : null;
+                return null;
             }
 
             // Fetch latest release and update download button
@@ -740,6 +739,11 @@
                         downloadBtn.href = asset.browser_download_url;
                         downloadBtn.download = asset.name;
                         downloadText.textContent = `Download for ${platform === 'macos' ? 'macOS' : platform === 'windows' ? 'Windows' : 'Linux'}`;
+                    } else if (platform !== 'macos') {
+                        // No native builds for this platform yet
+                        downloadBtn.href = 'https://github.com/octobud-hq/octobud';
+                        downloadBtn.removeAttribute('download');
+                        downloadText.textContent = 'Build from Source';
                     } else {
                         // Fallback to releases page
                         downloadBtn.href = 'https://github.com/octobud-hq/octobud/releases/latest';
