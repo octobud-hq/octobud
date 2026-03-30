@@ -7,7 +7,7 @@ require (
 	github.com/cenkalti/backoff/v5 v5.0.3
 	github.com/go-chi/chi/v5 v5.2.5
 	github.com/go-chi/cors v1.2.2
-	github.com/hashicorp/go-version v1.8.0
+	github.com/hashicorp/go-version v1.9.0
 	github.com/keybase/go-keychain v0.0.1
 	github.com/pressly/goose/v3 v3.27.0
 	github.com/stretchr/testify v1.11.1
