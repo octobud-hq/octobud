@@ -163,7 +163,25 @@ Here are some recommended views and rules to help you get started:
 
 See the [Views & Rules guide](docs/guides/views-and-rules.md) for detailed instructions on creating views and rules.
 
+### Reset on macOS (clean reinstall)
 
+If you want to start over, quit Octobud and remove its local state:
+
+```bash
+osascript -e 'quit app "Octobud"' 2>/dev/null || true
+
+rm -rf ~/Library/Application\ Support/Octobud
+rm -f ~/Library/Preferences/io.octobud.plist
+rm -rf ~/Library/Caches/io.octobud
+
+osascript -e 'tell application "System Events" to delete login item "Octobud"' 2>/dev/null || true
+
+while security delete-generic-password -s io.octobud >/dev/null 2>&1; do :; done
+```
+
+Then launch Octobud again. It starts with a fresh setup flow.
+
+If you ran Octobud with `--data-dir`, also remove that custom directory.
 
 ## Documentation
 
