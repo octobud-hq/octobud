@@ -113,7 +113,7 @@
 					label: "Changes requested",
 					icon: "⚠",
 					useIcon: false,
-					iconPath: octicons["file-diff"].toSVG().match(/d="([^"]+)"/)?.[1] ?? "",
+					iconPath: octicons["file-diff"].heights["16"].path,
 					bgClass: "bg-red-600",
 					textClass: "text-white",
 				};

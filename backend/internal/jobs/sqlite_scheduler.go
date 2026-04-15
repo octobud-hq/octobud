@@ -736,7 +736,11 @@ func (s *SQLiteScheduler) enrichmentLoop(ctx context.Context) {
 				// so only a version bump would create new work.
 				continue
 			}
-			processed := s.doEnrichment(ctx)
+			processed, ok := s.doEnrichment(ctx)
+			if !ok {
+				// Couldn't run (no user, error) - don't idle, retry next tick
+				continue
+			}
 			if processed > 0 {
 				totalEnriched += processed
 				s.logger.Info("enriched notifications",
@@ -751,19 +755,21 @@ func (s *SQLiteScheduler) enrichmentLoop(ctx context.Context) {
 	}
 }
 
-func (s *SQLiteScheduler) doEnrichment(ctx context.Context) int64 {
+// doEnrichment runs a single enrichment batch. Returns (processed, ok) where ok is false
+// if the batch couldn't run (no user configured, error) and should be retried.
+func (s *SQLiteScheduler) doEnrichment(ctx context.Context) (int64, bool) {
 	userID, err := s.getCurrentUserID(ctx)
 	if err != nil {
-		return 0 // No user configured yet
+		return 0, false // No user configured yet - retry later
 	}
 
 	processed, err := s.syncService.EnrichNotificationBatch(ctx, userID, enrichmentBatchSize)
 	if err != nil {
 		s.logger.Warn("enrichment batch failed", zap.Error(err))
-		return 0
+		return 0, false // Error - retry later
 	}
 
-	return processed
+	return processed, true
 }
 
 // updateCheckInterval is how often to check for updates (if enabled and frequency allows)

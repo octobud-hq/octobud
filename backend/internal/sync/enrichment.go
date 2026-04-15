@@ -75,8 +75,9 @@ func (s *Service) EnrichNotificationBatch(
 					zap.Error(stampErr),
 				)
 			}
+		} else {
+			processed++
 		}
-		processed++
 	}
 
 	return processed, nil

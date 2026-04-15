@@ -148,7 +148,9 @@ func (b *Builder) visitNotExpr(node *parse.NotExpr) (string, error) {
 	return fmt.Sprintf("NOT (%s)", expr), nil
 }
 
-// visitTerm handles field:value terms
+// visitTerm handles field:value terms by dispatching to the appropriate handler.
+//
+//nolint:gocyclo // Pure dispatch table - complexity is proportional to the number of supported fields.
 func (b *Builder) visitTerm(node *parse.Term) (string, error) {
 	field := strings.ToLower(strings.TrimSpace(node.Field))
 
@@ -160,40 +162,54 @@ func (b *Builder) visitTerm(node *parse.Term) (string, error) {
 		field = "type"
 	}
 
-	handler := b.fieldHandler(field)
-	if handler == nil {
+	switch field {
+	case "in":
+		return b.handleInOperator(node.Values)
+	case "is":
+		return b.handleIsOperator(node.Values)
+	case "repo":
+		return b.handleRepoField(node.Values)
+	case "org":
+		return b.handleOrgField(node.Values)
+	case "reason":
+		return b.handleReasonField(node.Values)
+	case "type":
+		return b.handleTypeField(node.Values)
+	case "author":
+		return b.handleAuthorField(node.Values)
+	case "title":
+		return b.handleTitleField(node.Values)
+	case "state":
+		return b.handleStateField(node.Values)
+	case "merged":
+		return b.handleMergedField(node.Values)
+	case "draft":
+		return b.handleDraftField(node.Values)
+	case "state_reason":
+		return b.handleStateReasonField(node.Values)
+	case "read":
+		return b.handleReadField(node.Values)
+	case "archived":
+		return b.handleArchivedField(node.Values)
+	case "muted":
+		return b.handleMutedField(node.Values)
+	case queryValueSnoozed:
+		return b.handleSnoozedField(node.Values)
+	case queryValueFiltered:
+		return b.handleFilteredField(node.Values)
+	case "tags":
+		return b.handleTagsField(node.Values)
+	case "label":
+		return b.handleLabelField(node.Values)
+	case "assignee":
+		return b.handleAssigneeField(node.Values)
+	case "reviewer":
+		return b.handleReviewerField(node.Values)
+	case "team_reviewer":
+		return b.handleTeamReviewerField(node.Values)
+	default:
 		return "", errors.Join(ErrUnsupportedField, fmt.Errorf("field: %s", field))
 	}
-	return handler(node.Values)
-}
-
-// fieldHandler returns the handler function for a given field name, or nil if unsupported.
-func (b *Builder) fieldHandler(field string) func([]string) (string, error) {
-	handlers := map[string]func([]string) (string, error){
-		"in":            b.handleInOperator,
-		"is":            b.handleIsOperator,
-		"repo":          b.handleRepoField,
-		"org":           b.handleOrgField,
-		"reason":        b.handleReasonField,
-		"type":          b.handleTypeField,
-		"author":        b.handleAuthorField,
-		"title":         b.handleTitleField,
-		"state":         b.handleStateField,
-		"merged":        b.handleMergedField,
-		"draft":         b.handleDraftField,
-		"state_reason":  b.handleStateReasonField,
-		"read":          b.handleReadField,
-		"archived":      b.handleArchivedField,
-		"muted":         b.handleMutedField,
-		"snoozed":       b.handleSnoozedField,
-		"filtered":      b.handleFilteredField,
-		"tags":          b.handleTagsField,
-		"label":         b.handleLabelField,
-		"assignee":      b.handleAssigneeField,
-		"reviewer":      b.handleReviewerField,
-		"team_reviewer": b.handleTeamReviewerField,
-	}
-	return handlers[field]
 }
 
 // visitFreeText handles free text search

@@ -624,9 +624,10 @@
 							{/if}
 							{#if notification.githubLabels && notification.githubLabels.length > 0}
 								{#each notification.githubLabels as label (label.name)}
+									{@const color = label.color || "6b7280"}
 									<span
 										class="github-label-chip rounded-full border px-2 py-0.5 text-[12px] font-medium"
-										style="--label-color: #{label.color}; background-color: #{label.color}20; border-color: #{label.color}40;"
+										style="--label-color: #{color}; background-color: #{color}20; border-color: #{color}40;"
 										title={label.name}
 									>
 										{label.name}
@@ -711,7 +712,7 @@
 														fill="currentColor"
 														aria-hidden="true"
 													>
-														<path d={octicons.people.toSVG().match(/d="([^"]+)"/)?.[1] ?? ""} />
+														<path d={getIconPath("people")} />
 													</svg>
 													<span class="text-[9px] font-medium text-gray-600 dark:text-gray-300"
 														>{team.slug}</span
@@ -755,24 +756,15 @@
 																aria-hidden="true"
 															>
 																{#if reviewer.reviewStatus === "approved"}
-																	<path
-																		d={octicons.check.toSVG().match(/d="([^"]+)"/)?.[1] ?? ""}
-																	/>
+																	<path d={getIconPath("check")} />
 																{:else if reviewer.reviewStatus === "changes_requested"}
-																	<path
-																		d={octicons["file-diff"].toSVG().match(/d="([^"]+)"/)?.[1] ??
-																			""}
-																	/>
+																	<path d={getIconPath("file-diff")} />
 																{:else if reviewer.reviewStatus === "commented"}
-																	<path
-																		d={octicons.comment.toSVG().match(/d="([^"]+)"/)?.[1] ?? ""}
-																	/>
+																	<path d={getIconPath("comment")} />
 																{:else if reviewer.reviewStatus === "dismissed"}
-																	<path d={octicons.dash.toSVG().match(/d="([^"]+)"/)?.[1] ?? ""} />
+																	<path d={getIconPath("dash")} />
 																{:else}
-																	<path
-																		d={octicons["dot-fill"].toSVG().match(/d="([^"]+)"/)?.[1] ?? ""}
-																	/>
+																	<path d={getIconPath("dot-fill")} />
 																{/if}
 															</svg>
 														</span>
@@ -801,7 +793,7 @@
 															fill="currentColor"
 															aria-hidden="true"
 														>
-															<path d={octicons.people.toSVG().match(/d="([^"]+)"/)?.[1] ?? ""} />
+															<path d={getIconPath("people")} />
 														</svg>
 													</div>
 													<span class="text-xs text-gray-700 dark:text-gray-300 flex-1"
@@ -813,9 +805,7 @@
 														fill="currentColor"
 													>
 														<title>Pending</title>
-														<path
-															d={octicons["dot-fill"].toSVG().match(/d="([^"]+)"/)?.[1] ?? ""}
-														/>
+														<path d={getIconPath("dot-fill")} />
 													</svg>
 												</div>
 											{/each}
@@ -860,19 +850,15 @@
 																	(reviewer.reviewStatus ?? "pending").slice(1)}</title
 														>
 														{#if reviewer.reviewStatus === "approved"}
-															<path d={octicons.check.toSVG().match(/d="([^"]+)"/)?.[1] ?? ""} />
+															<path d={getIconPath("check")} />
 														{:else if reviewer.reviewStatus === "changes_requested"}
-															<path
-																d={octicons["file-diff"].toSVG().match(/d="([^"]+)"/)?.[1] ?? ""}
-															/>
+															<path d={getIconPath("file-diff")} />
 														{:else if reviewer.reviewStatus === "commented"}
-															<path d={octicons.comment.toSVG().match(/d="([^"]+)"/)?.[1] ?? ""} />
+															<path d={getIconPath("comment")} />
 														{:else if reviewer.reviewStatus === "dismissed"}
-															<path d={octicons.dash.toSVG().match(/d="([^"]+)"/)?.[1] ?? ""} />
+															<path d={getIconPath("dash")} />
 														{:else}
-															<path
-																d={octicons["dot-fill"].toSVG().match(/d="([^"]+)"/)?.[1] ?? ""}
-															/>
+															<path d={getIconPath("dot-fill")} />
 														{/if}
 													</svg>
 												</div>
@@ -1403,7 +1389,8 @@
 		animation: spin-slow 1.2s linear infinite;
 	}
 
-	.avatar-group:hover .avatar-group-popover {
+	.avatar-group:hover .avatar-group-popover,
+	.avatar-group:focus-within .avatar-group-popover {
 		display: block;
 	}
 </style>
