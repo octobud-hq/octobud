@@ -701,26 +701,28 @@
 							{#if (notification.githubReviewers && notification.githubReviewers.length > 0) || (notification.githubTeamReviewers && notification.githubTeamReviewers.length > 0)}
 								<div class="avatar-group relative flex items-center gap-1.5">
 									<div class="flex items-center -space-x-1.5">
-										{#if notification.githubTeamReviewers}
-											{#each notification.githubTeamReviewers as team (team.slug)}
-												<div
-													class="h-6 rounded-full ring-2 ring-white dark:ring-gray-950 bg-gray-200 dark:bg-gray-900 flex items-center gap-0.5 px-1.5"
+										{#if notification.githubTeamReviewers && notification.githubTeamReviewers.length > 0}
+											<div
+												class="h-6 rounded-full bg-gray-200 dark:bg-gray-900 flex items-center gap-1 px-2"
+												title={notification.githubTeamReviewers.map((t) => t.slug).join(", ")}
+											>
+												<svg
+													class="w-3 h-3 text-gray-500 dark:text-gray-400 shrink-0"
+													viewBox="0 0 16 16"
+													fill="currentColor"
+													aria-hidden="true"
 												>
-													<svg
-														class="w-3 h-3 text-gray-500 dark:text-gray-400"
-														viewBox="0 0 16 16"
-														fill="currentColor"
-														aria-hidden="true"
-													>
-														<!-- eslint-disable-next-line svelte/no-at-html-tags -->{@html getIconPath(
-															"people"
-														)}
-													</svg>
-													<span class="text-[9px] font-medium text-gray-600 dark:text-gray-300"
-														>{team.slug}</span
-													>
-												</div>
-											{/each}
+													<!-- eslint-disable-next-line svelte/no-at-html-tags -->{@html getIconPath(
+														"people"
+													)}
+												</svg>
+												<span
+													class="text-[9px] font-medium text-gray-600 dark:text-gray-300 whitespace-nowrap"
+													>{notification.githubTeamReviewers.length === 1
+														? "1 team"
+														: `${notification.githubTeamReviewers.length} teams`}</span
+												>
+											</div>
 										{/if}
 										{#if notification.githubReviewers}
 											{#each notification.githubReviewers as reviewer (reviewer.login)}
