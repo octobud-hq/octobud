@@ -140,6 +140,15 @@
 	}
 
 	function handleFocus() {
+		if (value && !value.endsWith(" ")) {
+			value = value + " ";
+			if (inputElement) {
+				inputElement.value = value;
+				inputElement.selectionStart = inputElement.selectionEnd = value.length;
+			}
+			onChange(value);
+		}
+		cursorPos = value.length;
 		if (showDropdownOnFocus) {
 			updateSuggestions();
 		}

@@ -218,6 +218,36 @@
 					</tr>
 					<tr class="bg-gray-50/30 dark:bg-gray-800/30">
 						<td class="px-3 py-2"
+							><code class="text-indigo-600 dark:text-indigo-300">merged:</code></td
+						>
+						<td class="px-3 py-2 text-gray-600 dark:text-gray-400">PR merged status</td>
+						<td class="px-3 py-2 text-gray-700 dark:text-gray-500">
+							<code class="text-indigo-600 dark:text-indigo-300">true</code>,
+							<code class="text-indigo-600 dark:text-indigo-300">false</code>
+						</td>
+					</tr>
+					<tr class="bg-gray-50/30 dark:bg-gray-800/30">
+						<td class="px-3 py-2"
+							><code class="text-indigo-600 dark:text-indigo-300">draft:</code></td
+						>
+						<td class="px-3 py-2 text-gray-600 dark:text-gray-400">PR draft status</td>
+						<td class="px-3 py-2 text-gray-700 dark:text-gray-500">
+							<code class="text-indigo-600 dark:text-indigo-300">true</code>,
+							<code class="text-indigo-600 dark:text-indigo-300">false</code>
+						</td>
+					</tr>
+					<tr class="bg-gray-50/30 dark:bg-gray-800/30">
+						<td class="px-3 py-2"
+							><code class="text-indigo-600 dark:text-indigo-300">state_reason:</code></td
+						>
+						<td class="px-3 py-2 text-gray-600 dark:text-gray-400">Issue close reason</td>
+						<td class="px-3 py-2 text-gray-700 dark:text-gray-500">
+							<code class="text-indigo-600 dark:text-indigo-300">completed</code>,
+							<code class="text-indigo-600 dark:text-indigo-300">not_planned</code>
+						</td>
+					</tr>
+					<tr class="bg-gray-50/30 dark:bg-gray-800/30">
+						<td class="px-3 py-2"
 							><code class="text-indigo-600 dark:text-indigo-300">author:</code></td
 						>
 						<td class="px-3 py-2 text-gray-600 dark:text-gray-400"
@@ -255,6 +285,44 @@
 						<td class="px-3 py-2 text-gray-700 dark:text-gray-500">
 							<code class="text-indigo-600 dark:text-indigo-300">urgent</code>,
 							<code class="text-indigo-600 dark:text-indigo-300">bug-fix</code>
+						</td>
+					</tr>
+					<tr class="bg-gray-50/30 dark:bg-gray-800/30">
+						<td class="px-3 py-2"
+							><code class="text-indigo-600 dark:text-indigo-300">label:</code></td
+						>
+						<td class="px-3 py-2 text-gray-600 dark:text-gray-400">GitHub label (contains match)</td
+						>
+						<td class="px-3 py-2 text-gray-700 dark:text-gray-500">
+							<code class="text-indigo-600 dark:text-indigo-300">bug</code>,
+							<code class="text-indigo-600 dark:text-indigo-300">enhancement</code>
+						</td>
+					</tr>
+					<tr class="bg-gray-50/30 dark:bg-gray-800/30">
+						<td class="px-3 py-2"
+							><code class="text-indigo-600 dark:text-indigo-300">assignee:</code></td
+						>
+						<td class="px-3 py-2 text-gray-600 dark:text-gray-400">Assigned user</td>
+						<td class="px-3 py-2 text-gray-700 dark:text-gray-500">
+							<code class="text-indigo-600 dark:text-indigo-300">octocat</code>
+						</td>
+					</tr>
+					<tr class="bg-gray-50/30 dark:bg-gray-800/30">
+						<td class="px-3 py-2"
+							><code class="text-indigo-600 dark:text-indigo-300">reviewer:</code></td
+						>
+						<td class="px-3 py-2 text-gray-600 dark:text-gray-400">Requested reviewer (user)</td>
+						<td class="px-3 py-2 text-gray-700 dark:text-gray-500">
+							<code class="text-indigo-600 dark:text-indigo-300">octocat</code>
+						</td>
+					</tr>
+					<tr class="bg-gray-50/30 dark:bg-gray-800/30">
+						<td class="px-3 py-2"
+							><code class="text-indigo-600 dark:text-indigo-300">team_reviewer:</code></td
+						>
+						<td class="px-3 py-2 text-gray-600 dark:text-gray-400">Requested reviewer (team)</td>
+						<td class="px-3 py-2 text-gray-700 dark:text-gray-500">
+							<code class="text-indigo-600 dark:text-indigo-300">my-team</code>
 						</td>
 					</tr>
 				</tbody>
@@ -332,6 +400,22 @@
 				<p class="mt-1 text-xs text-gray-600 dark:text-gray-400">
 					Search everywhere for "urgent" and "security" in title/repo/author
 				</p>
+			</div>
+			<div class="rounded-lg bg-gray-100/50 dark:bg-gray-800/50 px-3 py-2">
+				<code class="text-indigo-600 dark:text-indigo-300">draft:true reviewer:octocat</code>
+				<p class="mt-1 text-xs text-gray-600 dark:text-gray-400">
+					Draft PRs where octocat is requested as reviewer
+				</p>
+			</div>
+			<div class="rounded-lg bg-gray-100/50 dark:bg-gray-800/50 px-3 py-2">
+				<code class="text-indigo-600 dark:text-indigo-300">label:bug state:open</code>
+				<p class="mt-1 text-xs text-gray-600 dark:text-gray-400">Open items with the "bug" label</p>
+			</div>
+			<div class="rounded-lg bg-gray-100/50 dark:bg-gray-800/50 px-3 py-2">
+				<code class="text-indigo-600 dark:text-indigo-300"
+					>assignee:octocat type:issue state:open</code
+				>
+				<p class="mt-1 text-xs text-gray-600 dark:text-gray-400">Open issues assigned to octocat</p>
 			</div>
 		</div>
 	</section>

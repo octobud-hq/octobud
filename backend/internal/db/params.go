@@ -256,6 +256,7 @@ type UpsertNotificationParams struct {
 	SubjectState            sql.NullString
 	SubjectMerged           sql.NullBool
 	SubjectStateReason      sql.NullString
+	SubjectDraft            sql.NullBool
 }
 
 // UpdateNotificationSubjectParams contains the parameters for updating notification subject
@@ -269,6 +270,7 @@ type UpdateNotificationSubjectParams struct {
 	SubjectState       sql.NullString
 	SubjectMerged      sql.NullBool
 	SubjectStateReason sql.NullString
+	SubjectDraft       sql.NullBool
 	AuthorLogin        sql.NullString
 	AuthorID           sql.NullInt64
 }

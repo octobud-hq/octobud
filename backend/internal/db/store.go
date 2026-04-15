@@ -216,6 +216,40 @@ type Store interface {
 		arg UpdateNotificationSubjectParams,
 	) error
 
+	// Notification metadata (junction table) methods
+	ReplaceNotificationMetadata(
+		ctx context.Context,
+		notificationID int64,
+		metadata NotificationMetadata,
+	) error
+	GetNotificationLabels(ctx context.Context, notificationID int64) ([]NotificationLabel, error)
+	GetNotificationAssignees(
+		ctx context.Context,
+		notificationID int64,
+	) ([]NotificationAssignee, error)
+	GetNotificationReviewers(
+		ctx context.Context,
+		notificationID int64,
+	) ([]NotificationReviewer, error)
+	GetNotificationTeamReviewers(
+		ctx context.Context,
+		notificationID int64,
+	) ([]NotificationTeamReviewer, error)
+
+	// Enrichment methods
+	ListNotificationsForEnrichment(
+		ctx context.Context,
+		userID string,
+		targetVersion int32,
+		batchSize int32,
+	) ([]EnrichmentRow, error)
+	UpdateNotificationEnrichmentVersion(
+		ctx context.Context,
+		notificationID int64,
+		version int32,
+	) error
+	UpdateNotificationDraft(ctx context.Context, notificationID int64, draft bool) error
+
 	// User methods (no userID param - these operate on the single user record)
 	GetUser(ctx context.Context) (User, error)
 	CreateUser(ctx context.Context) (User, error)

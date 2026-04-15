@@ -26,7 +26,11 @@ import (
 
 // Error definitions
 var (
-	ErrFailedToFetchTags = errors.New("failed to fetch tags")
+	ErrFailedToFetchTags          = errors.New("failed to fetch tags")
+	ErrFailedToFetchLabels        = errors.New("failed to fetch labels")
+	ErrFailedToFetchAssignees     = errors.New("failed to fetch assignees")
+	ErrFailedToFetchReviewers     = errors.New("failed to fetch reviewers")
+	ErrFailedToFetchTeamReviewers = errors.New("failed to fetch team reviewers")
 )
 
 // computeActionHintsForNotification computes action hints for a single notification

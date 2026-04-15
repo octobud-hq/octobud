@@ -488,6 +488,11 @@ func TestProcessNotification_NonRetriableSubjectFetchError(t *testing.T) {
 		UpsertNotification(gomock.Any(), "test-user-id", gomock.Any()).
 		Return(db.Notification{ID: 1, GithubID: "notif-123"}, nil)
 
+	// Metadata replacement is a no-op (subjectPayload is invalid) but enrichment version is stamped
+	mockUserStore.EXPECT().
+		UpdateNotificationEnrichmentVersion(gomock.Any(), int64(1), CurrentEnrichmentVersion).
+		Return(nil)
+
 	service := setupSyncService(
 		ctrl,
 		mockClient,
@@ -546,6 +551,10 @@ func TestRefreshSubjectData_ExtractsAuthor(t *testing.T) {
 			require.Equal(t, int64(12345), params.AuthorID.Int64)
 			return nil
 		})
+
+	mockUserStore.EXPECT().
+		ReplaceNotificationMetadata(gomock.Any(), int64(1), gomock.Any()).
+		Return(nil)
 
 	service := setupSyncService(
 		ctrl,
@@ -635,6 +644,10 @@ func TestRefreshSubjectData_WasMissing(t *testing.T) {
 			// GetRepositoryByID not called for Issue type
 			mockNotification.EXPECT().
 				UpdateNotificationSubject(gomock.Any(), "test-user-id", gomock.Any()).
+				Return(nil)
+
+			mockUserStore.EXPECT().
+				ReplaceNotificationMetadata(gomock.Any(), int64(1), gomock.Any()).
 				Return(nil)
 
 			service := setupSyncService(

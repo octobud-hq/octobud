@@ -188,6 +188,10 @@ func (s *SQLiteScheduler) Start(ctx context.Context) error {
 	s.workerWg.Add(1)
 	go s.cleanupLoop(ctx)
 
+	// Start enrichment loop
+	s.workerWg.Add(1)
+	go s.enrichmentLoop(ctx)
+
 	// Start update check loop (if handler is configured)
 	if s.checkUpdatesHandler != nil {
 		s.workerWg.Add(1)
@@ -685,6 +689,87 @@ func (s *SQLiteScheduler) doCleanup(ctx context.Context) {
 // GetCleanupHandler returns the cleanup handler for API access
 func (s *SQLiteScheduler) GetCleanupHandler() *handlers.CleanupNotificationsHandler {
 	return s.cleanupNotificationsHandler
+}
+
+// enrichmentInterval is how often the enrichment loop runs.
+// It backs off when there's nothing to do.
+const enrichmentInterval = 30 * time.Second
+
+// enrichmentBatchSize is the number of notifications to enrich per tick.
+const enrichmentBatchSize = 20
+
+func (s *SQLiteScheduler) enrichmentLoop(ctx context.Context) {
+	defer s.workerWg.Done()
+
+	s.logger.Info("enrichment loop starting",
+		zap.Duration("interval", enrichmentInterval),
+		zap.Int("batchSize", enrichmentBatchSize),
+	)
+
+	// Short initial delay to let sync start first
+	select {
+	case <-s.stopCh:
+		return
+	case <-ctx.Done():
+		return
+	case <-time.After(10 * time.Second):
+	}
+
+	ticker := time.NewTicker(enrichmentInterval)
+	defer ticker.Stop()
+
+	totalEnriched := int64(0)
+	idle := false // true when last batch found nothing to do
+	for {
+		select {
+		case <-s.stopCh:
+			if totalEnriched > 0 {
+				s.logger.Info("enrichment loop stopped", zap.Int64("totalEnriched", totalEnriched))
+			}
+			return
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if idle {
+				// Already caught up - skip DB query until next app restart or version bump.
+				// New notifications get stamped with CurrentEnrichmentVersion during sync,
+				// so only a version bump would create new work.
+				continue
+			}
+			processed, ok := s.doEnrichment(ctx)
+			if !ok {
+				// Couldn't run (no user, error) - don't idle, retry next tick
+				continue
+			}
+			if processed > 0 {
+				totalEnriched += processed
+				s.logger.Info("enriched notifications",
+					zap.Int64("batch", processed),
+					zap.Int64("totalEnriched", totalEnriched),
+				)
+			} else {
+				idle = true
+				s.logger.Info("enrichment complete, idling", zap.Int64("totalEnriched", totalEnriched))
+			}
+		}
+	}
+}
+
+// doEnrichment runs a single enrichment batch. Returns (processed, ok) where ok is false
+// if the batch couldn't run (no user configured, error) and should be retried.
+func (s *SQLiteScheduler) doEnrichment(ctx context.Context) (int64, bool) {
+	userID, err := s.getCurrentUserID(ctx)
+	if err != nil {
+		return 0, false // No user configured yet - retry later
+	}
+
+	processed, err := s.syncService.EnrichNotificationBatch(ctx, userID, enrichmentBatchSize)
+	if err != nil {
+		s.logger.Warn("enrichment batch failed", zap.Error(err))
+		return 0, false // Error - retry later
+	}
+
+	return processed, true
 }
 
 // updateCheckInterval is how often to check for updates (if enabled and frequency allows)

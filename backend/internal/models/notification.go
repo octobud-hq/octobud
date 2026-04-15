@@ -59,6 +59,28 @@ type Notification struct {
 	Repository              *Repository     `json:"repository,omitempty"`
 	ActionHints             *ActionHints    `json:"actionHints,omitempty"`
 	Tags                    []Tag           `json:"tags,omitempty"`
+	Labels                  []Label         `json:"labels,omitempty"`
+	Assignees               []UserRef       `json:"assignees,omitempty"`
+	Reviewers               []UserRef       `json:"reviewers,omitempty"`
+	TeamReviewers           []TeamRef       `json:"teamReviewers,omitempty"`
+}
+
+// Label represents a GitHub label associated with a notification's subject.
+type Label struct {
+	Name  string `json:"name"`
+	Color string `json:"color,omitempty"`
+}
+
+// UserRef represents a GitHub user reference (login + optional ID, review status, and avatar).
+type UserRef struct {
+	Login        string `json:"login"`
+	AvatarURL    string `json:"avatarUrl,omitempty"`
+	ReviewStatus string `json:"reviewStatus,omitempty"`
+}
+
+// TeamRef represents a GitHub team reference (slug + optional ID).
+type TeamRef struct {
+	Slug string `json:"slug"`
 }
 
 // NotificationFromDB converts a db.Notification to a models.Notification (without enrichment)

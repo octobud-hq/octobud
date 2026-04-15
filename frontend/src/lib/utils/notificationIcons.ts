@@ -107,6 +107,18 @@ export function getNotificationIcon(
 			};
 		}
 
+		// Draft PR (gray)
+		if (subject?.draft) {
+			return {
+				path: getIconPath("git-pull-request-draft"),
+				colorClass: getColorClass(
+					"text-gray-500 dark:text-gray-400",
+					"text-gray-400/60 dark:text-gray-400/50"
+				),
+				label: "Draft PR",
+			};
+		}
+
 		// Default: Open PR (green)
 		return {
 			path: getIconPath("git-pull-request"),
@@ -245,14 +257,17 @@ export function getNotificationIcon(
 /**
  * Parse subject metadata from raw data
  */
-function parseSubjectMetadata(raw: unknown): { state?: string; merged?: boolean } | null {
+function parseSubjectMetadata(
+	raw: unknown
+): { state?: string; merged?: boolean; draft?: boolean } | null {
 	if (!raw || typeof raw !== "object") return null;
 	const data = raw as Record<string, unknown>;
 
 	const state = typeof data.state === "string" ? data.state : undefined;
 	const merged = typeof data.merged === "boolean" ? data.merged : undefined;
+	const draft = typeof data.draft === "boolean" ? data.draft : undefined;
 
-	return { state, merged };
+	return { state, merged, draft };
 }
 
 /**

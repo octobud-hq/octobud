@@ -18,6 +18,7 @@
 	import { formatRelativeShort } from "$lib/utils/time";
 	import { renderMarkdown } from "$lib/utils/markdown";
 	import { computeAvatarUrl, resolveAvatarRedirect } from "$lib/utils/avatar";
+	import octicons from "@primer/octicons";
 	import ReviewComments from "./ReviewComments.svelte";
 	import DiscussionReplies from "./DiscussionReplies.svelte";
 
@@ -112,6 +113,7 @@
 					label: "Changes requested",
 					icon: "⚠",
 					useIcon: false,
+					iconPath: octicons["file-diff"].heights["16"].path,
 					bgClass: "bg-red-600",
 					textClass: "text-white",
 				};
@@ -182,7 +184,12 @@
 					<span
 						class="inline-flex items-center gap-1 px-2 py-0.5 mx-1 text-xs font-medium rounded-md {reviewBadgeConfig.bgClass} {reviewBadgeConfig.textClass}"
 					>
-						{#if reviewBadgeConfig.useIcon}
+						{#if reviewBadgeConfig.iconPath}
+							<svg class="w-3 h-3" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+								<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+								{@html reviewBadgeConfig.iconPath}
+							</svg>
+						{:else if reviewBadgeConfig.useIcon}
 							<img
 								src={reviewBadgeConfig.icon}
 								alt=""
@@ -262,7 +269,12 @@
 								<span
 									class="flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-md {reviewBadgeConfig.bgClass} {reviewBadgeConfig.textClass}"
 								>
-									{#if reviewBadgeConfig.useIcon}
+									{#if reviewBadgeConfig.iconPath}
+										<svg class="w-3 h-3" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+											<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+											{@html reviewBadgeConfig.iconPath}
+										</svg>
+									{:else if reviewBadgeConfig.useIcon}
 										<img
 											src={reviewBadgeConfig.icon}
 											alt=""

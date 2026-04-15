@@ -69,6 +69,21 @@ export const FILTER_FIELDS: FilterFieldConfig[] = [
 		valueSuggestions: ["open", "closed"],
 	},
 	{
+		value: "merged",
+		description: "PR merged status",
+		valueSuggestions: ["true", "false"],
+	},
+	{
+		value: "draft",
+		description: "PR draft status",
+		valueSuggestions: ["true", "false"],
+	},
+	{
+		value: "state_reason",
+		description: "Issue state reason (completed, not_planned)",
+		valueSuggestions: ["completed", "not_planned"],
+	},
+	{
 		value: "author",
 		description: "Author login",
 	},
@@ -83,6 +98,22 @@ export const FILTER_FIELDS: FilterFieldConfig[] = [
 	{
 		value: "tags",
 		description: "Tag slug (supports partial matching)",
+	},
+	{
+		value: "label",
+		description: "GitHub label name (contains match)",
+	},
+	{
+		value: "assignee",
+		description: "Assigned user login",
+	},
+	{
+		value: "reviewer",
+		description: "Requested reviewer (individual user)",
+	},
+	{
+		value: "team_reviewer",
+		description: "Requested reviewer (team)",
 	},
 ];
 

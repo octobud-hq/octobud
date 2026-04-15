@@ -148,23 +148,32 @@ func (b *Builder) visitNotExpr(node *parse.NotExpr) (string, error) {
 	return fmt.Sprintf("NOT (%s)", expr), nil
 }
 
-// visitTerm handles field:value terms
+// visitTerm handles field:value terms by dispatching to the appropriate handler.
+//
+//nolint:gocyclo // Pure dispatch table - complexity is proportional to the number of supported fields.
 func (b *Builder) visitTerm(node *parse.Term) (string, error) {
 	field := strings.ToLower(strings.TrimSpace(node.Field))
 
-	// Handle special operators
+	// Resolve aliases
+	switch field {
+	case "repository":
+		field = "repo"
+	case "subject_type":
+		field = "type"
+	}
+
 	switch field {
 	case "in":
 		return b.handleInOperator(node.Values)
 	case "is":
 		return b.handleIsOperator(node.Values)
-	case "repo", "repository":
+	case "repo":
 		return b.handleRepoField(node.Values)
 	case "org":
 		return b.handleOrgField(node.Values)
 	case "reason":
 		return b.handleReasonField(node.Values)
-	case "type", "subject_type":
+	case "type":
 		return b.handleTypeField(node.Values)
 	case "author":
 		return b.handleAuthorField(node.Values)
@@ -174,6 +183,8 @@ func (b *Builder) visitTerm(node *parse.Term) (string, error) {
 		return b.handleStateField(node.Values)
 	case "merged":
 		return b.handleMergedField(node.Values)
+	case "draft":
+		return b.handleDraftField(node.Values)
 	case "state_reason":
 		return b.handleStateReasonField(node.Values)
 	case "read":
@@ -188,6 +199,14 @@ func (b *Builder) visitTerm(node *parse.Term) (string, error) {
 		return b.handleFilteredField(node.Values)
 	case "tags":
 		return b.handleTagsField(node.Values)
+	case "label":
+		return b.handleLabelField(node.Values)
+	case "assignee":
+		return b.handleAssigneeField(node.Values)
+	case "reviewer":
+		return b.handleReviewerField(node.Values)
+	case "team_reviewer":
+		return b.handleTeamReviewerField(node.Values)
 	default:
 		return "", errors.Join(ErrUnsupportedField, fmt.Errorf("field: %s", field))
 	}
@@ -385,6 +404,10 @@ func (b *Builder) handleMergedField(values []string) (string, error) {
 	return "(" + strings.Join(conditions, " OR ") + ")", nil
 }
 
+func (b *Builder) handleDraftField(values []string) (string, error) {
+	return b.buildBooleanFilter("n.subject_draft", values)
+}
+
 func (b *Builder) handleStateReasonField(values []string) (string, error) {
 	// State reason is stored in subject_state_reason column (extracted from subject_raw)
 	// Only applies to Issues
@@ -460,6 +483,70 @@ func (b *Builder) handleTagsField(values []string) (string, error) {
 
 func (b *Builder) handleTitleField(values []string) (string, error) {
 	return b.buildStringFilter("n.subject_title", values), nil
+}
+
+func (b *Builder) handleLabelField(values []string) (string, error) {
+	if len(values) == 0 {
+		return "", fmt.Errorf("label field requires at least one value")
+	}
+	var conditions []string
+	for _, value := range values {
+		pattern := "%" + value + "%"
+		placeholder := b.addArg(pattern)
+		conditions = append(conditions, fmt.Sprintf("nl.name LIKE %s", placeholder))
+	}
+	return fmt.Sprintf(
+		"EXISTS (SELECT 1 FROM notification_labels nl WHERE nl.notification_id = n.id AND (%s))",
+		strings.Join(conditions, " OR "),
+	), nil
+}
+
+func (b *Builder) handleAssigneeField(values []string) (string, error) {
+	if len(values) == 0 {
+		return "", fmt.Errorf("assignee field requires at least one value")
+	}
+	var conditions []string
+	for _, value := range values {
+		pattern := "%" + value + "%"
+		placeholder := b.addArg(pattern)
+		conditions = append(conditions, fmt.Sprintf("na.login LIKE %s", placeholder))
+	}
+	return fmt.Sprintf(
+		"EXISTS (SELECT 1 FROM notification_assignees na WHERE na.notification_id = n.id AND (%s))",
+		strings.Join(conditions, " OR "),
+	), nil
+}
+
+func (b *Builder) handleReviewerField(values []string) (string, error) {
+	if len(values) == 0 {
+		return "", fmt.Errorf("reviewer field requires at least one value")
+	}
+	var conditions []string
+	for _, value := range values {
+		pattern := "%" + value + "%"
+		placeholder := b.addArg(pattern)
+		conditions = append(conditions, fmt.Sprintf("nr.login LIKE %s", placeholder))
+	}
+	return fmt.Sprintf(
+		"EXISTS (SELECT 1 FROM notification_reviewers nr WHERE nr.notification_id = n.id AND (%s))",
+		strings.Join(conditions, " OR "),
+	), nil
+}
+
+func (b *Builder) handleTeamReviewerField(values []string) (string, error) {
+	if len(values) == 0 {
+		return "", fmt.Errorf("team_reviewer field requires at least one value")
+	}
+	var conditions []string
+	for _, value := range values {
+		pattern := "%" + value + "%"
+		placeholder := b.addArg(pattern)
+		conditions = append(conditions, fmt.Sprintf("ntr.slug LIKE %s", placeholder))
+	}
+	return fmt.Sprintf(
+		"EXISTS (SELECT 1 FROM notification_team_reviewers ntr WHERE ntr.notification_id = n.id AND (%s))",
+		strings.Join(conditions, " OR "),
+	), nil
 }
 
 // Helper methods

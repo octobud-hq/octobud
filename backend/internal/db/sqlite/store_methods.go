@@ -1265,6 +1265,7 @@ func (s *Store) UpsertNotification(
 			SubjectState:            arg.SubjectState,
 			SubjectMerged:           fromNullBool(arg.SubjectMerged),
 			SubjectStateReason:      arg.SubjectStateReason,
+			SubjectDraft:            fromNullBool(arg.SubjectDraft),
 			EffectiveSortDate:       effectiveSortDate,
 		})
 	})
@@ -1333,6 +1334,7 @@ func (s *Store) UpdateNotificationSubject(
 			SubjectState:       arg.SubjectState,
 			SubjectMerged:      fromNullBool(arg.SubjectMerged),
 			SubjectStateReason: arg.SubjectStateReason,
+			SubjectDraft:       fromNullBool(arg.SubjectDraft),
 			AuthorLogin:        arg.AuthorLogin,
 			AuthorID:           arg.AuthorID,
 		})
@@ -1591,6 +1593,250 @@ func (s *Store) DeleteAllGitHubData(ctx context.Context, userID string) error {
 
 		return tx.Commit()
 	})
+}
+
+// --- Enrichment methods ---
+
+// ListNotificationsForEnrichment returns notifications needing enrichment.
+func (s *Store) ListNotificationsForEnrichment(
+	ctx context.Context,
+	userID string,
+	targetVersion int32,
+	batchSize int32,
+) ([]db.EnrichmentRow, error) {
+	rows, err := db.RetryOnBusy(ctx, func() ([]ListNotificationsForEnrichmentRow, error) {
+		return s.q.ListNotificationsForEnrichment(ctx, ListNotificationsForEnrichmentParams{
+			UserID:        userID,
+			TargetVersion: int64(targetVersion),
+			BatchLimit:    int64(batchSize),
+		})
+	})
+	if err != nil {
+		return nil, err
+	}
+	result := make([]db.EnrichmentRow, len(rows))
+	for i, r := range rows {
+		result[i] = db.EnrichmentRow{
+			ID:                r.ID,
+			GithubID:          r.GithubID,
+			SubjectType:       r.SubjectType,
+			SubjectURL:        nullStringToString(r.SubjectUrl),
+			SubjectRaw:        toNullRawMessage(r.SubjectRaw),
+			EnrichmentVersion: int32(r.EnrichmentVersion),
+		}
+	}
+	return result, nil
+}
+
+// UpdateNotificationEnrichmentVersion stamps a notification with the given enrichment version.
+func (s *Store) UpdateNotificationEnrichmentVersion(
+	ctx context.Context,
+	notificationID int64,
+	version int32,
+) error {
+	return db.RetryVoidOnBusy(ctx, func() error {
+		return s.q.UpdateNotificationEnrichmentVersion(
+			ctx,
+			UpdateNotificationEnrichmentVersionParams{
+				EnrichmentVersion: int64(version),
+				ID:                notificationID,
+			},
+		)
+	})
+}
+
+// UpdateNotificationDraft updates the subject_draft column for a notification.
+func (s *Store) UpdateNotificationDraft(
+	ctx context.Context,
+	notificationID int64,
+	draft bool,
+) error {
+	draftInt := int64(0)
+	if draft {
+		draftInt = 1
+	}
+	return db.RetryVoidOnBusy(ctx, func() error {
+		return s.q.UpdateNotificationDraft(ctx, UpdateNotificationDraftParams{
+			SubjectDraft: sql.NullInt64{Int64: draftInt, Valid: true},
+			ID:           notificationID,
+		})
+	})
+}
+
+// --- Notification metadata (junction table) methods ---
+
+// ReplaceNotificationMetadata replaces all junction table data for a notification.
+// It deletes existing rows and inserts new ones within a transaction.
+func (s *Store) ReplaceNotificationMetadata(
+	ctx context.Context,
+	notificationID int64,
+	metadata db.NotificationMetadata,
+) error {
+	return db.RetryVoidOnBusy(ctx, func() error {
+		tx, err := s.dbConn.BeginTx(ctx, nil)
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback() //nolint:errcheck
+
+		qtx := s.q.WithTx(tx)
+
+		// Replace labels
+		if err := qtx.DeleteNotificationLabels(ctx, notificationID); err != nil {
+			return fmt.Errorf("delete labels: %w", err)
+		}
+		for _, l := range metadata.Labels {
+			if err := qtx.InsertNotificationLabel(ctx, InsertNotificationLabelParams{
+				NotificationID: notificationID,
+				Name:           l.Name,
+				Color:          sql.NullString{String: l.Color, Valid: l.Color != ""},
+			}); err != nil {
+				return fmt.Errorf("insert label: %w", err)
+			}
+		}
+
+		// Replace assignees
+		if err := qtx.DeleteNotificationAssignees(ctx, notificationID); err != nil {
+			return fmt.Errorf("delete assignees: %w", err)
+		}
+		for _, a := range metadata.Assignees {
+			if err := qtx.InsertNotificationAssignee(ctx, InsertNotificationAssigneeParams{
+				NotificationID: notificationID,
+				Login:          a.Login,
+				GithubID:       sql.NullInt64{Int64: a.GithubID, Valid: a.GithubID != 0},
+				AvatarUrl:      sql.NullString{String: a.AvatarURL, Valid: a.AvatarURL != ""},
+			}); err != nil {
+				return fmt.Errorf("insert assignee: %w", err)
+			}
+		}
+
+		// Replace reviewers
+		if err := qtx.DeleteNotificationReviewers(ctx, notificationID); err != nil {
+			return fmt.Errorf("delete reviewers: %w", err)
+		}
+		for _, r := range metadata.Reviewers {
+			if err := qtx.InsertNotificationReviewer(ctx, InsertNotificationReviewerParams{
+				NotificationID: notificationID,
+				Login:          r.Login,
+				GithubID:       sql.NullInt64{Int64: r.GithubID, Valid: r.GithubID != 0},
+				Status:         r.Status,
+				AvatarUrl:      sql.NullString{String: r.AvatarURL, Valid: r.AvatarURL != ""},
+			}); err != nil {
+				return fmt.Errorf("insert reviewer: %w", err)
+			}
+		}
+
+		// Replace team reviewers
+		if err := qtx.DeleteNotificationTeamReviewers(ctx, notificationID); err != nil {
+			return fmt.Errorf("delete team reviewers: %w", err)
+		}
+		for _, t := range metadata.TeamReviewers {
+			if err := qtx.InsertNotificationTeamReviewer(ctx, InsertNotificationTeamReviewerParams{
+				NotificationID: notificationID,
+				Slug:           t.Slug,
+				GithubID:       sql.NullInt64{Int64: t.GithubID, Valid: t.GithubID != 0},
+			}); err != nil {
+				return fmt.Errorf("insert team reviewer: %w", err)
+			}
+		}
+
+		return tx.Commit()
+	})
+}
+
+// GetNotificationLabels returns labels for a notification.
+func (s *Store) GetNotificationLabels(
+	ctx context.Context,
+	notificationID int64,
+) ([]db.NotificationLabel, error) {
+	rows, err := db.RetryOnBusy(ctx, func() ([]GetNotificationLabelsRow, error) {
+		return s.q.GetNotificationLabels(ctx, notificationID)
+	})
+	if err != nil {
+		return nil, err
+	}
+	labels := make([]db.NotificationLabel, len(rows))
+	for i, r := range rows {
+		labels[i] = db.NotificationLabel{Name: r.Name, Color: nullStringToString(r.Color)}
+	}
+	return labels, nil
+}
+
+// GetNotificationAssignees returns assignees for a notification.
+func (s *Store) GetNotificationAssignees(
+	ctx context.Context,
+	notificationID int64,
+) ([]db.NotificationAssignee, error) {
+	rows, err := db.RetryOnBusy(ctx, func() ([]GetNotificationAssigneesRow, error) {
+		return s.q.GetNotificationAssignees(ctx, notificationID)
+	})
+	if err != nil {
+		return nil, err
+	}
+	assignees := make([]db.NotificationAssignee, len(rows))
+	for i, r := range rows {
+		assignees[i] = db.NotificationAssignee{
+			Login:     r.Login,
+			GithubID:  nullInt64ToInt64(r.GithubID),
+			AvatarURL: nullStringToString(r.AvatarUrl),
+		}
+	}
+	return assignees, nil
+}
+
+// GetNotificationReviewers returns requested reviewers for a notification.
+func (s *Store) GetNotificationReviewers(
+	ctx context.Context,
+	notificationID int64,
+) ([]db.NotificationReviewer, error) {
+	rows, err := db.RetryOnBusy(ctx, func() ([]GetNotificationReviewersRow, error) {
+		return s.q.GetNotificationReviewers(ctx, notificationID)
+	})
+	if err != nil {
+		return nil, err
+	}
+	reviewers := make([]db.NotificationReviewer, len(rows))
+	for i, r := range rows {
+		reviewers[i] = db.NotificationReviewer{
+			Login:     r.Login,
+			GithubID:  nullInt64ToInt64(r.GithubID),
+			Status:    r.Status,
+			AvatarURL: nullStringToString(r.AvatarUrl),
+		}
+	}
+	return reviewers, nil
+}
+
+// GetNotificationTeamReviewers returns requested team reviewers for a notification.
+func (s *Store) GetNotificationTeamReviewers(
+	ctx context.Context,
+	notificationID int64,
+) ([]db.NotificationTeamReviewer, error) {
+	rows, err := db.RetryOnBusy(ctx, func() ([]GetNotificationTeamReviewersRow, error) {
+		return s.q.GetNotificationTeamReviewers(ctx, notificationID)
+	})
+	if err != nil {
+		return nil, err
+	}
+	teams := make([]db.NotificationTeamReviewer, len(rows))
+	for i, r := range rows {
+		teams[i] = db.NotificationTeamReviewer{Slug: r.Slug, GithubID: nullInt64ToInt64(r.GithubID)}
+	}
+	return teams, nil
+}
+
+func nullStringToString(ns sql.NullString) string {
+	if ns.Valid {
+		return ns.String
+	}
+	return ""
+}
+
+func nullInt64ToInt64(ni sql.NullInt64) int64 {
+	if ni.Valid {
+		return ni.Int64
+	}
+	return 0
 }
 
 // Helper function

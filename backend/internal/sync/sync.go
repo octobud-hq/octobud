@@ -20,6 +20,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"sort"
 	"strings"
 	"time"
 
@@ -301,43 +302,43 @@ func (s *Service) ProcessNotification(
 		subjectFetchedAt sql.NullTime
 	)
 
-	if rawSubject, err := s.client.FetchSubjectRaw(ctx, thread.Subject.URL); err == nil &&
-		len(rawSubject) > 0 {
+	rawSubject, fetchErr := s.client.FetchSubjectRaw(ctx, thread.Subject.URL)
+	if fetchErr == nil && len(rawSubject) > 0 {
 		subjectPayload = db.NullRawMessage{
 			RawMessage: rawSubject,
 			Valid:      true,
 		}
 		fetched := s.clock().UTC()
 		subjectFetchedAt = models.SQLNullTime(&fetched)
-	} else if err != nil {
+	} else if fetchErr != nil {
 		// Check if error is retriable - if so, return error to trigger job retry
-		if github.IsRetriableError(err) {
+		if github.IsRetriableError(fetchErr) {
 			fields := []zap.Field{
 				zap.String("githubID", thread.ID),
 				zap.String("subjectURL", thread.Subject.URL),
-				zap.Error(err),
+				zap.Error(fetchErr),
 			}
-			if retryDelay := github.GetRetryDelayFromError(err); retryDelay != nil {
+			if retryDelay := github.GetRetryDelayFromError(fetchErr); retryDelay != nil {
 				fields = append(fields, zap.Duration("serverRetryAfter", *retryDelay))
 			}
 			s.logger.Warn("failed to fetch subject data (retriable error, will retry)", fields...)
-			return errors.Join(ErrFailedToFetchSubject, err)
+			return errors.Join(ErrFailedToFetchSubject, fetchErr)
 		}
 		// Non-retriable error - log but don't fail, continue without subject data
 		//nolint:lll // Long warning message with multiple zap fields
-		s.logger.Warn("failed to fetch subject data (non-retriable, continuing without it)", zap.String("githubID", thread.ID), zap.String("subjectURL", thread.Subject.URL), zap.Error(err))
+		s.logger.Warn("failed to fetch subject data (non-retriable, continuing without it)", zap.String("githubID", thread.ID), zap.String("subjectURL", thread.Subject.URL), zap.Error(fetchErr))
 	}
 
 	// Process pull request metadata if subject is a PullRequest
 	var pullRequestID sql.NullInt64
 	if strings.EqualFold(thread.Subject.Type, "PullRequest") && subjectPayload.Valid {
-		if pr, err := s.upsertPullRequestFromSubject(ctx, userID, repo.ID, subjectPayload.RawMessage); err == nil &&
-			pr != nil {
+		pr, prErr := s.upsertPullRequestFromSubject(ctx, userID, repo.ID, subjectPayload.RawMessage)
+		if prErr == nil && pr != nil {
 			pullRequestID = sql.NullInt64{Int64: pr.ID, Valid: true}
-		} else if err != nil {
+		} else if prErr != nil {
 			// Log but don't fail - PR metadata is optional
 			//nolint:lll // Long warning message with multiple zap fields
-			s.logger.Warn("failed to upsert pull request metadata (continuing without it)", zap.String("githubID", thread.ID), zap.Int64("repoID", repo.ID), zap.Error(err))
+			s.logger.Warn("failed to upsert pull request metadata (continuing without it)", zap.String("githubID", thread.ID), zap.Int64("repoID", repo.ID), zap.Error(prErr))
 		}
 	}
 
@@ -348,12 +349,14 @@ func (s *Service) ProcessNotification(
 	var subjectState sql.NullString
 	var subjectMerged sql.NullBool
 	var subjectStateReason sql.NullString
+	var subjectDraft sql.NullBool
 	if subjectPayload.Valid {
 		authorLogin, authorID = github.ExtractAuthorFromSubject(subjectPayload.RawMessage)
 		subjectNumber = github.ExtractSubjectNumber(subjectPayload.RawMessage)
 		subjectState = github.ExtractSubjectState(subjectPayload.RawMessage)
 		subjectMerged = github.ExtractSubjectMerged(subjectPayload.RawMessage)
 		subjectStateReason = github.ExtractSubjectStateReason(subjectPayload.RawMessage)
+		subjectDraft = github.ExtractSubjectDraft(subjectPayload.RawMessage)
 	}
 
 	// Upsert notification
@@ -383,9 +386,11 @@ func (s *Service) ProcessNotification(
 		SubjectState:       subjectState,
 		SubjectMerged:      subjectMerged,
 		SubjectStateReason: subjectStateReason,
+		SubjectDraft:       subjectDraft,
 	}
 
-	if _, err := s.notificationService.UpsertNotification(ctx, userID, notificationParams); err != nil {
+	notification, err := s.notificationService.UpsertNotification(ctx, userID, notificationParams)
+	if err != nil {
 		s.logger.Error(
 			"failed to upsert notification",
 			zap.String("githubID", thread.ID),
@@ -394,7 +399,219 @@ func (s *Service) ProcessNotification(
 		return err
 	}
 
+	// Replace junction table metadata (labels, assignees, reviewers)
+	s.replaceMetadataFromSubject(ctx, notification, subjectPayload, thread.ID)
+
+	// Stamp with current enrichment version so this notification is not re-enriched
+	if err := s.userStore.UpdateNotificationEnrichmentVersion(
+		ctx, notification.ID, CurrentEnrichmentVersion,
+	); err != nil {
+		s.logger.Warn(
+			"failed to stamp enrichment version",
+			zap.String("githubID", thread.ID),
+			zap.Error(err),
+		)
+	}
+
 	return nil
+}
+
+// replaceMetadataFromSubject extracts and replaces junction table metadata for a notification.
+func (s *Service) replaceMetadataFromSubject(
+	ctx context.Context,
+	notification db.Notification,
+	subjectPayload db.NullRawMessage,
+	githubID string,
+) {
+	if !subjectPayload.Valid {
+		return
+	}
+
+	metadata := extractNotificationMetadata(subjectPayload.RawMessage)
+
+	if strings.EqualFold(notification.SubjectType, "PullRequest") {
+		metadata.Reviewers = s.fetchAndMergeReviewers(
+			ctx, notification.SubjectURL.String, subjectPayload.RawMessage,
+		)
+	}
+
+	if err := s.userStore.ReplaceNotificationMetadata(ctx, notification.ID, metadata); err != nil {
+		s.logger.Warn(
+			"failed to replace notification metadata",
+			zap.String("githubID", githubID),
+			zap.Error(err),
+		)
+	}
+}
+
+// extractNotificationMetadata extracts labels, assignees, reviewers, and team reviewers
+// from a subject JSON payload and returns them as a NotificationMetadata struct.
+func extractNotificationMetadata(subjectJSON json.RawMessage) db.NotificationMetadata {
+	var metadata db.NotificationMetadata
+
+	for _, l := range github.ExtractSubjectLabels(subjectJSON) {
+		metadata.Labels = append(
+			metadata.Labels,
+			db.NotificationLabel{Name: l.Name, Color: l.Color},
+		)
+	}
+	for _, a := range github.ExtractSubjectAssignees(subjectJSON) {
+		metadata.Assignees = append(
+			metadata.Assignees,
+			db.NotificationAssignee{Login: a.Login, GithubID: a.GithubID, AvatarURL: a.AvatarURL},
+		)
+	}
+	// Note: reviewers are NOT populated here. For PRs, they are populated separately
+	// via mergeReviewers() which combines requested_reviewers with the reviews API.
+	// For non-PR subjects, there are no reviewers.
+	for _, t := range github.ExtractSubjectTeamReviewers(subjectJSON) {
+		metadata.TeamReviewers = append(
+			metadata.TeamReviewers,
+			db.NotificationTeamReviewer{Slug: t.Slug, GithubID: t.GithubID},
+		)
+	}
+
+	// Sort for consistent ordering
+	sort.Slice(metadata.Labels, func(i, j int) bool {
+		return metadata.Labels[i].Name < metadata.Labels[j].Name
+	})
+	sort.Slice(metadata.Assignees, func(i, j int) bool {
+		return metadata.Assignees[i].Login < metadata.Assignees[j].Login
+	})
+	sort.Slice(metadata.TeamReviewers, func(i, j int) bool {
+		return metadata.TeamReviewers[i].Slug < metadata.TeamReviewers[j].Slug
+	})
+
+	return metadata
+}
+
+// mergeReviewers combines requested reviewers (from subject_raw) with submitted reviews (from API)
+// into a single reviewer list with statuses.
+//
+// Logic:
+//   - If a user is in requested_reviewers → status = "pending" (even if they have a prior review,
+//     being in requested_reviewers means they've been (re-)requested)
+//   - If a user submitted a review but is NOT in requested_reviewers → status = their latest review state
+//   - If a user was previously requested but is no longer in requested_reviewers AND has no review → removed
+func mergeReviewers(
+	subjectJSON json.RawMessage,
+	reviews []types.PullRequestReview,
+) []db.NotificationReviewer {
+	// Build map of latest review status per user (reviews are chronological, last wins)
+	reviewMap := make(map[string]db.NotificationReviewer)
+	for _, r := range reviews {
+		if r.User.Login == "" {
+			continue
+		}
+		reviewMap[r.User.Login] = db.NotificationReviewer{
+			Login:     r.User.Login,
+			GithubID:  r.User.ID,
+			Status:    normalizeReviewState(r.State),
+			AvatarURL: r.User.AvatarURL,
+		}
+	}
+
+	// Get requested reviewers from subject_raw
+	requested := github.ExtractSubjectReviewers(subjectJSON)
+
+	// Merge: requested reviewers override with "pending" status,
+	// but preserve avatar URL from the reviews API if the requested data doesn't have one.
+	for _, r := range requested {
+		avatarURL := r.AvatarURL
+		if avatarURL == "" {
+			if existing, ok := reviewMap[r.Login]; ok && existing.AvatarURL != "" {
+				avatarURL = existing.AvatarURL
+			}
+		}
+		reviewMap[r.Login] = db.NotificationReviewer{
+			Login:     r.Login,
+			GithubID:  r.GithubID,
+			Status:    "pending",
+			AvatarURL: avatarURL,
+		}
+	}
+
+	result := make([]db.NotificationReviewer, 0, len(reviewMap))
+	for _, r := range reviewMap {
+		result = append(result, r)
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].Login < result[j].Login
+	})
+	return result
+}
+
+// normalizeReviewState normalizes GitHub review states to lowercase.
+// GitHub API returns: APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED, PENDING
+func normalizeReviewState(state string) string {
+	switch strings.ToUpper(state) {
+	case "APPROVED":
+		return "approved"
+	case "CHANGES_REQUESTED":
+		return "changes_requested"
+	case "COMMENTED":
+		return "commented"
+	case "DISMISSED":
+		return "dismissed"
+	default:
+		return "pending"
+	}
+}
+
+// fetchAndMergeReviewers fetches PR reviews from the API and merges them with
+// requested reviewers from subject_raw. Falls back to requested_reviewers only
+// if the reviews API call fails.
+func (s *Service) fetchAndMergeReviewers(
+	ctx context.Context,
+	subjectURL string,
+	subjectJSON json.RawMessage,
+) []db.NotificationReviewer {
+	info, err := github.ExtractSubjectInfo(subjectURL, subjectJSON)
+	if err != nil {
+		s.logger.Debug("could not extract subject info for reviews fetch", zap.Error(err))
+		return requestedReviewersAsPending(subjectJSON)
+	}
+
+	// Fetch reviews (first page only). PRs with >100 reviews may have incomplete data.
+	// TODO: add pagination if this becomes an issue for high-traffic PRs.
+	reviews, err := s.client.FetchPullRequestReviews(
+		ctx,
+		info.Owner,
+		info.Repo,
+		info.Number,
+		100,
+		1,
+	)
+	if err != nil {
+		s.logger.Debug(
+			"failed to fetch PR reviews, falling back to requested_reviewers only",
+			zap.String("owner", info.Owner),
+			zap.String("repo", info.Repo),
+			zap.Int("number", info.Number),
+			zap.Error(err),
+		)
+		return requestedReviewersAsPending(subjectJSON)
+	}
+
+	return mergeReviewers(subjectJSON, reviews)
+}
+
+// requestedReviewersAsPending returns requested reviewers with "pending" status as a fallback.
+func requestedReviewersAsPending(subjectJSON json.RawMessage) []db.NotificationReviewer {
+	requested := github.ExtractSubjectReviewers(subjectJSON)
+	result := make([]db.NotificationReviewer, 0, len(requested))
+	for _, r := range requested {
+		result = append(result, db.NotificationReviewer{
+			Login:     r.Login,
+			GithubID:  r.GithubID,
+			Status:    "pending",
+			AvatarURL: r.AvatarURL,
+		})
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].Login < result[j].Login
+	})
+	return result
 }
 
 // upsertPullRequestFromSubject extracts PR data from subject JSON and upserts it to the database.
@@ -539,6 +756,7 @@ func (s *Service) RefreshSubjectData(ctx context.Context, userID, githubID strin
 	var subjectState sql.NullString
 	var subjectMerged sql.NullBool
 	var subjectStateReason sql.NullString
+	var subjectDraft sql.NullBool
 	// Use existing title as default; override if fresh subject data has one
 	subjectTitle := notification.SubjectTitle
 	if subjectPayload.Valid {
@@ -550,6 +768,7 @@ func (s *Service) RefreshSubjectData(ctx context.Context, userID, githubID strin
 		subjectState = github.ExtractSubjectState(subjectPayload.RawMessage)
 		subjectMerged = github.ExtractSubjectMerged(subjectPayload.RawMessage)
 		subjectStateReason = github.ExtractSubjectStateReason(subjectPayload.RawMessage)
+		subjectDraft = github.ExtractSubjectDraft(subjectPayload.RawMessage)
 	}
 
 	// Update the notification with the fresh subject data
@@ -566,6 +785,7 @@ func (s *Service) RefreshSubjectData(ctx context.Context, userID, githubID strin
 			SubjectState:       subjectState,
 			SubjectMerged:      subjectMerged,
 			SubjectStateReason: subjectStateReason,
+			SubjectDraft:       subjectDraft,
 			AuthorLogin:        authorLogin,
 			AuthorID:           authorID,
 		},
@@ -578,6 +798,9 @@ func (s *Service) RefreshSubjectData(ctx context.Context, userID, githubID strin
 		)
 		return wasMissing, err
 	}
+
+	// Replace junction table metadata (labels, assignees, reviewers)
+	s.replaceMetadataFromSubject(ctx, notification, subjectPayload, githubID)
 
 	return wasMissing, nil
 }

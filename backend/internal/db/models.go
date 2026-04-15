@@ -57,7 +57,53 @@ type Notification struct {
 	SubjectState            sql.NullString
 	SubjectMerged           sql.NullBool
 	SubjectStateReason      sql.NullString
+	SubjectDraft            sql.NullBool
 	TimelineLastSeenAt      sql.NullTime
+}
+
+// NotificationLabel represents a GitHub label associated with a notification's subject.
+type NotificationLabel struct {
+	Name  string
+	Color string
+}
+
+// NotificationAssignee represents a GitHub user assigned to a notification's subject.
+type NotificationAssignee struct {
+	Login     string
+	GithubID  int64
+	AvatarURL string
+}
+
+// NotificationReviewer represents a GitHub user involved in reviewing a notification's PR subject.
+type NotificationReviewer struct {
+	Login     string
+	GithubID  int64
+	Status    string // pending, approved, changes_requested, commented, dismissed
+	AvatarURL string
+}
+
+// NotificationTeamReviewer represents a GitHub team requested as reviewer on a notification's PR subject.
+type NotificationTeamReviewer struct {
+	Slug     string
+	GithubID int64
+}
+
+// NotificationMetadata holds the extracted junction table data for a notification.
+type NotificationMetadata struct {
+	Labels        []NotificationLabel
+	Assignees     []NotificationAssignee
+	Reviewers     []NotificationReviewer
+	TeamReviewers []NotificationTeamReviewer
+}
+
+// EnrichmentRow represents a notification needing enrichment.
+type EnrichmentRow struct {
+	ID                int64
+	GithubID          string
+	SubjectType       string
+	SubjectURL        string
+	SubjectRaw        NullRawMessage
+	EnrichmentVersion int32
 }
 
 // PullRequest represents a pull request

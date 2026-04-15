@@ -84,8 +84,27 @@ export interface BackendNotificationResponse {
 	subjectStateReason?: string | null;
 	actionHints?: ActionHints;
 	tags?: Tag[];
+	labels?: BackendLabel[];
+	assignees?: BackendUserRef[];
+	reviewers?: BackendUserRef[];
+	teamReviewers?: BackendTeamRef[];
 	authorLogin?: string | null;
 	timelineLastSeenAt?: string | null;
+}
+
+export interface BackendLabel {
+	name: string;
+	color?: string;
+}
+
+export interface BackendUserRef {
+	login: string;
+	avatarUrl?: string;
+	reviewStatus?: string; // pending, approved, changes_requested, commented, dismissed
+}
+
+export interface BackendTeamRef {
+	slug: string;
 }
 
 export interface ActionHints {
@@ -126,6 +145,10 @@ export interface Notification {
 	subjectStateReason?: string;
 	actionHints?: ActionHints;
 	tags?: Tag[];
+	githubLabels?: BackendLabel[];
+	githubAssignees?: BackendUserRef[];
+	githubReviewers?: BackendUserRef[];
+	githubTeamReviewers?: BackendTeamRef[];
 	effectiveSortDate?: string;
 	timelineLastSeenAt?: string;
 }

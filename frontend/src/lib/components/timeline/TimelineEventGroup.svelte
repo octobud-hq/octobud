@@ -61,8 +61,8 @@
 			{#if labelPreviews.length > 0}
 				{#each labelPreviews as label (label.name)}
 					<span
-						class="inline-flex items-center px-1.5 py-0 text-xs font-medium rounded-full border"
-						style="background-color: #{label.color}20; color: #{label.color}; border-color: #{label.color}40;"
+						class="github-label-chip inline-flex items-center px-1.5 py-0 text-xs font-medium rounded-full border"
+						style="--label-color: #{label.color}; background-color: #{label.color}20; border-color: #{label.color}40;"
 					>
 						{label.name}
 					</span>
