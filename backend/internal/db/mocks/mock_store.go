@@ -549,6 +549,21 @@ func (mr *MockStoreMockRecorder) DeleteView(ctx, userID, id any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteView", reflect.TypeOf((*MockStore)(nil).DeleteView), ctx, userID, id)
 }
 
+// GetNotificationAssignees mocks base method.
+func (m *MockStore) GetNotificationAssignees(ctx context.Context, notificationID int64) ([]db.NotificationAssignee, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetNotificationAssignees", ctx, notificationID)
+	ret0, _ := ret[0].([]db.NotificationAssignee)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetNotificationAssignees indicates an expected call of GetNotificationAssignees.
+func (mr *MockStoreMockRecorder) GetNotificationAssignees(ctx, notificationID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNotificationAssignees", reflect.TypeOf((*MockStore)(nil).GetNotificationAssignees), ctx, notificationID)
+}
+
 // GetNotificationByGithubID mocks base method.
 func (m *MockStore) GetNotificationByGithubID(ctx context.Context, userID, githubID string) (db.Notification, error) {
 	m.ctrl.T.Helper()
@@ -577,6 +592,51 @@ func (m *MockStore) GetNotificationByID(ctx context.Context, userID string, id i
 func (mr *MockStoreMockRecorder) GetNotificationByID(ctx, userID, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNotificationByID", reflect.TypeOf((*MockStore)(nil).GetNotificationByID), ctx, userID, id)
+}
+
+// GetNotificationLabels mocks base method.
+func (m *MockStore) GetNotificationLabels(ctx context.Context, notificationID int64) ([]db.NotificationLabel, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetNotificationLabels", ctx, notificationID)
+	ret0, _ := ret[0].([]db.NotificationLabel)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetNotificationLabels indicates an expected call of GetNotificationLabels.
+func (mr *MockStoreMockRecorder) GetNotificationLabels(ctx, notificationID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNotificationLabels", reflect.TypeOf((*MockStore)(nil).GetNotificationLabels), ctx, notificationID)
+}
+
+// GetNotificationReviewers mocks base method.
+func (m *MockStore) GetNotificationReviewers(ctx context.Context, notificationID int64) ([]db.NotificationReviewer, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetNotificationReviewers", ctx, notificationID)
+	ret0, _ := ret[0].([]db.NotificationReviewer)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetNotificationReviewers indicates an expected call of GetNotificationReviewers.
+func (mr *MockStoreMockRecorder) GetNotificationReviewers(ctx, notificationID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNotificationReviewers", reflect.TypeOf((*MockStore)(nil).GetNotificationReviewers), ctx, notificationID)
+}
+
+// GetNotificationTeamReviewers mocks base method.
+func (m *MockStore) GetNotificationTeamReviewers(ctx context.Context, notificationID int64) ([]db.NotificationTeamReviewer, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetNotificationTeamReviewers", ctx, notificationID)
+	ret0, _ := ret[0].([]db.NotificationTeamReviewer)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetNotificationTeamReviewers indicates an expected call of GetNotificationTeamReviewers.
+func (mr *MockStoreMockRecorder) GetNotificationTeamReviewers(ctx, notificationID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNotificationTeamReviewers", reflect.TypeOf((*MockStore)(nil).GetNotificationTeamReviewers), ctx, notificationID)
 }
 
 // GetRepositoryByID mocks base method.
@@ -744,6 +804,21 @@ func (mr *MockStoreMockRecorder) ListEnabledRulesOrdered(ctx, userID any) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListEnabledRulesOrdered", reflect.TypeOf((*MockStore)(nil).ListEnabledRulesOrdered), ctx, userID)
 }
 
+// ListNotificationsForEnrichment mocks base method.
+func (m *MockStore) ListNotificationsForEnrichment(ctx context.Context, userID string, targetVersion, batchSize int32) ([]db.EnrichmentRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListNotificationsForEnrichment", ctx, userID, targetVersion, batchSize)
+	ret0, _ := ret[0].([]db.EnrichmentRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListNotificationsForEnrichment indicates an expected call of ListNotificationsForEnrichment.
+func (mr *MockStoreMockRecorder) ListNotificationsForEnrichment(ctx, userID, targetVersion, batchSize any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListNotificationsForEnrichment", reflect.TypeOf((*MockStore)(nil).ListNotificationsForEnrichment), ctx, userID, targetVersion, batchSize)
+}
+
 // ListNotificationsFromQuery mocks base method.
 func (m *MockStore) ListNotificationsFromQuery(ctx context.Context, userID string, query db.NotificationQuery) (db.ListNotificationsFromQueryResult, error) {
 	m.ctrl.T.Helper()
@@ -908,6 +983,20 @@ func (mr *MockStoreMockRecorder) RemoveTagAssignment(ctx, userID, arg any) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveTagAssignment", reflect.TypeOf((*MockStore)(nil).RemoveTagAssignment), ctx, userID, arg)
 }
 
+// ReplaceNotificationMetadata mocks base method.
+func (m *MockStore) ReplaceNotificationMetadata(ctx context.Context, notificationID int64, metadata db.NotificationMetadata) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ReplaceNotificationMetadata", ctx, notificationID, metadata)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ReplaceNotificationMetadata indicates an expected call of ReplaceNotificationMetadata.
+func (mr *MockStoreMockRecorder) ReplaceNotificationMetadata(ctx, notificationID, metadata any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReplaceNotificationMetadata", reflect.TypeOf((*MockStore)(nil).ReplaceNotificationMetadata), ctx, notificationID, metadata)
+}
+
 // SnoozeNotification mocks base method.
 func (m *MockStore) SnoozeNotification(ctx context.Context, userID string, arg db.SnoozeNotificationParams) (db.Notification, error) {
 	m.ctrl.T.Helper()
@@ -996,6 +1085,34 @@ func (m *MockStore) UnstarNotification(ctx context.Context, userID, githubID str
 func (mr *MockStoreMockRecorder) UnstarNotification(ctx, userID, githubID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UnstarNotification", reflect.TypeOf((*MockStore)(nil).UnstarNotification), ctx, userID, githubID)
+}
+
+// UpdateNotificationDraft mocks base method.
+func (m *MockStore) UpdateNotificationDraft(ctx context.Context, notificationID int64, draft bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateNotificationDraft", ctx, notificationID, draft)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateNotificationDraft indicates an expected call of UpdateNotificationDraft.
+func (mr *MockStoreMockRecorder) UpdateNotificationDraft(ctx, notificationID, draft any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateNotificationDraft", reflect.TypeOf((*MockStore)(nil).UpdateNotificationDraft), ctx, notificationID, draft)
+}
+
+// UpdateNotificationEnrichmentVersion mocks base method.
+func (m *MockStore) UpdateNotificationEnrichmentVersion(ctx context.Context, notificationID int64, version int32) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateNotificationEnrichmentVersion", ctx, notificationID, version)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateNotificationEnrichmentVersion indicates an expected call of UpdateNotificationEnrichmentVersion.
+func (mr *MockStoreMockRecorder) UpdateNotificationEnrichmentVersion(ctx, notificationID, version any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateNotificationEnrichmentVersion", reflect.TypeOf((*MockStore)(nil).UpdateNotificationEnrichmentVersion), ctx, notificationID, version)
 }
 
 // UpdateNotificationSubject mocks base method.

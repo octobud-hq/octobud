@@ -5,6 +5,27 @@ All notable changes to Octobud will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1]
+
+### Added
+
+- **New query filters**: `label:`, `assignee:`, `reviewer:`, `team_reviewer:`, `draft:`, `merged:`, `state_reason:` for filtering notifications by PR/issue metadata
+- **Assignee and reviewer display**: Detail view shows avatar stacks for assignees and reviewers with hover popovers listing logins and review statuses
+- **Reviewer status tracking**: PR reviewer statuses (approved, changes requested, commented, dismissed, pending) are fetched from the GitHub Reviews API and displayed as colored status dots on reviewer avatars
+- **GitHub label chips**: Labels from PRs/issues are displayed as colored chips in the detail view metadata row, matching their GitHub colors
+- **Enrichment pipeline**: Background enrichment system with versioned processing for re-enriching existing notifications when new data sources are added
+- **Query input auto-space**: Focusing the query input appends a trailing space so you can immediately start typing a new filter token and see the base suggestion list
+
+### Changed
+
+- Timeline "Changes requested" review badge now uses a diff icon instead of a warning emoji
+- GitHub label chip text contrast improved in both light and dark mode using `color-mix`
+
+### Fixed
+
+- `merged:` and `state_reason:` query fields were handled in the SQL builder but rejected by the validator, so they never worked
+- Backfill job ran in an infinite loop for non-PR notifications because `subject_draft` was written as NULL (unchanged) instead of `false`
+
 ## [0.3.0]
 
 ### Added

@@ -145,7 +145,6 @@
 			// Clear timer if we switch out of split mode
 			if (autoMarkReadTimeoutId !== null) {
 				clearTimeout(autoMarkReadTimeoutId);
-				// eslint-disable-next-line svelte/infinite-reactive-loop
 				autoMarkReadTimeoutId = null;
 			}
 		}
@@ -352,10 +351,30 @@
 	let previousGithubId: string | null = null;
 	let scrollContainer: HTMLDivElement | null = null;
 
+	// Track failed avatar loads for assignee/reviewer avatars.
+	// Uses computeAvatarUrl to get the redirect URL (github.com/user.png) which
+	// browsers can load as <img src> without CORS issues. On load failure, falls
+	// back to initial-letter placeholder.
+	// eslint-disable-next-line svelte/prefer-svelte-reactivity -- SvelteSet requires runes mode; using Set with reassignment for legacy reactivity
+	let failedAvatarLogins = new Set<string>();
+
+	function getAvatarForLogin(login: string, directUrl?: string): string | null {
+		if (failedAvatarLogins.has(login)) {
+			return null;
+		}
+		return computeAvatarUrl(directUrl ?? null, login);
+	}
+
+	function onAvatarError(login: string) {
+		failedAvatarLogins.add(login);
+		failedAvatarLogins = failedAvatarLogins; // trigger reactivity
+	}
+
 	// Reset avatar error state and timeline when switching to a different notification
 	$: if (notification) {
 		avatarLoadFailed = false;
 		resolvedAvatarUrl = null;
+		failedAvatarLogins = new Set();
 
 		// Only reset timeline controller when switching to a DIFFERENT notification
 		const currentGithubId = notification.githubId;
@@ -603,33 +622,267 @@
 									</span>
 								{/if}
 							{/if}
-							{#if detail?.subject?.assignees && detail.subject.assignees.length > 0}
-								<span class="flex items-center gap-1 text-[12px] text-gray-700 dark:text-gray-600">
-									<span>assigned:</span>
-									<span class="text-gray-600 dark:text-gray-500">
-										{detail.subject.assignees.slice(0, 2).join(", ")}{detail.subject.assignees
-											.length > 2
-											? ` +${detail.subject.assignees.length - 2}`
-											: ""}
-									</span>
-								</span>
-							{/if}
-							{#if detail?.subject?.labels && detail.subject.labels.length > 0}
-								{#each detail.subject.labels.slice(0, 3) as label (label)}
+							{#if notification.githubLabels && notification.githubLabels.length > 0}
+								{#each notification.githubLabels as label (label.name)}
 									<span
-										class="rounded-md bg-blue-500/10 dark:bg-blue-500/20 px-2 text-blue-600 dark:text-blue-300 text-[12px]"
+										class="github-label-chip rounded-full border px-2 py-0.5 text-[12px] font-medium"
+										style="--label-color: #{label.color}; background-color: #{label.color}20; border-color: #{label.color}40;"
+										title={label.name}
 									>
-										{label}
+										{label.name}
 									</span>
 								{/each}
-								{#if detail.subject.labels.length > 3}
-									<span class="text-[12px] text-gray-600">
-										+{detail.subject.labels.length - 3}
-									</span>
-								{/if}
 							{/if}
 						</div>
 					</div>
+
+					<!-- Fourth Row: Assignees & Reviewers (single-line with hover popovers) -->
+					{#if (notification.githubAssignees && notification.githubAssignees.length > 0) || (notification.githubReviewers && notification.githubReviewers.length > 0) || (notification.githubTeamReviewers && notification.githubTeamReviewers.length > 0)}
+						<div class="flex flex-wrap items-center gap-4 pt-1.5">
+							{#if notification.githubAssignees && notification.githubAssignees.length > 0}
+								<div class="avatar-group relative flex items-center gap-1.5">
+									<div class="flex items-center -space-x-1.5">
+										{#each notification.githubAssignees as assignee (assignee.login)}
+											{@const avatarUrl = getAvatarForLogin(assignee.login, assignee.avatarUrl)}
+											{#if avatarUrl}
+												<img
+													src={avatarUrl}
+													alt={assignee.login}
+													class="h-6 w-6 rounded-full ring-2 ring-white dark:ring-gray-950 bg-gray-200 dark:bg-gray-700"
+													on:error={() => onAvatarError(assignee.login)}
+												/>
+											{:else}
+												<div
+													class="h-6 w-6 rounded-full ring-2 ring-white dark:ring-gray-950 bg-gray-200 dark:bg-gray-700 flex items-center justify-center"
+												>
+													<span class="text-[10px] font-bold text-gray-600 dark:text-gray-300"
+														>{assignee.login.charAt(0).toUpperCase()}</span
+													>
+												</div>
+											{/if}
+										{/each}
+									</div>
+									<span class="text-[12px] text-gray-500 dark:text-gray-500">assigned</span>
+									<!-- Hover popover -->
+									<div
+										class="avatar-group-popover absolute left-0 top-full mt-1 z-50 hidden rounded-lg border-[0.5px] border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-lg py-1.5 w-max"
+									>
+										<div class="text-[11px] font-medium text-gray-400 dark:text-gray-500 px-3 pb-1">
+											Assignees
+										</div>
+										{#each notification.githubAssignees as assignee (assignee.login)}
+											{@const avatarUrl = getAvatarForLogin(assignee.login, assignee.avatarUrl)}
+											<div class="flex items-center gap-2 px-3 py-1">
+												{#if avatarUrl}
+													<img
+														src={avatarUrl}
+														alt={assignee.login}
+														class="h-5 w-5 rounded-full bg-gray-200 dark:bg-gray-700"
+														on:error={() => onAvatarError(assignee.login)}
+													/>
+												{:else}
+													<div
+														class="h-5 w-5 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center"
+													>
+														<span class="text-[9px] font-bold text-gray-600 dark:text-gray-300"
+															>{assignee.login.charAt(0).toUpperCase()}</span
+														>
+													</div>
+												{/if}
+												<span class="text-xs text-gray-700 dark:text-gray-300"
+													>{assignee.login}</span
+												>
+											</div>
+										{/each}
+									</div>
+								</div>
+							{/if}
+							{#if (notification.githubReviewers && notification.githubReviewers.length > 0) || (notification.githubTeamReviewers && notification.githubTeamReviewers.length > 0)}
+								<div class="avatar-group relative flex items-center gap-1.5">
+									<div class="flex items-center -space-x-1.5">
+										{#if notification.githubTeamReviewers}
+											{#each notification.githubTeamReviewers as team (team.slug)}
+												<div
+													class="h-6 rounded-full ring-2 ring-white dark:ring-gray-950 bg-gray-200 dark:bg-gray-900 flex items-center gap-0.5 px-1.5"
+												>
+													<svg
+														class="w-3 h-3 text-gray-500 dark:text-gray-400"
+														viewBox="0 0 16 16"
+														fill="currentColor"
+														aria-hidden="true"
+													>
+														<path d={octicons.people.toSVG().match(/d="([^"]+)"/)?.[1] ?? ""} />
+													</svg>
+													<span class="text-[9px] font-medium text-gray-600 dark:text-gray-300"
+														>{team.slug}</span
+													>
+												</div>
+											{/each}
+										{/if}
+										{#if notification.githubReviewers}
+											{#each notification.githubReviewers as reviewer (reviewer.login)}
+												{@const avatarUrl = getAvatarForLogin(reviewer.login, reviewer.avatarUrl)}
+												<div class="relative">
+													{#if avatarUrl}
+														<img
+															src={avatarUrl}
+															alt={reviewer.login}
+															class="h-6 w-6 rounded-full ring-2 ring-white dark:ring-gray-950 bg-gray-200 dark:bg-gray-700"
+															on:error={() => onAvatarError(reviewer.login)}
+														/>
+													{:else}
+														<div
+															class="h-6 w-6 rounded-full ring-2 ring-white dark:ring-gray-950 bg-gray-200 dark:bg-gray-700 flex items-center justify-center"
+														>
+															<span class="text-[10px] font-bold text-gray-600 dark:text-gray-300"
+																>{reviewer.login.charAt(0).toUpperCase()}</span
+															>
+														</div>
+													{/if}
+													{#if reviewer.reviewStatus}
+														<span
+															class="absolute -bottom-0.5 -right-0.5 flex items-center justify-center h-3 w-3 rounded-full ring-1.5 ring-white dark:ring-gray-950
+																{reviewer.reviewStatus === 'approved' ? 'bg-green-500' : ''}
+																{reviewer.reviewStatus === 'changes_requested' ? 'bg-red-500' : ''}
+																{reviewer.reviewStatus === 'commented' ? 'bg-gray-400 dark:bg-gray-500' : ''}
+																{reviewer.reviewStatus === 'dismissed' ? 'bg-gray-300 dark:bg-gray-600' : ''}
+																{reviewer.reviewStatus === 'pending' ? 'bg-amber-400' : ''}"
+														>
+															<svg
+																class="w-2 h-2 text-white"
+																viewBox="0 0 16 16"
+																fill="currentColor"
+																aria-hidden="true"
+															>
+																{#if reviewer.reviewStatus === "approved"}
+																	<path
+																		d={octicons.check.toSVG().match(/d="([^"]+)"/)?.[1] ?? ""}
+																	/>
+																{:else if reviewer.reviewStatus === "changes_requested"}
+																	<path
+																		d={octicons["file-diff"].toSVG().match(/d="([^"]+)"/)?.[1] ??
+																			""}
+																	/>
+																{:else if reviewer.reviewStatus === "commented"}
+																	<path
+																		d={octicons.comment.toSVG().match(/d="([^"]+)"/)?.[1] ?? ""}
+																	/>
+																{:else if reviewer.reviewStatus === "dismissed"}
+																	<path d={octicons.dash.toSVG().match(/d="([^"]+)"/)?.[1] ?? ""} />
+																{:else}
+																	<path
+																		d={octicons["dot-fill"].toSVG().match(/d="([^"]+)"/)?.[1] ?? ""}
+																	/>
+																{/if}
+															</svg>
+														</span>
+													{/if}
+												</div>
+											{/each}
+										{/if}
+									</div>
+									<span class="text-[12px] text-gray-500 dark:text-gray-500">reviewers</span>
+									<!-- Hover popover -->
+									<div
+										class="avatar-group-popover absolute left-0 top-full mt-1 z-50 hidden rounded-lg border-[0.5px] border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-lg py-1.5 w-max"
+									>
+										<div class="text-[11px] font-medium text-gray-400 dark:text-gray-500 px-3 pb-1">
+											Reviewers
+										</div>
+										{#if notification.githubTeamReviewers}
+											{#each notification.githubTeamReviewers as team (team.slug)}
+												<div class="flex items-center gap-2 px-3 py-1">
+													<div
+														class="h-5 w-5 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center"
+													>
+														<svg
+															class="w-3 h-3 text-gray-500 dark:text-gray-400"
+															viewBox="0 0 16 16"
+															fill="currentColor"
+															aria-hidden="true"
+														>
+															<path d={octicons.people.toSVG().match(/d="([^"]+)"/)?.[1] ?? ""} />
+														</svg>
+													</div>
+													<span class="text-xs text-gray-700 dark:text-gray-300 flex-1"
+														>{team.slug}</span
+													>
+													<svg
+														class="w-4 h-4 flex-shrink-0 text-amber-500 dark:text-amber-400"
+														viewBox="0 0 16 16"
+														fill="currentColor"
+													>
+														<title>Pending</title>
+														<path
+															d={octicons["dot-fill"].toSVG().match(/d="([^"]+)"/)?.[1] ?? ""}
+														/>
+													</svg>
+												</div>
+											{/each}
+										{/if}
+										{#if notification.githubReviewers}
+											{#each notification.githubReviewers as reviewer (reviewer.login)}
+												{@const avatarUrl = getAvatarForLogin(reviewer.login, reviewer.avatarUrl)}
+												<div class="flex items-center gap-2 px-3 py-1">
+													{#if avatarUrl}
+														<img
+															src={avatarUrl}
+															alt={reviewer.login}
+															class="h-5 w-5 rounded-full bg-gray-200 dark:bg-gray-700"
+															on:error={() => onAvatarError(reviewer.login)}
+														/>
+													{:else}
+														<div
+															class="h-5 w-5 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center"
+														>
+															<span class="text-[9px] font-bold text-gray-600 dark:text-gray-300"
+																>{reviewer.login.charAt(0).toUpperCase()}</span
+															>
+														</div>
+													{/if}
+													<span class="text-xs text-gray-700 dark:text-gray-300 flex-1 mr-3"
+														>{reviewer.login}</span
+													>
+													<svg
+														class="w-4 h-4 flex-shrink-0
+														{reviewer.reviewStatus === 'approved' ? 'text-green-500 dark:text-green-400' : ''}
+														{reviewer.reviewStatus === 'changes_requested' ? 'text-red-500 dark:text-red-400' : ''}
+														{reviewer.reviewStatus === 'commented' ? 'text-gray-400 dark:text-gray-500' : ''}
+														{reviewer.reviewStatus === 'dismissed' ? 'text-gray-300 dark:text-gray-600' : ''}
+														{reviewer.reviewStatus === 'pending' ? 'text-amber-500 dark:text-amber-400' : ''}"
+														viewBox="0 0 16 16"
+														fill="currentColor"
+													>
+														<title
+															>{reviewer.reviewStatus === "changes_requested"
+																? "Changes requested"
+																: (reviewer.reviewStatus ?? "pending").charAt(0).toUpperCase() +
+																	(reviewer.reviewStatus ?? "pending").slice(1)}</title
+														>
+														{#if reviewer.reviewStatus === "approved"}
+															<path d={octicons.check.toSVG().match(/d="([^"]+)"/)?.[1] ?? ""} />
+														{:else if reviewer.reviewStatus === "changes_requested"}
+															<path
+																d={octicons["file-diff"].toSVG().match(/d="([^"]+)"/)?.[1] ?? ""}
+															/>
+														{:else if reviewer.reviewStatus === "commented"}
+															<path d={octicons.comment.toSVG().match(/d="([^"]+)"/)?.[1] ?? ""} />
+														{:else if reviewer.reviewStatus === "dismissed"}
+															<path d={octicons.dash.toSVG().match(/d="([^"]+)"/)?.[1] ?? ""} />
+														{:else}
+															<path
+																d={octicons["dot-fill"].toSVG().match(/d="([^"]+)"/)?.[1] ?? ""}
+															/>
+														{/if}
+													</svg>
+												</div>
+											{/each}
+										{/if}
+									</div>
+								</div>
+							{/if}
+						</div>
+					{/if}
 
 					<!-- Permission Error Warning -->
 					{#if hasPermissionError}
@@ -1148,5 +1401,9 @@
 
 	.animate-spin-slow {
 		animation: spin-slow 1.2s linear infinite;
+	}
+
+	.avatar-group:hover .avatar-group-popover {
+		display: block;
 	}
 </style>

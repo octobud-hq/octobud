@@ -186,6 +186,17 @@
 	}
 
 	function handleFocus() {
+		// Append a trailing space so the user can immediately start a new token
+		// and see the base suggestion list instead of suggestions for the last token.
+		if (value && !value.endsWith(" ")) {
+			value = value + " ";
+			if (inputElement) {
+				inputElement.value = value;
+				inputElement.selectionStart = inputElement.selectionEnd = value.length;
+			}
+			onChange(value);
+		}
+		cursorPos = value.length;
 		// Always show dropdown when focusing
 		updateSuggestions();
 	}

@@ -102,6 +102,16 @@ const fromBackendNotification = (notification: BackendNotificationResponse): Not
 		subjectStateReason: notification.subjectStateReason ?? undefined,
 		actionHints: notification.actionHints,
 		tags: notification.tags ?? [],
+		githubLabels: notification.labels ?? [],
+		githubAssignees: [...(notification.assignees ?? [])].sort((a, b) =>
+			a.login.localeCompare(b.login)
+		),
+		githubReviewers: [...(notification.reviewers ?? [])].sort((a, b) =>
+			a.login.localeCompare(b.login)
+		),
+		githubTeamReviewers: [...(notification.teamReviewers ?? [])].sort((a, b) =>
+			a.slug.localeCompare(b.slug)
+		),
 		effectiveSortDate: notification.effectiveSortDate,
 		timelineLastSeenAt: notification.timelineLastSeenAt ?? undefined,
 	};

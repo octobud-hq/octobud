@@ -87,6 +87,19 @@
 		}
 	}
 
+	function handleFocus() {
+		if (value && !value.endsWith(" ")) {
+			value = value + " ";
+			if (inputElement) {
+				inputElement.value = value;
+				inputElement.selectionStart = inputElement.selectionEnd = value.length;
+			}
+			onChange(value);
+		}
+		cursorPos = value.length;
+		updateSuggestions();
+	}
+
 	function handleClick() {
 		if (inputElement) {
 			cursorPos = inputElement.selectionStart || 0;
@@ -260,6 +273,7 @@
 		on:input={handleInput}
 		on:keydown={handleKeyDown}
 		on:click={handleClick}
+		on:focus={handleFocus}
 		on:blur={handleBlur}
 		autocomplete="off"
 		spellcheck={false}

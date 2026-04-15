@@ -145,8 +145,25 @@ Combine all operators for sophisticated filtering:
 | `state:closed` | Closed issues/PRs |
 | `merged:true` | Merged pull requests |
 | `merged:false` | Unmerged pull requests |
+| `draft:true` | Draft pull requests |
+| `draft:false` | Non-draft (ready for review) pull requests |
 | `state_reason:completed` | Issues closed as completed |
 | `state_reason:not_planned` | Issues closed as not planned |
+
+### Label Filters
+
+| Filter | Description |
+|--------|-------------|
+| `label:bug` | Has label matching "bug" (contains matching) |
+| `label:bug,enhancement` | Has label matching "bug" OR "enhancement" |
+
+### Assignee and Reviewer Filters
+
+| Filter | Description |
+|--------|-------------|
+| `assignee:username` | Assigned to user (contains matching) |
+| `reviewer:username` | Has user as reviewer - requested or submitted (contains matching) |
+| `team_reviewer:team-slug` | Has team requested as reviewer (contains matching) |
 
 ### Tag Filters
 
@@ -156,7 +173,7 @@ Combine all operators for sophisticated filtering:
 
 ### Boolean Filters
 
-Use with `true`/`false`, `yes`/`no`, or `1`/`0`: `read:true`, `archived:true`, `muted:true`, `snoozed:true`, `filtered:true`
+Use with `true`/`false`, `yes`/`no`, or `1`/`0`: `read:true`, `archived:true`, `muted:true`, `snoozed:true`, `filtered:true`, `draft:true`, `merged:true`
 
 ## Example Queries
 
@@ -200,6 +217,30 @@ type:PullRequest reason:review_requested state:open -is:archived
 
 ```
 type:PullRequest merged:true
+```
+
+### Draft PRs awaiting review
+
+```
+draft:true reviewer:octocat
+```
+
+### PRs with a specific label
+
+```
+type:PullRequest label:bug state:open
+```
+
+### PRs assigned to me
+
+```
+type:PullRequest assignee:myusername state:open
+```
+
+### PRs where a team is requested
+
+```
+team_reviewer:frontend state:open
 ```
 
 ### Dependabot PRs to archive

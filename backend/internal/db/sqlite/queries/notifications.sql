@@ -67,22 +67,23 @@ INSERT INTO notifications (
     github_last_read_at, github_url, github_subscription_url, payload,
     subject_raw, subject_fetched_at, author_login, author_id,
     subject_number, subject_state, subject_merged, subject_state_reason,
+    subject_draft,
     imported_at, effective_sort_date
 ) VALUES (
     sqlc.arg(user_id),
-    sqlc.arg(github_id), 
-    sqlc.arg(repository_id), 
+    sqlc.arg(github_id),
+    sqlc.arg(repository_id),
     sqlc.narg(pull_request_id),
-    sqlc.arg(subject_type), 
-    sqlc.arg(subject_title), 
+    sqlc.arg(subject_type),
+    sqlc.arg(subject_title),
     sqlc.arg(subject_url),
-    sqlc.arg(subject_latest_comment_url), 
-    sqlc.arg(reason), 
-    sqlc.arg(github_unread), 
+    sqlc.arg(subject_latest_comment_url),
+    sqlc.arg(reason),
+    sqlc.arg(github_unread),
     sqlc.arg(github_updated_at),
-    sqlc.arg(github_last_read_at), 
-    sqlc.arg(github_url), 
-    sqlc.arg(github_subscription_url), 
+    sqlc.arg(github_last_read_at),
+    sqlc.arg(github_url),
+    sqlc.arg(github_subscription_url),
     sqlc.arg(payload),
     sqlc.narg(subject_raw),
     sqlc.narg(subject_fetched_at),
@@ -92,7 +93,8 @@ INSERT INTO notifications (
     sqlc.narg(subject_state),
     sqlc.narg(subject_merged),
     sqlc.narg(subject_state_reason),
-    strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), 
+    sqlc.narg(subject_draft),
+    strftime('%Y-%m-%dT%H:%M:%SZ', 'now'),
     COALESCE(sqlc.arg(effective_sort_date), strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 )
 ON CONFLICT(user_id, github_id) DO UPDATE SET
@@ -115,6 +117,7 @@ ON CONFLICT(user_id, github_id) DO UPDATE SET
     subject_state = excluded.subject_state,
     subject_merged = excluded.subject_merged,
     subject_state_reason = excluded.subject_state_reason,
+    subject_draft = excluded.subject_draft,
     -- Preserve snoozed_until as sort date if notification is snoozed, otherwise use new github_updated_at
     effective_sort_date = COALESCE(notifications.snoozed_until, excluded.effective_sort_date)
 RETURNING *;
@@ -129,6 +132,7 @@ UPDATE notifications SET
     subject_state = ?,
     subject_merged = ?,
     subject_state_reason = ?,
+    subject_draft = ?,
     author_login = ?,
     author_id = ?
 WHERE user_id = ? AND github_id = ?;

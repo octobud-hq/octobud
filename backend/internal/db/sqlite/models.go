@@ -58,6 +58,35 @@ type Notification struct {
 	SubjectMerged           sql.NullInt64
 	SubjectStateReason      sql.NullString
 	TimelineLastSeenAt      sql.NullString
+	SubjectDraft            sql.NullInt64
+	EnrichmentVersion       int64
+}
+
+type NotificationAssignee struct {
+	NotificationID int64
+	Login          string
+	GithubID       sql.NullInt64
+	AvatarUrl      sql.NullString
+}
+
+type NotificationLabel struct {
+	NotificationID int64
+	Name           string
+	Color          sql.NullString
+}
+
+type NotificationReviewer struct {
+	NotificationID int64
+	Login          string
+	GithubID       sql.NullInt64
+	Status         string
+	AvatarUrl      sql.NullString
+}
+
+type NotificationTeamReviewer struct {
+	NotificationID int64
+	Slug           string
+	GithubID       sql.NullInt64
 }
 
 type PullRequest struct {

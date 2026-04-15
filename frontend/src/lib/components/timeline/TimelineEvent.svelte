@@ -480,17 +480,17 @@
 				>
 			{:else if item.type === "labeled" && item.label}
 				added label <span
-					class="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border"
-					style="background-color: #{item.label.color}20; color: #{item.label
-						.color}; border-color: #{item.label.color}40;"
+					class="github-label-chip inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border"
+					style="--label-color: #{item.label.color}; background-color: #{item.label
+						.color}20; border-color: #{item.label.color}40;"
 				>
 					{item.label.name}
 				</span>
 			{:else if item.type === "unlabeled" && item.label}
 				removed label <span
-					class="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border"
-					style="background-color: #{item.label.color}20; color: #{item.label
-						.color}; border-color: #{item.label.color}40;"
+					class="github-label-chip inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border"
+					style="--label-color: #{item.label.color}; background-color: #{item.label
+						.color}20; border-color: #{item.label.color}40;"
 				>
 					{item.label.name}
 				</span>

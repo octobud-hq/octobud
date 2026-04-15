@@ -111,6 +111,10 @@ type SyncOperations interface {
 	// Returns (wasMissing, error) where wasMissing indicates if subject data was previously missing.
 	RefreshSubjectData(ctx context.Context, userID string, githubID string) (bool, error)
 
+	// EnrichNotificationBatch processes a batch of notifications that need enrichment.
+	// Returns the number of notifications successfully enriched.
+	EnrichNotificationBatch(ctx context.Context, userID string, batchSize int32) (int64, error)
+
 	// IsInitialSyncComplete checks if the initial sync has been completed
 	IsInitialSyncComplete(ctx context.Context, userID string) (bool, error)
 

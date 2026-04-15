@@ -121,3 +121,12 @@
 		78.5% 0.115 274.713
 	) !important; /* indigo-300 - keep same color on hover (dark mode) */
 }
+
+/* GitHub label chips - darkened text in light mode, lightened in dark mode */
+.github-label-chip {
+	color: color-mix(in srgb, var(--label-color) 60%, black);
+}
+
+.dark .github-label-chip {
+	color: color-mix(in srgb, var(--label-color) 75%, white);
+}

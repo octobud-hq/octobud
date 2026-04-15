@@ -93,12 +93,65 @@ func (s *Service) BuildResponse(
 		}
 	}
 
+	// Fetch metadata (labels, assignees, reviewers, team reviewers)
+	if err := s.enrichResponseMetadata(ctx, notification.ID, &item); err != nil {
+		return models.Notification{}, err
+	}
+
 	// Always compute action hints using unified query semantics
 	// Pass nil for repo if not found - evaluator handles this gracefully
 	hints := computeActionHintsForNotification(&notification, repo, evaluator)
 	item.ActionHints = hints
 
 	return item, nil
+}
+
+// enrichResponseMetadata fetches labels, assignees, reviewers, and team reviewers
+// from the junction tables and populates the notification response.
+func (s *Service) enrichResponseMetadata(
+	ctx context.Context,
+	notificationID int64,
+	item *models.Notification,
+) error {
+	labels, err := s.queries.GetNotificationLabels(ctx, notificationID)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return errors.Join(ErrFailedToFetchLabels, err)
+	}
+	for _, l := range labels {
+		item.Labels = append(item.Labels, models.Label{Name: l.Name, Color: l.Color})
+	}
+
+	assignees, err := s.queries.GetNotificationAssignees(ctx, notificationID)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return errors.Join(ErrFailedToFetchAssignees, err)
+	}
+	for _, a := range assignees {
+		item.Assignees = append(
+			item.Assignees,
+			models.UserRef{Login: a.Login, AvatarURL: a.AvatarURL},
+		)
+	}
+
+	reviewers, err := s.queries.GetNotificationReviewers(ctx, notificationID)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return errors.Join(ErrFailedToFetchReviewers, err)
+	}
+	for _, r := range reviewers {
+		item.Reviewers = append(
+			item.Reviewers,
+			models.UserRef{Login: r.Login, AvatarURL: r.AvatarURL, ReviewStatus: r.Status},
+		)
+	}
+
+	teamReviewers, err := s.queries.GetNotificationTeamReviewers(ctx, notificationID)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return errors.Join(ErrFailedToFetchTeamReviewers, err)
+	}
+	for _, t := range teamReviewers {
+		item.TeamReviewers = append(item.TeamReviewers, models.TeamRef{Slug: t.Slug})
+	}
+
+	return nil
 }
 
 // IndexRepositories creates a map of repository ID to repository for efficient lookup

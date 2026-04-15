@@ -44,6 +44,21 @@ func (m *MockSyncOperations) EXPECT() *MockSyncOperationsMockRecorder {
 	return m.recorder
 }
 
+// EnrichNotificationBatch mocks base method.
+func (m *MockSyncOperations) EnrichNotificationBatch(ctx context.Context, userID string, batchSize int32) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "EnrichNotificationBatch", ctx, userID, batchSize)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// EnrichNotificationBatch indicates an expected call of EnrichNotificationBatch.
+func (mr *MockSyncOperationsMockRecorder) EnrichNotificationBatch(ctx, userID, batchSize any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnrichNotificationBatch", reflect.TypeOf((*MockSyncOperations)(nil).EnrichNotificationBatch), ctx, userID, batchSize)
+}
+
 // FetchNotificationsToSync mocks base method.
 func (m *MockSyncOperations) FetchNotificationsToSync(ctx context.Context, syncCtx sync.SyncContext) ([]types.NotificationThread, error) {
 	m.ctrl.T.Helper()

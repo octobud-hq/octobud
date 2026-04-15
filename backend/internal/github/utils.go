@@ -233,6 +233,132 @@ func ExtractPullRequestData(subjectJSON json.RawMessage) (*PullRequestData, erro
 	return result, nil
 }
 
+// LabelData represents a GitHub label extracted from subject JSON.
+type LabelData struct {
+	Name  string
+	Color string // hex color without '#' prefix
+}
+
+// UserData represents a GitHub user extracted from subject JSON.
+type UserData struct {
+	Login     string
+	GithubID  int64
+	AvatarURL string
+}
+
+// TeamData represents a GitHub team extracted from subject JSON.
+type TeamData struct {
+	Slug     string
+	GithubID int64
+}
+
+// ExtractSubjectDraft extracts the draft status from subject JSON.
+// Works for Pull Requests which have a "draft" field (boolean).
+func ExtractSubjectDraft(subjectJSON json.RawMessage) sql.NullBool {
+	var data map[string]interface{}
+	if err := json.Unmarshal(subjectJSON, &data); err != nil {
+		return sql.NullBool{}
+	}
+
+	if draftVal, ok := data["draft"].(bool); ok {
+		return sql.NullBool{Bool: draftVal, Valid: true}
+	}
+
+	return sql.NullBool{}
+}
+
+// ExtractSubjectLabels extracts the labels array from subject JSON.
+// Works for PRs and Issues which have a "labels" field.
+func ExtractSubjectLabels(subjectJSON json.RawMessage) []LabelData {
+	var data struct {
+		Labels []struct {
+			Name  string `json:"name"`
+			Color string `json:"color"`
+		} `json:"labels"`
+	}
+	if err := json.Unmarshal(subjectJSON, &data); err != nil {
+		return nil
+	}
+
+	labels := make([]LabelData, 0, len(data.Labels))
+	for _, l := range data.Labels {
+		if l.Name != "" {
+			labels = append(labels, LabelData{Name: l.Name, Color: l.Color})
+		}
+	}
+	return labels
+}
+
+// ExtractSubjectAssignees extracts the assignees array from subject JSON.
+// Works for PRs and Issues which have an "assignees" field.
+func ExtractSubjectAssignees(subjectJSON json.RawMessage) []UserData {
+	var data struct {
+		Assignees []struct {
+			Login     string `json:"login"`
+			ID        int64  `json:"id"`
+			AvatarURL string `json:"avatar_url"`
+		} `json:"assignees"`
+	}
+	if err := json.Unmarshal(subjectJSON, &data); err != nil {
+		return nil
+	}
+
+	users := make([]UserData, 0, len(data.Assignees))
+	for _, a := range data.Assignees {
+		if a.Login != "" {
+			users = append(users, UserData{Login: a.Login, GithubID: a.ID, AvatarURL: a.AvatarURL})
+		}
+	}
+	return users
+}
+
+// ExtractSubjectReviewers extracts the requested_reviewers array from subject JSON.
+// Works for Pull Requests which have a "requested_reviewers" field.
+// Note: GitHub clears this array after a review is submitted, so this reflects
+// currently pending review requests only.
+func ExtractSubjectReviewers(subjectJSON json.RawMessage) []UserData {
+	var data struct {
+		RequestedReviewers []struct {
+			Login     string `json:"login"`
+			ID        int64  `json:"id"`
+			AvatarURL string `json:"avatar_url"`
+		} `json:"requested_reviewers"`
+	}
+	if err := json.Unmarshal(subjectJSON, &data); err != nil {
+		return nil
+	}
+
+	users := make([]UserData, 0, len(data.RequestedReviewers))
+	for _, r := range data.RequestedReviewers {
+		if r.Login != "" {
+			users = append(users, UserData{Login: r.Login, GithubID: r.ID, AvatarURL: r.AvatarURL})
+		}
+	}
+	return users
+}
+
+// ExtractSubjectTeamReviewers extracts the requested_teams array from subject JSON.
+// Works for Pull Requests which have a "requested_teams" field.
+func ExtractSubjectTeamReviewers(subjectJSON json.RawMessage) []TeamData {
+	var data struct {
+		RequestedTeams []struct {
+			Slug string `json:"slug"`
+			ID   int64  `json:"id"`
+		} `json:"requested_teams"`
+	}
+	if err := json.Unmarshal(subjectJSON, &data); err != nil {
+		return nil
+	}
+
+	teams := make([]TeamData, 0, len(data.RequestedTeams))
+	for _, t := range data.RequestedTeams {
+		if t.Slug != "" {
+			teams = append(teams, TeamData{Slug: t.Slug, GithubID: t.ID})
+		}
+	}
+	return teams
+}
+
 // ExtractSubjectInfo parses a subject URL or raw JSON to extract repository owner, repo, and number.
 // This is used to make GitHub API calls for the subject (e.g., fetching timeline).
 // Note: Subject type should come from the notification's SubjectType field, not from URL parsing.
