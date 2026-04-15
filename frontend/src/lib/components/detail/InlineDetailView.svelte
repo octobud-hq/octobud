@@ -712,7 +712,9 @@
 														fill="currentColor"
 														aria-hidden="true"
 													>
-														<path d={getIconPath("people")} />
+														<!-- eslint-disable-next-line svelte/no-at-html-tags -->{@html getIconPath(
+															"people"
+														)}
 													</svg>
 													<span class="text-[9px] font-medium text-gray-600 dark:text-gray-300"
 														>{team.slug}</span
@@ -756,15 +758,25 @@
 																aria-hidden="true"
 															>
 																{#if reviewer.reviewStatus === "approved"}
-																	<path d={getIconPath("check")} />
+																	<!-- eslint-disable-next-line svelte/no-at-html-tags -->{@html getIconPath(
+																		"check"
+																	)}
 																{:else if reviewer.reviewStatus === "changes_requested"}
-																	<path d={getIconPath("file-diff")} />
+																	<!-- eslint-disable-next-line svelte/no-at-html-tags -->{@html getIconPath(
+																		"file-diff"
+																	)}
 																{:else if reviewer.reviewStatus === "commented"}
-																	<path d={getIconPath("comment")} />
+																	<!-- eslint-disable-next-line svelte/no-at-html-tags -->{@html getIconPath(
+																		"comment"
+																	)}
 																{:else if reviewer.reviewStatus === "dismissed"}
-																	<path d={getIconPath("dash")} />
+																	<!-- eslint-disable-next-line svelte/no-at-html-tags -->{@html getIconPath(
+																		"dash"
+																	)}
 																{:else}
-																	<path d={getIconPath("dot-fill")} />
+																	<!-- eslint-disable-next-line svelte/no-at-html-tags -->{@html getIconPath(
+																		"dot-fill"
+																	)}
 																{/if}
 															</svg>
 														</span>
@@ -793,7 +805,9 @@
 															fill="currentColor"
 															aria-hidden="true"
 														>
-															<path d={getIconPath("people")} />
+															<!-- eslint-disable-next-line svelte/no-at-html-tags -->{@html getIconPath(
+																"people"
+															)}
 														</svg>
 													</div>
 													<span class="text-xs text-gray-700 dark:text-gray-300 flex-1"
@@ -805,7 +819,9 @@
 														fill="currentColor"
 													>
 														<title>Pending</title>
-														<path d={getIconPath("dot-fill")} />
+														<!-- eslint-disable-next-line svelte/no-at-html-tags -->{@html getIconPath(
+															"dot-fill"
+														)}
 													</svg>
 												</div>
 											{/each}
@@ -850,15 +866,25 @@
 																	(reviewer.reviewStatus ?? "pending").slice(1)}</title
 														>
 														{#if reviewer.reviewStatus === "approved"}
-															<path d={getIconPath("check")} />
+															<!-- eslint-disable-next-line svelte/no-at-html-tags -->{@html getIconPath(
+																"check"
+															)}
 														{:else if reviewer.reviewStatus === "changes_requested"}
-															<path d={getIconPath("file-diff")} />
+															<!-- eslint-disable-next-line svelte/no-at-html-tags -->{@html getIconPath(
+																"file-diff"
+															)}
 														{:else if reviewer.reviewStatus === "commented"}
-															<path d={getIconPath("comment")} />
+															<!-- eslint-disable-next-line svelte/no-at-html-tags -->{@html getIconPath(
+																"comment"
+															)}
 														{:else if reviewer.reviewStatus === "dismissed"}
-															<path d={getIconPath("dash")} />
+															<!-- eslint-disable-next-line svelte/no-at-html-tags -->{@html getIconPath(
+																"dash"
+															)}
 														{:else}
-															<path d={getIconPath("dot-fill")} />
+															<!-- eslint-disable-next-line svelte/no-at-html-tags -->{@html getIconPath(
+																"dot-fill"
+															)}
 														{/if}
 													</svg>
 												</div>

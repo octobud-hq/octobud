@@ -186,7 +186,8 @@
 					>
 						{#if reviewBadgeConfig.iconPath}
 							<svg class="w-3 h-3" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-								<path d={reviewBadgeConfig.iconPath} />
+								<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+								{@html reviewBadgeConfig.iconPath}
 							</svg>
 						{:else if reviewBadgeConfig.useIcon}
 							<img
@@ -270,7 +271,8 @@
 								>
 									{#if reviewBadgeConfig.iconPath}
 										<svg class="w-3 h-3" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-											<path d={reviewBadgeConfig.iconPath} />
+											<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+											{@html reviewBadgeConfig.iconPath}
 										</svg>
 									{:else if reviewBadgeConfig.useIcon}
 										<img

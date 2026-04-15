@@ -24,7 +24,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - `merged:` and `state_reason:` query fields were handled in the SQL builder but rejected by the validator, so they never worked
-- Backfill job ran in an infinite loop for non-PR notifications because `subject_draft` was written as NULL (unchanged) instead of `false`
 
 ## [0.3.0]
 
