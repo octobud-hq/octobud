@@ -19,6 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>. -->
 	import { getUpdateStore } from "$lib/stores/updateStore";
 	import { toastStore } from "$lib/stores/toastStore";
 	import { getVersion } from "$lib/api/user";
+	import ChangelogView from "./ChangelogView.svelte";
 
 	const updateStore = getUpdateStore();
 
@@ -391,5 +392,11 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>. -->
 				<p class="text-sm text-red-800 dark:text-red-200">{$error}</p>
 			</div>
 		{/if}
+
+		<!-- Release Notes -->
+		<div id="release-notes" class="scroll-mt-6 border-t border-gray-200 pt-6 dark:border-gray-800">
+			<h3 class="mb-3 text-sm font-medium text-gray-900 dark:text-gray-100">Release Notes</h3>
+			<ChangelogView />
+		</div>
 	</div>
 {/if}

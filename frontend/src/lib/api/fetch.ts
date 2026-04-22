@@ -31,6 +31,51 @@ export class ApiUnreachableError extends Error {
 }
 
 /**
+ * Thrown for API responses with a non-2xx status. Carries the HTTP status and
+ * the backend's machine-readable error code (when present) so callers can
+ * branch on the reason without string-matching the human-readable message.
+ */
+export class ApiError extends Error {
+	readonly status: number;
+	readonly code: string | null;
+
+	constructor(message: string, status: number, code: string | null = null) {
+		super(message);
+		this.name = "ApiError";
+		this.status = status;
+		this.code = code;
+	}
+}
+
+/**
+ * Backend error codes. Keep in sync with backend/internal/api/helpers/render.go.
+ */
+export const ApiErrorCode = {
+	NotConnected: "not_connected",
+} as const;
+export type ApiErrorCodeValue = (typeof ApiErrorCode)[keyof typeof ApiErrorCode];
+
+/**
+ * Parses a non-OK Response into an ApiError, extracting `error` and `code`
+ * from the JSON body when available. Does not throw — call sites decide.
+ */
+export async function apiErrorFromResponse(
+	response: Response,
+	fallbackMessage: string
+): Promise<ApiError> {
+	let message = fallbackMessage;
+	let code: string | null = null;
+	try {
+		const body: { error?: string; code?: string } = await response.json();
+		if (body.error) message = body.error;
+		if (body.code) code = body.code;
+	} catch {
+		// Non-JSON body — keep fallback message.
+	}
+	return new ApiError(message, response.status, code);
+}
+
+/**
  * Check if an error is a network error (API unreachable).
  * This includes TypeError from fetch failures and other network-related errors.
  */

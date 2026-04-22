@@ -49,6 +49,7 @@
 	$: selectionMap = context.listView.selectionMap;
 	$: initialScrollPosition = context.initialScrollPosition;
 	$: apiError = context.apiError;
+	$: apiErrorCode = context.apiErrorCode;
 
 	// Export list section ref for parent access
 	let listSectionComponent: NotificationListSectionComponent | null = null;
@@ -90,5 +91,6 @@
 		{selectionMap}
 		{initialScrollPosition}
 		{apiError}
+		{apiErrorCode}
 	/>
 {/if}

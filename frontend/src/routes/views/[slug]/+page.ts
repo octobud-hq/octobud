@@ -17,7 +17,7 @@ import { redirect } from "@sveltejs/kit";
 import type { PageLoad } from "./$types";
 import { fetchNotifications } from "$lib/api/notifications";
 import { fetchTags } from "$lib/api/tags";
-import { ApiUnreachableError, isNetworkError } from "$lib/api/fetch";
+import { ApiUnreachableError, ApiError, isNetworkError } from "$lib/api/fetch";
 import type { NotificationViewFilter, ViewFilterOperator } from "$lib/api/types";
 
 const BUILT_IN_VIEW_SLUG = "inbox";
@@ -248,8 +248,9 @@ export const load: PageLoad = async ({ fetch, params, url, parent }) => {
 			};
 		}
 
-		// Extract error message from the error
+		// Extract error message + code from the error
 		const errorMessage = error instanceof Error ? error.message : "Failed to load notifications";
+		const errorCode = error instanceof ApiError ? error.code : null;
 
 		// Query/validation errors should be shown inline (not blocking the whole view)
 		return {
@@ -265,6 +266,7 @@ export const load: PageLoad = async ({ fetch, params, url, parent }) => {
 			initialQuery: currentQuery,
 			viewQuery: viewQuery,
 			apiError: errorMessage,
+			apiErrorCode: errorCode,
 			apiErrorIsInline: true, // Show inline error for query validation errors
 			tag, // Pass tag if this is a tag view
 		};

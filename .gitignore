@@ -9,6 +9,9 @@ frontend/node_modules
 frontend/.svelte-kit
 frontend/build
 
+# Synced from repo root by npm prebuild/predev (see frontend/package.json)
+frontend/static/CHANGELOG.md
+
 # Built binaries and embedded frontend assets
 backend/bin/
 backend/web/dist/*

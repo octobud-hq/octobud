@@ -40,6 +40,7 @@ function getIconPath(iconName: string): string {
  * @param isRead - Whether the notification has been read
  * @param subjectState - The state of the subject (e.g., "open", "closed", "merged", "draft")
  * @param subjectMerged - Whether the subject has been merged
+ * @param subjectDraft - Whether the subject is a draft PR
  * @param subjectTitle - The title of the subject
  * @param reason - The reason for the notification
  * @param alwaysFullColor - If true, always use full color regardless of read status (for detail view headers)
@@ -50,6 +51,7 @@ export function getNotificationIcon(
 	isRead: boolean = false,
 	subjectState?: string,
 	subjectMerged?: boolean,
+	subjectDraft?: boolean,
 	subjectTitle?: string,
 	reason?: string,
 	alwaysFullColor: boolean = false
@@ -57,10 +59,13 @@ export function getNotificationIcon(
 	const normalizedType = subjectType.toLowerCase().replace(/[-_\s]/g, "");
 
 	// Parse subject metadata to check state and merged status
-	// Prefer extracted fields (subjectState, subjectMerged) over parsing from subjectRaw
+	// Prefer extracted fields (subjectState, subjectMerged, subjectDraft) over parsing from subjectRaw.
+	// The list API omits subjectRaw for payload-size reasons, so extracted fields are the only
+	// signal available for list rows — without this fallback, draft PRs render as open PRs.
 	const subject = parseSubjectMetadata(subjectRaw);
 	const state = subjectState ?? subject?.state;
 	const merged = subjectMerged ?? subject?.merged;
+	const draft = subjectDraft ?? subject?.draft;
 
 	// Helper to get color class based on read status
 	// In light mode, keep same color for read/unread (no opacity changes)
@@ -108,7 +113,7 @@ export function getNotificationIcon(
 		}
 
 		// Draft PR (gray)
-		if (subject?.draft) {
+		if (draft) {
 			return {
 				path: getIconPath("git-pull-request-draft"),
 				colorClass: getColorClass(

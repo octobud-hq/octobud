@@ -16,8 +16,23 @@
 import type { PageLoad } from "./$types";
 import { fetchRules } from "$lib/api/rules";
 import { fetchTags } from "$lib/api/tags";
+import { ApiError } from "$lib/api/fetch";
+
+// Swallow 401 (user disconnected) so Settings stays reachable for reconnect.
+// Re-throw anything else so real backend errors still surface to the user.
+function swallowUnauthorized<T>(fallback: T): (err: unknown) => T {
+	return (err: unknown) => {
+		if (err instanceof ApiError && err.status === 401) {
+			return fallback;
+		}
+		throw err;
+	};
+}
 
 export const load: PageLoad = async ({ fetch }) => {
-	const [rules, tags] = await Promise.all([fetchRules(fetch), fetchTags(fetch)]);
+	const [rules, tags] = await Promise.all([
+		fetchRules(fetch).catch(swallowUnauthorized<Awaited<ReturnType<typeof fetchRules>>>([])),
+		fetchTags(fetch).catch(swallowUnauthorized<Awaited<ReturnType<typeof fetchTags>>>([])),
+	]);
 	return { rules, tags };
 };

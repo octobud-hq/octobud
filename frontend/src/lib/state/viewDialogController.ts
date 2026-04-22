@@ -15,7 +15,13 @@
 
 import { get, writable } from "svelte/store";
 import type { Writable } from "svelte/store";
-import { createView, updateView, deleteView, fetchViews } from "$lib/api/views";
+import {
+	createView,
+	updateView,
+	deleteView,
+	fetchViews,
+	ViewLinkedRulesError,
+} from "$lib/api/views";
 import { createRule } from "$lib/api/rules";
 import type { NotificationView, NotificationViewDraft } from "$lib/api/types";
 import { BUILT_IN_VIEWS, normalizeViewId, normalizeViewSlug } from "$lib/state/types";
@@ -292,7 +298,7 @@ export function createViewDialogController(
 			}, 0);
 		} catch (err: any) {
 			// Set error message - show all errors in the dialog, not in toasts
-			if (err.statusCode === 409 || (err.message && err.message.includes("already exists"))) {
+			if (err.status === 409 || (err.message && err.message.includes("already exists"))) {
 				error.set(err.message || "A view with this name already exists");
 			} else {
 				error.set(err.message || "An error occurred while saving the view");
@@ -345,10 +351,9 @@ export function createViewDialogController(
 			}, 0);
 		} catch (error: any) {
 			// Check if this is a linked rules conflict error
-			if (error.statusCode === 409 && error.linkedRuleCount !== undefined) {
-				const count = error.linkedRuleCount;
+			if (error instanceof ViewLinkedRulesError) {
 				// Show custom confirmation dialog instead of browser confirm
-				linkedRuleCount.set(count);
+				linkedRuleCount.set(error.linkedRuleCount);
 				linkedRulesConfirmOpen.set(true);
 				saving.set(false);
 				// Don't reset state here - keep the delete confirmation open

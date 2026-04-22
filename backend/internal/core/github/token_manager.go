@@ -58,6 +58,21 @@ type Status struct {
 	GitHubUserID   string      `json:"githubUserId,omitempty"`
 }
 
+// TokenHealth classifies the current token's usability for the frontend banner.
+type TokenHealth string
+
+const (
+	// TokenHealthOK indicates the token is working and not near expiration.
+	TokenHealthOK TokenHealth = "ok"
+	// TokenHealthExpiring indicates the token is valid but expires within the warning window.
+	TokenHealthExpiring TokenHealth = "expiring"
+	// TokenHealthInvalid indicates the token has expired or was rejected by GitHub (401).
+	TokenHealthInvalid TokenHealth = "invalid"
+)
+
+// tokenExpirationWarningWindow is how far in advance we flag a token as "expiring".
+const tokenExpirationWarningWindow = 7 * 24 * time.Hour
+
 // AuthService defines the interface for updating GitHub identity
 type AuthService interface {
 	UpdateGitHubIdentity(ctx context.Context, githubUserID, githubUsername string) error
@@ -79,6 +94,13 @@ type TokenManager struct {
 	currentSource  TokenSource
 	githubUsername string
 	githubUserID   string
+
+	// Observed token health — populated by the GitHub client's RoundTripper.
+	// Guarded by healthMu (separate from mu) so the observer callback can fire
+	// during operations that hold mu (e.g. Initialize → githubClient.SetToken).
+	healthMu       sync.RWMutex
+	tokenExpiresAt *time.Time
+	tokenInvalid   bool
 }
 
 // NewTokenManager creates a new TokenManager
@@ -90,7 +112,7 @@ func NewTokenManager(
 	authService AuthService,
 	logger *zap.Logger,
 ) *TokenManager {
-	return &TokenManager{
+	m := &TokenManager{
 		store:        store,
 		encryptor:    encryptor,
 		keychain:     keychain,
@@ -102,6 +124,50 @@ func NewTokenManager(
 		},
 		currentSource: TokenSourceNone,
 	}
+	githubClient.SetTokenObserver(m.observeResponse)
+	return m
+}
+
+// observeResponse is the callback registered on the GitHub HTTP client's
+// RoundTripper. It runs on every authenticated response so we can update
+// in-memory token health without plumbing through each call site.
+//
+// Uses healthMu rather than mu because this fires from inside githubClient
+// HTTP calls that are sometimes made while mu is already held by the caller
+// (e.g. Initialize → githubClient.SetToken).
+func (m *TokenManager) observeResponse(statusCode int, expiresAt *time.Time) {
+	m.healthMu.Lock()
+	if expiresAt != nil {
+		if m.tokenExpiresAt == nil || !m.tokenExpiresAt.Equal(*expiresAt) {
+			t := *expiresAt
+			m.tokenExpiresAt = &t
+		}
+	}
+
+	wasInvalid := m.tokenInvalid
+	switch {
+	case statusCode == http.StatusUnauthorized:
+		m.tokenInvalid = true
+	case statusCode >= 200 && statusCode < 300:
+		m.tokenInvalid = false
+	}
+	transitioned := !wasInvalid && m.tokenInvalid
+	m.healthMu.Unlock()
+
+	if transitioned && m.logger != nil {
+		m.logger.Warn(
+			"github token observed as invalid (401); banner will prompt reconnect",
+			zap.Int("statusCode", statusCode),
+		)
+	}
+}
+
+// resetHealth clears observed health state — called on token changes.
+func (m *TokenManager) resetHealth() {
+	m.healthMu.Lock()
+	defer m.healthMu.Unlock()
+	m.tokenExpiresAt = nil
+	m.tokenInvalid = false
 }
 
 // Initialize loads the token from storage and configures the GitHub client.
@@ -224,6 +290,56 @@ func (m *TokenManager) GetStatusGitHubUserID() string {
 	return m.githubUserID
 }
 
+// GetTokenExpiresAt returns the last observed token expiration, or nil if the
+// token has no expiration (classic PAT) or we have not yet made an authenticated
+// GitHub call this session.
+func (m *TokenManager) GetTokenExpiresAt() *time.Time {
+	m.healthMu.RLock()
+	defer m.healthMu.RUnlock()
+	if m.tokenExpiresAt == nil {
+		return nil
+	}
+	t := *m.tokenExpiresAt
+	return &t
+}
+
+// GetTokenHealth classifies the current token's usability. Only evaluated for
+// stored PATs — OAuth tokens expire on a short cycle and are refreshed
+// automatically, so surfacing expiration/invalidation to the user isn't
+// actionable. Returns TokenHealthOK for any non-PAT source (disconnected state
+// is surfaced separately via Connected=false).
+func (m *TokenManager) GetTokenHealth() TokenHealth {
+	m.mu.RLock()
+	source := m.currentSource
+	m.mu.RUnlock()
+	if source != TokenSourceStored {
+		return TokenHealthOK
+	}
+
+	m.healthMu.RLock()
+	invalid := m.tokenInvalid
+	var expiresAt *time.Time
+	if m.tokenExpiresAt != nil {
+		t := *m.tokenExpiresAt
+		expiresAt = &t
+	}
+	m.healthMu.RUnlock()
+
+	if invalid {
+		return TokenHealthInvalid
+	}
+	if expiresAt != nil {
+		remaining := time.Until(*expiresAt)
+		if remaining <= 0 {
+			return TokenHealthInvalid
+		}
+		if remaining <= tokenExpirationWarningWindow {
+			return TokenHealthExpiring
+		}
+	}
+	return TokenHealthOK
+}
+
 // IsConnected returns true if a valid GitHub token is configured
 func (m *TokenManager) IsConnected() bool {
 	m.mu.RLock()
@@ -306,14 +422,14 @@ func (m *TokenManager) SetToken(ctx context.Context, token string) (string, erro
 		return "", fmt.Errorf("failed to set token on GitHub client: %w", err)
 	}
 
-	// Update internal state
+	// Update internal state (resetHealth uses healthMu — independent of mu).
 	m.mu.Lock()
 	m.currentToken = token
 	m.currentSource = TokenSourceStored
 	m.githubUsername = username
 	m.githubUserID = userID
+	m.resetHealth()
 	m.mu.Unlock()
-
 	return username, nil
 }
 
@@ -392,12 +508,14 @@ func (m *TokenManager) SetTokenFromOAuth(ctx context.Context, token string) (str
 		return "", fmt.Errorf("failed to set token on GitHub client: %w", err)
 	}
 
-	// Update internal state - mark as OAuth source
+	// Update internal state - mark as OAuth source.
+	// (resetHealth uses healthMu — independent of mu.)
 	m.mu.Lock()
 	m.currentToken = token
 	m.currentSource = TokenSourceOAuth
 	m.githubUsername = username
 	m.githubUserID = userID
+	m.resetHealth()
 	m.mu.Unlock()
 
 	return username, nil
@@ -452,6 +570,7 @@ func (m *TokenManager) ClearToken(ctx context.Context) error {
 	m.currentSource = TokenSourceNone
 	m.githubUsername = ""
 	m.githubUserID = ""
+	m.resetHealth()
 
 	return nil
 }

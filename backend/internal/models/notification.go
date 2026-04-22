@@ -53,6 +53,7 @@ type Notification struct {
 	SubjectNumber           *int64          `json:"subjectNumber,omitempty"`
 	SubjectState            *string         `json:"subjectState,omitempty"`
 	SubjectMerged           *bool           `json:"subjectMerged,omitempty"`
+	SubjectDraft            *bool           `json:"subjectDraft,omitempty"`
 	SubjectStateReason      *string         `json:"subjectStateReason,omitempty"`
 	AuthorLogin             *string         `json:"authorLogin,omitempty"`
 	TimelineLastSeenAt      *time.Time      `json:"timelineLastSeenAt,omitempty"`
@@ -126,6 +127,7 @@ func NotificationFromDB(notification db.Notification) Notification {
 		SubjectNumber:           NullInt32ToInt64Ptr(notification.SubjectNumber),
 		SubjectState:            NullStringPtr(notification.SubjectState),
 		SubjectMerged:           NullBoolPtr(notification.SubjectMerged),
+		SubjectDraft:            NullBoolPtr(notification.SubjectDraft),
 		SubjectStateReason:      NullStringPtr(notification.SubjectStateReason),
 		TimelineLastSeenAt:      NullTimePtr(notification.TimelineLastSeenAt),
 	}

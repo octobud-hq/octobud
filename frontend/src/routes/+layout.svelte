@@ -53,7 +53,10 @@
 	import SWHealthBanner from "$lib/components/shared/SWHealthBanner.svelte";
 	import UpdateBanner from "$lib/components/shared/UpdateBanner.svelte";
 	import RestartBanner from "$lib/components/shared/RestartBanner.svelte";
+	import TokenStatusBanner from "$lib/components/shared/TokenStatusBanner.svelte";
+	import WhatsNewBanner from "$lib/components/shared/WhatsNewBanner.svelte";
 	import { getUpdateStore } from "$lib/stores/updateStore";
+	import { getGithubStatusStore } from "$lib/stores/githubStatusStore";
 
 	// State Controllers
 	import { createViewDialogController } from "$lib/state/viewDialogController";
@@ -187,6 +190,7 @@
 
 	// Initialize update store
 	const updateStore = browser ? getUpdateStore() : null;
+	const githubStatusStore = browser ? getGithubStatusStore() : null;
 
 	const pageController = createNotificationPageController(
 		{
@@ -554,6 +558,9 @@
 					if (updateStore) {
 						await updateStore.initialize();
 					}
+					if (githubStatusStore) {
+						void githubStatusStore.initialize();
+					}
 				}
 			})();
 		}
@@ -699,6 +706,9 @@
 		// Clean up update store
 		if (updateStore) {
 			updateStore.destroy();
+		}
+		if (githubStatusStore) {
+			githubStatusStore.destroy();
 		}
 	});
 
@@ -903,9 +913,19 @@
 				<RestartBanner />
 			{/if}
 
+			<!-- What's new banner (shows once after running a newly-installed version) -->
+			{#if !isLoginRoute && !isSetupRoute}
+				<WhatsNewBanner />
+			{/if}
+
 			<!-- Update available banner -->
 			{#if !isLoginRoute && !isSetupRoute}
 				<UpdateBanner />
+			{/if}
+
+			<!-- GitHub token expiration / invalidation banner -->
+			{#if !isLoginRoute && !isSetupRoute}
+				<TokenStatusBanner />
 			{/if}
 
 			<!-- Sidebar and content area below header -->

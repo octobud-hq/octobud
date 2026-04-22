@@ -15,6 +15,7 @@ import (
 	reflect "reflect"
 	time "time"
 
+	githubinterfaces "github.com/octobud-hq/octobud/backend/internal/github/interfaces"
 	types "github.com/octobud-hq/octobud/backend/internal/github/types"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -178,4 +179,16 @@ func (m *MockClient) SetToken(ctx context.Context, token string) error {
 func (mr *MockClientMockRecorder) SetToken(ctx, token any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetToken", reflect.TypeOf((*MockClient)(nil).SetToken), ctx, token)
+}
+
+// SetTokenObserver mocks base method.
+func (m *MockClient) SetTokenObserver(observer githubinterfaces.TokenObserverFunc) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetTokenObserver", observer)
+}
+
+// SetTokenObserver indicates an expected call of SetTokenObserver.
+func (mr *MockClientMockRecorder) SetTokenObserver(observer any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTokenObserver", reflect.TypeOf((*MockClient)(nil).SetTokenObserver), observer)
 }

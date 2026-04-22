@@ -60,6 +60,7 @@ func notificationColumns(includeSubject bool) string {
 		"n.subject_state",
 		"n.subject_merged",
 		"n.subject_state_reason",
+		"n.subject_draft",
 	}
 
 	if includeSubject {
@@ -158,6 +159,7 @@ func listNotificationsFromQuery(
 			&n.SubjectState,
 			&n.SubjectMerged,
 			&n.SubjectStateReason,
+			&n.SubjectDraft,
 		}
 
 		// For convenience, add subject_raw if requested

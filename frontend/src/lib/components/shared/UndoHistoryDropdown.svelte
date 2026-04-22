@@ -381,8 +381,9 @@
 													notification.subjectType,
 													notification.subjectRaw,
 													notification.isRead,
-													notification.subjectState,
-													notification.subjectMerged,
+													notification.subjectState ?? undefined,
+													notification.subjectMerged ?? undefined,
+													notification.subjectDraft ?? undefined,
 													notification.subjectTitle,
 													notification.reason
 												)}
@@ -422,8 +423,9 @@
 										notification.subjectType,
 										notification.subjectRaw,
 										notification.isRead,
-										notification.subjectState,
-										notification.subjectMerged,
+										notification.subjectState ?? undefined,
+										notification.subjectMerged ?? undefined,
+										notification.subjectDraft ?? undefined,
 										notification.subjectTitle,
 										notification.reason
 									)}

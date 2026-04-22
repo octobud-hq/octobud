@@ -24,7 +24,18 @@ import (
 // errorResponse is the response type for an error.
 type errorResponse struct {
 	Error string `json:"error"`
+	// Code is a stable machine-readable identifier the frontend can match on
+	// instead of the human-readable Error string. Omitted when unset.
+	Code string `json:"code,omitempty"`
 }
+
+// Error codes returned via WriteErrorWithCode. Keep these stable — the frontend
+// matches on them to drive UI affordances (e.g. "reconnect" links).
+const (
+	// ErrCodeNotConnected indicates no GitHub token is configured. Surfaced by
+	// handlers that need a GitHub identity to do useful work.
+	ErrCodeNotConnected = "not_connected"
+)
 
 // WriteJSON writes a JSON response to the response writer.
 func WriteJSON(w http.ResponseWriter, status int, value any) {
@@ -48,4 +59,10 @@ func WriteJSON(w http.ResponseWriter, status int, value any) {
 // WriteError writes an error response to the response writer.
 func WriteError(w http.ResponseWriter, status int, msg string) {
 	WriteJSON(w, status, errorResponse{Error: msg})
+}
+
+// WriteErrorWithCode writes an error response carrying a stable machine-readable
+// code. Use this for errors the frontend needs to react to programmatically.
+func WriteErrorWithCode(w http.ResponseWriter, status int, code, msg string) {
+	WriteJSON(w, status, errorResponse{Error: msg, Code: code})
 }

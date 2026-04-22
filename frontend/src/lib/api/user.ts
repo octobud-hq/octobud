@@ -163,11 +163,15 @@ export async function syncOlderNotifications(
 
 // GitHub Token Management
 
+export type GitHubTokenHealth = "ok" | "expiring" | "invalid";
+
 export interface GitHubStatus {
 	connected: boolean;
 	source: "none" | "stored" | "oauth";
 	maskedToken?: string;
 	githubUsername?: string;
+	tokenHealth?: GitHubTokenHealth;
+	tokenExpiresAt?: string;
 }
 
 export async function getGitHubStatus(fetchImpl?: typeof fetch): Promise<GitHubStatus> {

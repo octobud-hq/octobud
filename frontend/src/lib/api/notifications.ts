@@ -26,7 +26,13 @@ import type {
 	TimelineReviewComment,
 } from "./types";
 import { constructGitHubHtmlUrl } from "$lib/utils/githubUrls";
-import { fetchWithAuth, buildApiUrl, ApiUnreachableError, isProxyConnectionError } from "./fetch";
+import {
+	fetchWithAuth,
+	buildApiUrl,
+	ApiUnreachableError,
+	ApiError,
+	isProxyConnectionError,
+} from "./fetch";
 
 const PAGE_SIZE = 30;
 
@@ -99,6 +105,7 @@ const fromBackendNotification = (notification: BackendNotificationResponse): Not
 		subjectNumber: notification.subjectNumber ?? undefined,
 		subjectState: notification.subjectState ?? undefined,
 		subjectMerged: notification.subjectMerged ?? undefined,
+		subjectDraft: notification.subjectDraft ?? undefined,
 		subjectStateReason: notification.subjectStateReason ?? undefined,
 		actionHints: notification.actionHints,
 		tags: notification.tags ?? [],
@@ -242,18 +249,22 @@ export async function fetchNotifications(
 	const url = `/api/notifications?${searchParams.toString()}`;
 	const response = await fetchWithAuth(url, {}, fetchImpl);
 	if (!response.ok) {
-		// Try to extract error message from response
+		// Try to extract error message + code from response
 		let errorMessage = `Failed to load notifications (${response.status})`;
+		let errorCode: string | null = null;
 		let responseText = "";
 		let isValidJson = false;
 		try {
 			// First get raw text to check for proxy errors
 			responseText = await response.text();
 			// Try to parse as JSON
-			const errorData: { error?: string } = JSON.parse(responseText);
+			const errorData: { error?: string; code?: string } = JSON.parse(responseText);
 			isValidJson = true;
 			if (errorData.error) {
 				errorMessage = errorData.error;
+			}
+			if (errorData.code) {
+				errorCode = errorData.code;
 			}
 		} catch {
 			// If JSON parsing fails, responseText might contain proxy error
@@ -273,9 +284,7 @@ export async function fetchNotifications(
 			throw new ApiUnreachableError();
 		}
 
-		const error = new Error(errorMessage) as Error & { statusCode?: number };
-		error.statusCode = response.status;
-		throw error;
+		throw new ApiError(errorMessage, response.status, errorCode);
 	}
 
 	const payload: {

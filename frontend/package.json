@@ -4,6 +4,9 @@
     "private": true,
     "type": "module",
     "scripts": {
+        "sync:changelog": "node -e \"require('fs').copyFileSync('../CHANGELOG.md', 'static/CHANGELOG.md')\"",
+        "predev": "npm run sync:changelog",
+        "prebuild": "npm run sync:changelog",
         "dev": "vite dev",
         "build": "vite build",
         "preview": "vite preview",

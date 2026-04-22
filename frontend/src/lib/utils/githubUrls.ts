@@ -18,6 +18,36 @@
  * when html_url is not available in the subject data.
  */
 
+import type { Notification } from "$lib/api/types";
+
+const GITHUB_API_PREFIX = "https://api.github.com";
+
+function isWebUrl(url: string | undefined | null): url is string {
+	return !!url && !url.startsWith(GITHUB_API_PREFIX);
+}
+
+/**
+ * Resolves the best GitHub web URL for a notification, falling back to a
+ * constructed URL when the stored URLs point at api.github.com or are missing.
+ * Returns null if no usable URL can be derived.
+ */
+export function resolveNotificationHtmlUrl(notification: Notification): string | null {
+	if (isWebUrl(notification.htmlUrl)) return notification.htmlUrl;
+	if (isWebUrl(notification.githubUrl)) return notification.githubUrl;
+
+	const constructed = constructGitHubHtmlUrl(
+		notification.repoFullName,
+		notification.subjectType,
+		notification.subjectUrl,
+		notification.subjectNumber
+	);
+	if (constructed) return constructed;
+
+	if (isWebUrl(notification.subjectUrl)) return notification.subjectUrl;
+
+	return null;
+}
+
 /**
  * Constructs a GitHub HTML URL from available notification data.
  *
@@ -37,8 +67,10 @@ export function constructGitHubHtmlUrl(
 		return null;
 	}
 
-	// Normalize subject type to handle variations
-	const normalizedType = subjectType.toLowerCase();
+	// Normalize subject type to handle variations (strip separators so
+	// "RepositoryDependabotAlertsThread" and "repository_dependabot_alerts_thread"
+	// both match).
+	const normalizedType = subjectType.toLowerCase().replace(/[-_\s]/g, "");
 
 	// Try to extract information from API URL if provided
 	if (subjectUrl) {
@@ -79,12 +111,19 @@ export function constructGitHubHtmlUrl(
 		return `https://github.com/${repoFullName}/actions`;
 	}
 
-	// Vulnerability alerts -> security/dependabot page
+	// Vulnerability alerts / Dependabot alerts -> security/dependabot page
 	if (
 		normalizedType === "repositoryvulnerabilityalert" ||
-		normalizedType === "repository_vulnerability_alert"
+		normalizedType === "repository_vulnerability_alert" ||
+		normalizedType === "repositorydependabotalertsthread" ||
+		normalizedType === "securityalert"
 	) {
 		return `https://github.com/${repoFullName}/security/dependabot`;
+	}
+
+	// Repository invitations -> per-repo invitations page (Accept/Decline UI)
+	if (normalizedType === "repositoryinvitation") {
+		return `https://github.com/${repoFullName}/invitations`;
 	}
 
 	return null;
@@ -126,6 +165,20 @@ function extractFromApiUrl(apiUrl: string, repoFullName: string): string | null 
 		const discussionMatch = apiUrl.match(/\/repos\/[^\/]+\/[^\/]+\/discussions\/(\d+)/);
 		if (discussionMatch) {
 			return `https://github.com/${repoFullName}/discussions/${discussionMatch[1]}`;
+		}
+
+		// Pattern: https://api.github.com/repos/{owner}/{repo}/actions/runs/{id}
+		// (Matched before the generic /runs/ pattern below.)
+		const workflowRunMatch = apiUrl.match(/\/repos\/[^\/]+\/[^\/]+\/actions\/runs\/(\d+)/);
+		if (workflowRunMatch) {
+			return `https://github.com/${repoFullName}/actions/runs/${workflowRunMatch[1]}`;
+		}
+
+		// Pattern: https://api.github.com/repos/{owner}/{repo}/check-runs/{id}
+		// GitHub's /{repo}/runs/{id} redirects to the specific workflow job.
+		const checkRunMatch = apiUrl.match(/\/repos\/[^\/]+\/[^\/]+\/check-runs\/(\d+)/);
+		if (checkRunMatch) {
+			return `https://github.com/${repoFullName}/runs/${checkRunMatch[1]}`;
 		}
 	} catch (error) {
 		return null;

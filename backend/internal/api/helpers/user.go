@@ -73,7 +73,12 @@ func RequireUserID(
 	userID, err := GetUserID(ctx, authSvc)
 	if err != nil {
 		if errors.Is(err, ErrNoGitHubIdentity) {
-			WriteError(w, http.StatusUnauthorized, "GitHub account not connected")
+			WriteErrorWithCode(
+				w,
+				http.StatusUnauthorized,
+				ErrCodeNotConnected,
+				"GitHub account not connected",
+			)
 		} else {
 			WriteError(w, http.StatusInternalServerError, "Failed to get user")
 		}

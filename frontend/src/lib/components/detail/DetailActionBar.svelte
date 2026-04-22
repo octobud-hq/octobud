@@ -19,6 +19,7 @@
 	import { getArchiveIcon } from "$lib/utils/archiveIcons";
 	import { getMuteIcon } from "$lib/utils/muteIcons";
 	import { mailOpenIcon, mailClosedIcon } from "$lib/utils/notificationHelpers";
+	import { resolveNotificationHtmlUrl } from "$lib/utils/githubUrls";
 	import type { NotificationPageController } from "$lib/state/types";
 	import SnoozeDropdown from "$lib/components/shared/SnoozeDropdown.svelte";
 	import TagDropdown from "$lib/components/shared/TagDropdown.svelte";
@@ -50,6 +51,7 @@
 	let tagButtonElement: HTMLButtonElement | null = null;
 	let tagDropdownComponent: TagDropdownComponent | null = null;
 
+	$: subjectLink = resolveNotificationHtmlUrl(notification);
 	$: isUnread = !notification.isRead;
 	$: isArchived = !!notification.archived;
 	$: isMuted = !!notification.muted;
@@ -175,6 +177,34 @@
 
 		<!-- Action buttons -->
 		<div class="flex items-center gap-1">
+			{#if subjectLink}
+				<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
+				<a
+					class="flex h-10 w-10 items-center justify-center rounded-full bg-transparent text-gray-700 dark:text-gray-300 transition hover:bg-gray-100 dark:hover:bg-gray-700/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600/40 cursor-pointer"
+					href={subjectLink}
+					target="_blank"
+					rel="noopener noreferrer"
+					title="Open in GitHub (O)"
+					aria-label="Open in GitHub"
+				>
+					<svg
+						class="h-5 w-5"
+						viewBox="0 0 24 24"
+						fill="none"
+						xmlns="http://www.w3.org/2000/svg"
+						role="img"
+						aria-hidden="true"
+					>
+						<path
+							d="M10.0002 5H8.2002C7.08009 5 6.51962 5 6.0918 5.21799C5.71547 5.40973 5.40973 5.71547 5.21799 6.0918C5 6.51962 5 7.08009 5 8.2002V15.8002C5 16.9203 5 17.4801 5.21799 17.9079C5.40973 18.2842 5.71547 18.5905 6.0918 18.7822C6.5192 19 7.07899 19 8.19691 19H15.8031C16.921 19 17.48 19 17.9074 18.7822C18.2837 18.5905 18.5905 18.2839 18.7822 17.9076C19 17.4802 19 16.921 19 15.8031V14M20 9V4M20 4H15M20 4L13 11"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						/>
+					</svg>
+				</a>
+			{/if}
 			<button
 				type="button"
 				class="flex h-10 w-10 items-center justify-center rounded-full bg-transparent text-gray-700 dark:text-gray-300 transition hover:bg-gray-100 dark:hover:bg-gray-700/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600/40 cursor-pointer"

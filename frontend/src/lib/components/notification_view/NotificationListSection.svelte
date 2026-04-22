@@ -33,6 +33,7 @@
 	export let selectionMap: Map<string, boolean>;
 	export let initialScrollPosition: number = 0; // Scroll position to restore on mount
 	export let apiError: string | null = null; // Inline error message (for query validation errors)
+	export let apiErrorCode: string | null = null; // Machine-readable backend error code, when present
 
 	// Scroll position management
 	let scrollContainer: HTMLDivElement | null = null;
@@ -133,6 +134,16 @@
 						<div class="flex-1">
 							<p class="text-sm font-semibold text-amber-800 dark:text-amber-200">Invalid Query</p>
 							<p class="mt-1 text-sm text-amber-700 dark:text-amber-300">{apiError}</p>
+							{#if apiErrorCode === "not_connected"}
+								<p class="mt-2 text-sm text-amber-700 dark:text-amber-300">
+									<a
+										href="/settings#account"
+										class="font-medium underline underline-offset-2 hover:text-amber-900 dark:hover:text-amber-100"
+									>
+										Open Settings to reconnect
+									</a>
+								</p>
+							{/if}
 						</div>
 					</div>
 				</div>

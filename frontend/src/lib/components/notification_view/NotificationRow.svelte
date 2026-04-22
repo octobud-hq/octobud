@@ -25,6 +25,7 @@
 	} from "$lib/utils/notificationHelpers";
 	import { getArchiveIcon } from "$lib/utils/archiveIcons";
 	import { getMuteIcon } from "$lib/utils/muteIcons";
+	import { resolveNotificationHtmlUrl } from "$lib/utils/githubUrls";
 	import SnoozeDropdown from "$lib/components/shared/SnoozeDropdown.svelte";
 	import TagDropdown from "$lib/components/shared/TagDropdown.svelte";
 	import type { NotificationPageController } from "$lib/state/types";
@@ -123,6 +124,7 @@
 		notification.isRead,
 		notification.subjectState,
 		notification.subjectMerged,
+		notification.subjectDraft,
 		notification.subjectTitle,
 		notification.reason
 	);
@@ -157,8 +159,7 @@
 	$: muteLabel = isMuted ? "Unmute" : "Mute";
 	$: archiveIcon = getArchiveIcon(isArchived);
 	$: muteIcon = getMuteIcon(isMuted);
-	$: subjectLink =
-		notification.htmlUrl || notification.subjectUrl || notification.githubUrl || null;
+	$: subjectLink = resolveNotificationHtmlUrl(notification);
 	$: openSubjectLabel = subjectLink
 		? `Open ${iconConfig.label.toLowerCase()}`
 		: "Subject link unavailable";

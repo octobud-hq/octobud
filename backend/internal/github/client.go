@@ -26,6 +26,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	githubinterfaces "github.com/octobud-hq/octobud/backend/internal/github/interfaces"
@@ -76,9 +77,54 @@ func newAPIError(statusCode int, headers http.Header, body []byte) *APIError {
 	return apiErr
 }
 
+// githubTokenExpirationHeader is the response header GitHub sets on authenticated
+// requests when the token has an expiration (fine-grained PATs, PATs with expiry).
+// Format: "2024-05-11 04:02:52 UTC".
+const githubTokenExpirationHeader = "github-authentication-token-expiration"
+
+// githubTokenExpirationLayout is the layout used by GitHub for the expiration header.
+const githubTokenExpirationLayout = "2006-01-02 15:04:05 MST"
+
+// observingTransport wraps an http.RoundTripper and invokes an observer callback
+// with each authenticated response's status code and parsed token expiration.
+// observer is stored in an atomic.Pointer so SetTokenObserver can be called
+// after the transport is in use without racing against RoundTrip.
+type observingTransport struct {
+	base     http.RoundTripper
+	observer atomic.Pointer[githubinterfaces.TokenObserverFunc]
+}
+
+func (t *observingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	resp, err := t.base.RoundTrip(req)
+	if err != nil || resp == nil {
+		return resp, err
+	}
+
+	// Only observe authenticated requests — ignore unauthenticated probes.
+	if req.Header.Get("Authorization") == "" {
+		return resp, nil
+	}
+
+	observerPtr := t.observer.Load()
+	if observerPtr == nil || *observerPtr == nil {
+		return resp, nil
+	}
+
+	var expiresAt *time.Time
+	if hdr := resp.Header.Get(githubTokenExpirationHeader); hdr != "" {
+		if parsed, perr := time.Parse(githubTokenExpirationLayout, hdr); perr == nil {
+			expiresAt = &parsed
+		}
+	}
+
+	(*observerPtr)(resp.StatusCode, expiresAt)
+	return resp, nil
+}
+
 // clientImpl wraps calls to the GitHub API for interacting with the Notifications API.
 type clientImpl struct {
 	httpClient *http.Client
+	transport  *observingTransport
 	baseURL    string
 	perPage    int
 	token      string
@@ -86,13 +132,26 @@ type clientImpl struct {
 
 // NewClient constructs an HTTP-backed GitHub client.
 func NewClient() githubinterfaces.Client {
+	transport := &observingTransport{base: http.DefaultTransport}
 	return &clientImpl{
 		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout:   30 * time.Second,
+			Transport: transport,
 		},
-		baseURL: githubAPIBase,
-		perPage: defaultPerPage,
+		transport: transport,
+		baseURL:   githubAPIBase,
+		perPage:   defaultPerPage,
 	}
+}
+
+// SetTokenObserver registers a callback invoked on each authenticated response.
+// Safe to call concurrently with in-flight RoundTrip calls.
+func (c *clientImpl) SetTokenObserver(observer githubinterfaces.TokenObserverFunc) {
+	if observer == nil {
+		c.transport.observer.Store(nil)
+		return
+	}
+	c.transport.observer.Store(&observer)
 }
 
 // SetToken sets the GitHub token directly and validates it.

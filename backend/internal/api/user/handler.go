@@ -30,6 +30,7 @@ import (
 
 	"github.com/octobud-hq/octobud/backend/internal/api/helpers"
 	authsvc "github.com/octobud-hq/octobud/backend/internal/core/auth"
+	coregithub "github.com/octobud-hq/octobud/backend/internal/core/github"
 	"github.com/octobud-hq/octobud/backend/internal/core/syncstate"
 	"github.com/octobud-hq/octobud/backend/internal/core/update"
 	"github.com/octobud-hq/octobud/backend/internal/db"
@@ -79,6 +80,8 @@ type TokenManagerInterface interface {
 	GetStatusMaskedToken() string
 	GetStatusGitHubUsername() string
 	GetStatusGitHubUserID() string
+	GetTokenExpiresAt() *time.Time
+	GetTokenHealth() coregithub.TokenHealth
 	IsConnected() bool
 	SetToken(ctx context.Context, token string) (string, error)
 	SetTokenFromOAuth(ctx context.Context, token string) (string, error)
@@ -189,14 +192,25 @@ func (h *Handler) HandleGetGitHubStatus(w http.ResponseWriter, _ *http.Request) 
 		return
 	}
 
-	response := GitHubStatusResponse{
-		Connected:      h.tokenManager.GetStatusConnected(),
-		Source:         h.tokenManager.GetStatusSource(),
-		MaskedToken:    h.tokenManager.GetStatusMaskedToken(),
-		GitHubUsername: h.tokenManager.GetStatusGitHubUsername(),
-	}
+	response := buildGitHubStatusResponse(h.tokenManager)
 
 	helpers.WriteJSON(w, http.StatusOK, response)
+}
+
+// buildGitHubStatusResponse snapshots TokenManager state into the wire response.
+func buildGitHubStatusResponse(tm TokenManagerInterface) GitHubStatusResponse {
+	resp := GitHubStatusResponse{
+		Connected:      tm.GetStatusConnected(),
+		Source:         tm.GetStatusSource(),
+		MaskedToken:    tm.GetStatusMaskedToken(),
+		GitHubUsername: tm.GetStatusGitHubUsername(),
+		TokenHealth:    string(tm.GetTokenHealth()),
+	}
+	if expiresAt := tm.GetTokenExpiresAt(); expiresAt != nil {
+		formatted := expiresAt.UTC().Format(time.RFC3339)
+		resp.TokenExpiresAt = &formatted
+	}
+	return resp
 }
 
 // HandleSetGitHubToken handles PUT /api/user/github-token
@@ -287,12 +301,7 @@ func (h *Handler) HandleClearGitHubToken(w http.ResponseWriter, r *http.Request)
 	)
 
 	// Return current status after clearing
-	response := GitHubStatusResponse{
-		Connected:      h.tokenManager.GetStatusConnected(),
-		Source:         h.tokenManager.GetStatusSource(),
-		MaskedToken:    h.tokenManager.GetStatusMaskedToken(),
-		GitHubUsername: h.tokenManager.GetStatusGitHubUsername(),
-	}
+	response := buildGitHubStatusResponse(h.tokenManager)
 
 	helpers.WriteJSON(w, http.StatusOK, response)
 }

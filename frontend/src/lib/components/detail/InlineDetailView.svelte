@@ -35,6 +35,7 @@
 	import { currentTime } from "$lib/stores/timeStore";
 	import octicons from "@primer/octicons";
 	import { computeAvatarUrl, isRedirectAvatarUrl, resolveAvatarRedirect } from "$lib/utils/avatar";
+	import { resolveNotificationHtmlUrl } from "$lib/utils/githubUrls";
 	import { updateTimelineLastSeen } from "$lib/api/notifications";
 
 	// Subscribe to time store to trigger re-renders when time updates
@@ -199,6 +200,7 @@
 				detail.notification.isRead,
 				detail.notification.subjectState,
 				detail.notification.subjectMerged,
+				detail.notification.subjectDraft,
 				detail.notification.subjectTitle,
 				detail.notification.reason,
 				true // alwaysFullColor - detail view header should always show full color
@@ -209,6 +211,7 @@
 				notification.isRead,
 				notification.subjectState,
 				notification.subjectMerged,
+				notification.subjectDraft,
 				notification.subjectTitle,
 				notification.reason,
 				true // alwaysFullColor - detail view header should always show full color
@@ -260,36 +263,14 @@
 	}
 
 	// Compute GitHub URLs
+	// Prefer the live subject's html_url when available (it's what GitHub actually links to);
+	// otherwise delegate to the shared resolver which handles CI / Dependabot / Invitation fallbacks.
 	$: githubUrl = (() => {
-		const subjectType = detail?.notification.subjectType || notification.subjectType;
-		const repoFullName = detail?.notification.repoFullName || notification.repoFullName;
-
-		// For CI activity, always use the actions page URL (subject data is not available)
-		if (checkIsCIActivity(subjectType) && repoFullName) {
-			return `https://github.com/${repoFullName}/actions`;
+		const subjectHtmlUrl = detail?.subject?.url;
+		if (subjectHtmlUrl && !subjectHtmlUrl.startsWith("https://api.github.com")) {
+			return subjectHtmlUrl;
 		}
-
-		// For Dependabot alerts, link to the security/dependabot page
-		if (checkIsDependabotAlert(subjectType) && repoFullName) {
-			return `https://github.com/${repoFullName}/security/dependabot`;
-		}
-
-		// For other types, try to get URL from detail/notification
-		if (detail) {
-			// Prefer html_url from subject, then htmlUrl from notification
-			// Note: githubUrl is the API thread URL, not suitable for display
-			const url = detail.subject?.url ?? detail.notification.htmlUrl;
-			if (url && !url.startsWith("https://api.github.com")) {
-				return url;
-			}
-		}
-
-		// Fallback: use notification's htmlUrl (constructed from subject data)
-		if (notification.htmlUrl && !notification.htmlUrl.startsWith("https://api.github.com")) {
-			return notification.htmlUrl;
-		}
-
-		return null;
+		return resolveNotificationHtmlUrl(detail?.notification ?? notification);
 	})();
 
 	$: isPullRequest =
@@ -463,7 +444,7 @@
 		<DetailActionBar {notification} {isSplitView} {markingRead} {archiving} {hideBackButton} />
 
 		<!-- Scrollable Content -->
-		<div bind:this={scrollContainer} class="flex-1 overflow-y-auto">
+		<div bind:this={scrollContainer} class="flex-1 overflow-y-auto" data-detail-scroll-container>
 			<div class="px-8 pb-16">
 				<div class="mx-auto max-w-7xl">
 					<!-- Header section - use notification data (always available) not detail (loaded async) -->

@@ -351,9 +351,9 @@
 </script>
 
 <!-- Container for both collapsed sidebar and hover overlay -->
-<div class="relative flex-shrink-0 h-screen">
+<div class="relative flex-shrink-0 h-full">
 	<aside
-		class="sticky top-0 flex h-full max-h-screen bg-gray-100 dark:bg-gray-950 {collapsed
+		class="flex h-full bg-gray-100 dark:bg-gray-950 {collapsed
 			? 'w-13'
 			: 'w-[15rem] xl:w-[16rem] 2xl:w-[18rem]'} {collapsed
 			? ' pr-0'

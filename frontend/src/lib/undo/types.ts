@@ -80,6 +80,8 @@ export interface RecentActionNotification {
 	subjectState?: string | null;
 	/** Whether PR was merged */
 	subjectMerged?: boolean | null;
+	/** Whether PR is a draft */
+	subjectDraft?: boolean | null;
 	/** Reason for notification */
 	reason?: string;
 }
@@ -99,6 +101,7 @@ export function toRecentActionNotification(notification: Notification): RecentAc
 		isRead: notification.isRead,
 		subjectState: notification.subjectState,
 		subjectMerged: notification.subjectMerged,
+		subjectDraft: notification.subjectDraft,
 		reason: notification.reason,
 	};
 }

@@ -36,7 +36,13 @@ interface TagEnvelope {
 	tag: Tag;
 }
 
-import { fetchWithAuth, buildApiUrl, ApiUnreachableError, isProxyConnectionError } from "./fetch";
+import {
+	fetchWithAuth,
+	buildApiUrl,
+	ApiUnreachableError,
+	ApiError,
+	isProxyConnectionError,
+} from "./fetch";
 import { fromBackendNotification } from "./notifications";
 
 export async function fetchTags(fetchImpl: typeof fetch = fetch): Promise<Tag[]> {
@@ -44,22 +50,24 @@ export async function fetchTags(fetchImpl: typeof fetch = fetch): Promise<Tag[]>
 	if (!response.ok) {
 		// Check if this is a proxy connection error
 		let responseText = "";
-		let isValidJson = false;
+		let parsed: { error?: string; code?: string } | null = null;
 		try {
 			responseText = await response.text();
-			JSON.parse(responseText);
-			isValidJson = true;
+			parsed = JSON.parse(responseText);
 		} catch {
-			// Ignore parse errors
+			// Non-JSON body (likely a proxy error page).
 		}
-		// Proxy errors: empty response, non-JSON response, or response with connection error keywords
 		const isProxyError =
 			(response.status === 500 || response.status === 502 || response.status === 503) &&
-			(!responseText || !isValidJson || isProxyConnectionError(responseText));
+			(!responseText || parsed === null || isProxyConnectionError(responseText));
 		if (isProxyError) {
 			throw new ApiUnreachableError();
 		}
-		throw new Error(`Failed to fetch tags: ${response.statusText}`);
+		throw new ApiError(
+			parsed?.error || `Failed to fetch tags: ${response.statusText}`,
+			response.status,
+			parsed?.code ?? null
+		);
 	}
 	const data: TagsResponse = await response.json();
 	return data.tags;

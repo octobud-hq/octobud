@@ -16,12 +16,28 @@
 import {
 	fetchWithAuth,
 	buildApiUrl,
+	ApiError,
 	ApiUnreachableError,
+	apiErrorFromResponse,
 	isNetworkError,
 	isProxyConnectionError,
 } from "./fetch";
 import { DEFAULT_VIEW_ICON } from "$lib/utils/viewIcons";
 import type { NotificationView, NotificationViewInput } from "./types";
+
+/**
+ * Thrown when attempting to delete a view that still has rules attached to it.
+ * Carries the linked rule count so callers can surface a confirmation prompt.
+ */
+export class ViewLinkedRulesError extends ApiError {
+	readonly linkedRuleCount: number;
+
+	constructor(message: string, linkedRuleCount: number) {
+		super(message, 409, null);
+		this.name = "ViewLinkedRulesError";
+		this.linkedRuleCount = linkedRuleCount;
+	}
+}
 
 const cloneView = (view: NotificationView): NotificationView => ({
 	...view,
@@ -92,18 +108,7 @@ export async function createView(
 	);
 
 	if (!response.ok) {
-		let errorMessage = `Failed to create view (${response.status})`;
-		try {
-			const errorData: { error?: string } = await response.json();
-			if (errorData.error) {
-				errorMessage = errorData.error;
-			}
-		} catch {
-			// If parsing fails, use the default error message
-		}
-		const error: any = new Error(errorMessage);
-		error.statusCode = response.status;
-		throw error;
+		throw await apiErrorFromResponse(response, `Failed to create view (${response.status})`);
 	}
 
 	const payload: { view: NotificationView } = await response.json();
@@ -134,18 +139,7 @@ export async function updateView(
 	);
 
 	if (!response.ok) {
-		let errorMessage = `Failed to update view (${response.status})`;
-		try {
-			const errorData: { error?: string } = await response.json();
-			if (errorData.error) {
-				errorMessage = errorData.error;
-			}
-		} catch {
-			// If parsing fails, use the default error message
-		}
-		const error: any = new Error(errorMessage);
-		error.statusCode = response.status;
-		throw error;
+		throw await apiErrorFromResponse(response, `Failed to update view (${response.status})`);
 	}
 
 	const payload: { view: NotificationView } = await response.json();
@@ -169,13 +163,13 @@ export async function deleteView(
 	if (!response.ok) {
 		if (response.status === 409) {
 			// Conflict - view has linked rules
-			const errorData = await response.json();
-			const error: any = new Error("This view has linked rules that will also be deleted");
-			error.linkedRuleCount = errorData.linkedRuleCount;
-			error.statusCode = 409;
-			throw error;
+			const errorData: { linkedRuleCount?: number } = await response.json();
+			throw new ViewLinkedRulesError(
+				"This view has linked rules that will also be deleted",
+				errorData.linkedRuleCount ?? 0
+			);
 		}
-		throw new Error(`Failed to delete view (${response.status})`);
+		throw await apiErrorFromResponse(response, `Failed to delete view (${response.status})`);
 	}
 }
 

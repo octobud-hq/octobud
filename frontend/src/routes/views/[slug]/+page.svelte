@@ -60,6 +60,7 @@
 
 	export let data: PageData & {
 		apiError?: string | null;
+		apiErrorCode?: string | null;
 	};
 
 	// ============================================================================
@@ -386,8 +387,8 @@
 					// Check if we're still viewing the same notification
 					if (get(detailNotificationId) === notificationId) {
 						// Check if this is a 403 Forbidden error (permission issue)
-						const errorWithStatus = refreshErr as Error & { status?: number; statusCode?: number };
-						const statusCode = errorWithStatus?.status ?? errorWithStatus?.statusCode;
+						const errorWithStatus = refreshErr as Error & { status?: number };
+						const statusCode = errorWithStatus?.status;
 						const errorMessage = refreshErr?.message ?? "";
 						const is403Error = statusCode === 403 || errorMessage.includes("403");
 
@@ -838,6 +839,33 @@
 			toggleSplitMode();
 			return true;
 		});
+		// Custom smooth scroll: native scrollBy({behavior:"smooth"}) has a fixed ~400ms
+		// duration and queues on rapid re-invocation. This animator runs ~200ms with
+		// easing and cancels any in-flight animation so auto-repeat never stalls or
+		// lingers after key release.
+		let scrollRaf: number | null = null;
+		const scrollDetailBy = (direction: 1 | -1): boolean => {
+			const el = document.querySelector<HTMLElement>("[data-detail-scroll-container]");
+			if (!el) return false;
+			if (scrollRaf !== null) {
+				cancelAnimationFrame(scrollRaf);
+				scrollRaf = null;
+			}
+			const delta = direction * Math.round(el.clientHeight * 0.85);
+			const duration = 200;
+			const startTop = el.scrollTop;
+			const startTime = performance.now();
+			const step = (now: number) => {
+				const t = Math.min(1, (now - startTime) / duration);
+				const eased = 1 - (1 - t) * (1 - t); // easeOutQuad
+				el.scrollTop = startTop + delta * eased;
+				scrollRaf = t < 1 ? requestAnimationFrame(step) : null;
+			};
+			scrollRaf = requestAnimationFrame(step);
+			return true;
+		};
+		registerCommand("scrollDetailDown", () => scrollDetailBy(1));
+		registerCommand("scrollDetailUp", () => scrollDetailBy(-1));
 		registerCommand("toggleSidebar", () => {
 			pageController.actions.toggleSidebar();
 			return true;
@@ -934,10 +962,18 @@
 			"bulkUnfilter",
 			"toggleSplitMode",
 			"toggleSidebar",
+			"scrollDetailDown",
+			"scrollDetailUp",
 		];
 
 		return () => {
 			unregisterShortcuts();
+			// Cancel any in-flight detail scroll animation so it doesn't keep
+			// running against a detached element after unmount.
+			if (scrollRaf !== null) {
+				cancelAnimationFrame(scrollRaf);
+				scrollRaf = null;
+			}
 			// Unregister all commands on cleanup
 			for (const name of commandNames) {
 				unregisterCommand(name);
@@ -954,6 +990,7 @@
 <NotificationView
 	bind:this={notificationViewComponent}
 	apiError={data.apiError}
+	apiErrorCode={data.apiErrorCode}
 	apiErrorIsInline={data.apiErrorIsInline ?? false}
 	combinedQuery={$quickQuery}
 	canUpdateView={!!$selectedView}

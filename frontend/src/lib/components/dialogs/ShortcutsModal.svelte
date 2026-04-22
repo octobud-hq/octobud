@@ -38,7 +38,10 @@
 			title: "Navigation",
 			shortcuts: [
 				{ keys: ["J", "K"], description: "Navigate notification list" },
-				{ keys: ["Space"], description: "Toggle notification detail" },
+				{ keys: ["Enter", "Space"], description: "Open notification detail" },
+				{ keys: ["Esc"], description: "Close notification detail" },
+				{ keys: ["Space"], description: "Scroll detail down (when open)" },
+				{ keys: ["⇧Space"], description: "Scroll detail up (when open)" },
 				{ keys: ["⇧P"], description: "Toggle split view" },
 				{ keys: ["GG"], description: "Jump to first notification" },
 				{ keys: ["⇧G"], description: "Jump to last notification" },

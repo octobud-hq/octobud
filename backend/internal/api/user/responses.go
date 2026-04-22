@@ -59,6 +59,14 @@ type GitHubStatusResponse struct {
 	Source         string `json:"source"` // "none", "stored", or "oauth"
 	MaskedToken    string `json:"maskedToken,omitempty"`
 	GitHubUsername string `json:"githubUsername,omitempty"`
+	// TokenHealth classifies the token's usability: "ok", "expiring", or "invalid".
+	// Populated from observed GitHub API responses; defaults to "ok" until we've
+	// made an authenticated request this session.
+	TokenHealth string `json:"tokenHealth,omitempty"`
+	// TokenExpiresAt is the RFC3339 expiration timestamp observed from GitHub.
+	// Omitted when the token has no expiration (classic PAT) or we have not yet
+	// made an authenticated request this session.
+	TokenExpiresAt *string `json:"tokenExpiresAt,omitempty"`
 }
 
 // SetGitHubTokenRequest represents the request to set a GitHub token

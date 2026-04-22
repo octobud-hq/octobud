@@ -16,6 +16,7 @@
 
 	import { onMount, onDestroy, getContext } from "svelte";
 	import { browser } from "$app/environment";
+	import { afterNavigate } from "$app/navigation";
 	import type { PageData } from "./$types";
 	import SettingsView from "$lib/components/settings/SettingsView.svelte";
 	import GitHubSettingsSection from "$lib/components/settings/GitHubSettingsSection.svelte";
@@ -84,6 +85,70 @@
 	}
 
 	let unregisterShortcuts: (() => void) | null = null;
+
+	// Wait for an element to both appear in the DOM AND have a stable position.
+	// Async content loading below a scroll target shifts its offsetTop mid-scroll,
+	// so waiting for position stability avoids the "lands halfway up" problem.
+	function waitForStableElement(id: string, timeoutMs = 3000): Promise<HTMLElement | null> {
+		return new Promise((resolve) => {
+			const start = performance.now();
+			let lastTop: number | null = null;
+			let stableFrames = 0;
+			const STABLE_THRESHOLD = 3;
+
+			function check() {
+				const elapsed = performance.now() - start;
+				const el = document.getElementById(id);
+
+				if (el) {
+					const top = el.getBoundingClientRect().top;
+					if (lastTop !== null && Math.abs(top - lastTop) < 0.5) {
+						stableFrames++;
+						if (stableFrames >= STABLE_THRESHOLD) {
+							resolve(el);
+							return;
+						}
+					} else {
+						stableFrames = 0;
+					}
+					lastTop = top;
+				}
+
+				if (elapsed >= timeoutMs) {
+					// Fall back to whatever we have (may still be shifting, but at least scroll).
+					resolve(el);
+					return;
+				}
+				requestAnimationFrame(check);
+			}
+			check();
+		});
+	}
+
+	// Scroll to an element by id once it's rendered. Strips the ?scroll param
+	// afterward so back-nav doesn't re-trigger the jump.
+	async function applyScrollTarget() {
+		if (!browser) return;
+		const params = new URL(window.location.href).searchParams;
+		const target = params.get("scroll");
+		if (!target) return;
+
+		const el = await waitForStableElement(target);
+		if (el) {
+			el.scrollIntoView({ behavior: "smooth", block: "start" });
+		}
+
+		// Clean up the URL without triggering a navigation.
+		const url = new URL(window.location.href);
+		url.searchParams.delete("scroll");
+		window.history.replaceState(window.history.state, "", url.toString());
+	}
+
+	// Fires on both initial mount and subsequent navigations to /settings,
+	// covering the case where the user clicks the banner while already on settings.
+	afterNavigate(() => {
+		void applyScrollTarget();
+	});
 
 	onMount(() => {
 		// Initialize section from hash

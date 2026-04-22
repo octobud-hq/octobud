@@ -51,6 +51,7 @@
 	$: listPaneWidth = context.splitView.listPaneWidth;
 	$: onPaneResize = context.splitView.onPaneResize;
 	$: apiError = context.apiError;
+	$: apiErrorCode = context.apiErrorCode;
 
 	// Export list section ref for parent access
 	let listSectionComponent: NotificationListSectionComponent | null = null;
@@ -83,6 +84,7 @@
 			isSplitView={true}
 			{selectionMap}
 			{apiError}
+			{apiErrorCode}
 		/>
 	</div>
 

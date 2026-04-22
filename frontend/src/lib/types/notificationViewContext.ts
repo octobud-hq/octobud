@@ -68,4 +68,6 @@ export interface NotificationViewContext {
 	splitView: SplitViewContext;
 	initialScrollPosition: number;
 	apiError: string | null;
+	/** Machine-readable backend error code, when the API provided one. */
+	apiErrorCode: string | null;
 }

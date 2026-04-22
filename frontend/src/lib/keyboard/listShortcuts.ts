@@ -214,18 +214,18 @@ export function registerListShortcuts(context: CommandContext): () => void {
 			return;
 		}
 
-		// Handle Space in detail view (can toggle detail closed while keeping list item selected)
+		// Handle Space/Shift+Space in detail view to scroll detail content.
+		// Each keydown (including auto-repeat) fires one jump; the animator cancels
+		// any in-flight animation to avoid queuing. To close detail, use Escape.
 		if (detailOpen && (event.key === " " || event.key === "spacebar")) {
 			if (isFormFieldActive(active)) {
-				return;
-			}
-			if (event.repeat) {
 				return;
 			}
 			if (isInteractiveElement(active)) {
 				return;
 			}
-			if (executeCommand("toggleFocused", context)) {
+			const command = event.shiftKey ? "scrollDetailUp" : "scrollDetailDown";
+			if (executeCommand(command, context)) {
 				consumeEvent(event);
 			}
 			return;
@@ -748,8 +748,16 @@ export function registerListShortcuts(context: CommandContext): () => void {
 					consumeEvent(event);
 				}
 			}
-		} else if (key === " " || key === "spacebar") {
+		} else if (event.key === "Enter" || key === " " || key === "spacebar") {
+			// When detail is open, Enter/Space must not close it — use Escape.
+			// Space is also intercepted earlier (line 220) for detail scrolling.
+			if (detailOpen) {
+				return;
+			}
 			if (event.repeat) {
+				return;
+			}
+			if (isInteractiveElement(active)) {
 				return;
 			}
 			if (executeCommand("toggleFocused", context)) {

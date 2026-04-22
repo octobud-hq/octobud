@@ -7,7 +7,10 @@ Octobud is designed for keyboard-first navigation. Press `h` at any time to see 
 | Shortcut | Action |
 |----------|--------|
 | `j` / `k` | Navigate notification list |
-| `Space` | Toggle notification detail |
+| `Enter` / `Space` | Open notification detail |
+| `Escape` | Close notification detail |
+| `Space` | Scroll detail down (when detail is open) |
+| `Shift + Space` | Scroll detail up (when detail is open) |
 | `Shift + p` | Toggle split view |
 | `gg` | Jump to first notification |
 | `Shift + g` | Jump to last notification |
@@ -56,7 +59,6 @@ These shortcuts work on the currently focused notification and toggle the action
 | `Cmd + z` | Undo last action (only when undo toast is visible) |
 | `h` | Toggle keyboard shortcuts |
 | `Escape` | Close dropdowns, clear selection, or exit multiselect |
-| `Space` | Toggle notification detail open/closed |
 
 ## Multiselect Mode
 

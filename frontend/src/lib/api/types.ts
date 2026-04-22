@@ -81,6 +81,7 @@ export interface BackendNotificationResponse {
 	subjectNumber?: number | null;
 	subjectState?: string | null;
 	subjectMerged?: boolean | null;
+	subjectDraft?: boolean | null;
 	subjectStateReason?: string | null;
 	actionHints?: ActionHints;
 	tags?: Tag[];
@@ -142,6 +143,7 @@ export interface Notification {
 	subjectNumber?: number;
 	subjectState?: string;
 	subjectMerged?: boolean;
+	subjectDraft?: boolean;
 	subjectStateReason?: string;
 	actionHints?: ActionHints;
 	tags?: Tag[];

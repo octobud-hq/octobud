@@ -64,12 +64,12 @@ interface UpdateRuleRequest {
 	applyToExisting?: boolean;
 }
 
-import { fetchWithAuth, buildApiUrl } from "./fetch";
+import { fetchWithAuth, buildApiUrl, apiErrorFromResponse } from "./fetch";
 
 export async function fetchRules(fetchImpl: typeof fetch = fetch): Promise<Rule[]> {
 	const response = await fetchWithAuth("/api/rules", {}, fetchImpl);
 	if (!response.ok) {
-		throw new Error(`Failed to fetch rules: ${response.statusText}`);
+		throw await apiErrorFromResponse(response, `Failed to fetch rules: ${response.statusText}`);
 	}
 	const data: RulesResponse = await response.json();
 	return data.rules;

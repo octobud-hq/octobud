@@ -18,6 +18,13 @@
 		color-scheme: light dark;
 	}
 
+	/* Tailwind v4 removed the default `cursor: pointer` on buttons. Restore it
+	   project-wide so we don't have to opt in per-button. Disabled buttons keep
+	   the browser default (or whatever `disabled:cursor-not-allowed` sets). */
+	button:not(:disabled) {
+		cursor: pointer;
+	}
+
 	html {
 		height: 100%;
 	}

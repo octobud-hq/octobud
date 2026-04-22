@@ -34,6 +34,7 @@
 
 	// API error state
 	export let apiError: string | null | undefined;
+	export let apiErrorCode: string | null | undefined = null;
 	export let apiErrorIsInline: boolean = false; // If true, show error inline instead of full screen
 	export let tags: Tag[] = [];
 
@@ -112,7 +113,8 @@
 			onPaneResize,
 		},
 		initialScrollPosition,
-		apiError: apiErrorIsInline ? apiError : null,
+		apiError: apiErrorIsInline ? (apiError ?? null) : null,
+		apiErrorCode: apiErrorIsInline ? (apiErrorCode ?? null) : null,
 	});
 
 	// Update context store reactively when props change
@@ -144,7 +146,8 @@
 			onPaneResize,
 		},
 		initialScrollPosition,
-		apiError: apiErrorIsInline ? apiError : null,
+		apiError: apiErrorIsInline ? (apiError ?? null) : null,
+		apiErrorCode: apiErrorIsInline ? (apiErrorCode ?? null) : null,
 	});
 
 	// Set context store so child components can subscribe to it

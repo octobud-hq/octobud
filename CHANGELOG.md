@@ -15,9 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **GitHub label chips**: Labels from PRs/issues are displayed as colored chips in the detail view metadata row, matching their GitHub colors
 - **Enrichment pipeline**: Background enrichment system with versioned processing for re-enriching existing notifications when new data sources are added
 - **Query input auto-space**: Focusing the query input appends a trailing space so you can immediately start typing a new filter token and see the base suggestion list
+- **Token expiry checks/warnings**: Show warning banner when a token is expring in the next 7 days, and an error banner if it is invalid or expired.
 
 ### Changed
 
+- **BREAKING**: `Space` now scrolls the detail view (with `Shift+Space` to scroll up) when the detail is open, instead of closing it. Open the detail with `Enter` or `Space` (while closed); close it with `Escape`. Previously `Space` toggled the detail open/closed.
 - Timeline "Changes requested" review badge now uses a diff icon instead of a warning emoji
 - GitHub label chip text contrast improved in both light and dark mode using `color-mix`
 

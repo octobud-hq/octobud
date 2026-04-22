@@ -25,9 +25,18 @@ import (
 	"github.com/octobud-hq/octobud/backend/internal/github/types"
 )
 
+// TokenObserverFunc is invoked on each authenticated GitHub API response so the
+// caller can observe token state (expiration countdown, invalidation on 401).
+// expiresAt is nil when the response did not include an expiration header
+// (e.g. classic PATs or PATs configured without expiry).
+type TokenObserverFunc func(statusCode int, expiresAt *time.Time)
+
 // Client defines the interface for GitHub API operations.
 type Client interface {
 	SetToken(ctx context.Context, token string) error
+	// SetTokenObserver registers a callback invoked once per authenticated
+	// response. Passing nil clears the observer.
+	SetTokenObserver(observer TokenObserverFunc)
 	// FetchNotifications retrieves notification threads from GitHub.
 	// - since: only fetch notifications updated after this time (nil = use GitHub default window)
 	// - before: only fetch notifications updated before this time (nil = no upper bound)
