@@ -71,6 +71,22 @@ export function createTimelineController(): TimelineController {
 
 	let currentGithubId: string | null = null;
 
+	// AbortController for the current load session. Cancels in-flight fetches
+	// when the user navigates to a different notification or closes detail,
+	// so a slow GitHub response doesn't tie up browser connection slots.
+	let currentController: AbortController | null = null;
+
+	function isAbortError(err: unknown): boolean {
+		return err instanceof DOMException && err.name === "AbortError";
+	}
+
+	// Primary loads (autoLoad, load) abort any in-flight session and start fresh.
+	function startSession(): AbortSignal {
+		if (currentController) currentController.abort();
+		currentController = new AbortController();
+		return currentController.signal;
+	}
+
 	// Review comments fetched in parallel — merged into items when both are ready
 	let reviewCommentsData: ReviewCommentsByReviewId | null = null;
 
@@ -150,6 +166,7 @@ export function createTimelineController(): TimelineController {
 		hasAttemptedAutoLoad.set(true);
 
 		currentGithubId = githubId;
+		const signal = startSession();
 		isLoading.set(true);
 		error.set(null);
 
@@ -157,7 +174,9 @@ export function createTimelineController(): TimelineController {
 			const response: NotificationTimelineResponse = await fetchNotificationTimeline(
 				githubId,
 				perPage,
-				1
+				1,
+				undefined,
+				signal
 			);
 
 			// Abort if githubId changed while loading (detail was closed/opened)
@@ -178,6 +197,8 @@ export function createTimelineController(): TimelineController {
 				hasMore: response.hasMore,
 			});
 		} catch (err) {
+			// Swallow aborts — they're expected when the user navigates away.
+			if (isAbortError(err)) return;
 			// Only set error if this is still the current notification
 			if (currentGithubId === githubId) {
 				console.error("[TimelineController] Failed to auto-load timeline:", err);
@@ -194,6 +215,7 @@ export function createTimelineController(): TimelineController {
 	async function loadTimeline(githubId: string, perPage: number = 10): Promise<void> {
 		hasAttemptedAutoLoad.set(true);
 		currentGithubId = githubId;
+		const signal = startSession();
 		isLoading.set(true);
 		error.set(null);
 
@@ -201,7 +223,9 @@ export function createTimelineController(): TimelineController {
 			const response: NotificationTimelineResponse = await fetchNotificationTimeline(
 				githubId,
 				perPage,
-				1
+				1,
+				undefined,
+				signal
 			);
 
 			// Abort if githubId changed while loading (detail was closed/opened)
@@ -222,6 +246,7 @@ export function createTimelineController(): TimelineController {
 				hasMore: response.hasMore,
 			});
 		} catch (err) {
+			if (isAbortError(err)) return;
 			// Only set error if this is still the current notification
 			if (currentGithubId === githubId) {
 				console.error("Failed to load timeline:", err);
@@ -240,6 +265,7 @@ export function createTimelineController(): TimelineController {
 		const nextPage = currentPagination.page + 1;
 
 		currentGithubId = githubId;
+		const signal = currentController?.signal;
 		isLoading.set(true);
 		error.set(null);
 
@@ -247,7 +273,9 @@ export function createTimelineController(): TimelineController {
 			const response: NotificationTimelineResponse = await fetchNotificationTimeline(
 				githubId,
 				perPage,
-				nextPage
+				nextPage,
+				undefined,
+				signal
 			);
 
 			// Abort if githubId changed while loading (detail was closed/opened)
@@ -277,6 +305,7 @@ export function createTimelineController(): TimelineController {
 				hasMore: response.items.length > 0 && response.hasMore,
 			});
 		} catch (err) {
+			if (isAbortError(err)) return;
 			// Only set error if this is still the current notification
 			if (currentGithubId === githubId) {
 				console.error("Failed to load more timeline:", err);
@@ -307,11 +336,14 @@ export function createTimelineController(): TimelineController {
 		if (currentItems.length === 0) return; // Don't refresh before initial load
 
 		refreshInProgress = true;
+		const signal = currentController?.signal;
 		try {
 			const response: NotificationTimelineResponse = await fetchNotificationTimeline(
 				githubId,
 				perPage,
-				1
+				1,
+				undefined,
+				signal
 			);
 
 			// Abort if githubId changed while loading
@@ -350,6 +382,7 @@ export function createTimelineController(): TimelineController {
 				mergeCommitAuthors();
 			}
 		} catch (err) {
+			if (isAbortError(err)) return;
 			// Silent failure for background refresh
 			if (currentGithubId === githubId) {
 				console.error("[TimelineController] Failed to refresh timeline:", err);
@@ -372,7 +405,7 @@ export function createTimelineController(): TimelineController {
 		}
 
 		try {
-			const data = await fetchReviewComments(githubId);
+			const data = await fetchReviewComments(githubId, undefined, currentController?.signal);
 
 			// Abort if githubId changed while loading
 			if (currentGithubId !== githubId) return;
@@ -380,6 +413,7 @@ export function createTimelineController(): TimelineController {
 			reviewCommentsData = data;
 			mergeReviewComments(force);
 		} catch (err) {
+			if (isAbortError(err)) return;
 			// Non-critical — log and continue
 			if (currentGithubId === githubId) {
 				console.error("[TimelineController] Failed to load review comments:", err);
@@ -400,7 +434,7 @@ export function createTimelineController(): TimelineController {
 		}
 
 		try {
-			const data = await fetchPRCommits(githubId);
+			const data = await fetchPRCommits(githubId, undefined, currentController?.signal);
 
 			// Abort if githubId changed while loading
 			if (currentGithubId !== githubId) return;
@@ -408,6 +442,7 @@ export function createTimelineController(): TimelineController {
 			commitAuthorsData = data;
 			mergeCommitAuthors();
 		} catch (err) {
+			if (isAbortError(err)) return;
 			// Non-critical — log and continue
 			if (currentGithubId === githubId) {
 				console.error("[TimelineController] Failed to load PR commits:", err);
@@ -416,6 +451,10 @@ export function createTimelineController(): TimelineController {
 	}
 
 	function reset(): void {
+		if (currentController) {
+			currentController.abort();
+			currentController = null;
+		}
 		items.set([]);
 		isLoading.set(false);
 		error.set(null);

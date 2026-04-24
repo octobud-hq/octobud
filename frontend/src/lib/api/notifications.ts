@@ -307,6 +307,7 @@ export interface FetchNotificationDetailOptions {
 	fetch?: typeof fetch;
 	fallback?: Notification;
 	query?: string;
+	signal?: AbortSignal;
 }
 
 export async function fetchNotificationDetail(
@@ -318,7 +319,7 @@ export async function fetchNotificationDetail(
 		const separator = url.includes("?") ? "&" : "?";
 		url = `${url}${separator}query=${encodeURIComponent(options.query)}`;
 	}
-	const response = await fetchWithAuth(url, {}, options.fetch);
+	const response = await fetchWithAuth(url, { signal: options.signal }, options.fetch);
 	if (!response.ok) {
 		if (response.status === 404 && options.fallback) {
 			return {
@@ -976,7 +977,7 @@ export async function bulkRemoveTag(
 
 export async function refreshNotificationSubject(
 	githubId: string,
-	options: { fetch?: typeof fetch; query?: string } = {}
+	options: { fetch?: typeof fetch; query?: string; signal?: AbortSignal } = {}
 ): Promise<Notification> {
 	let url = `/api/notifications/${encodeURIComponent(githubId)}/refresh-subject`;
 	if (options.query) {
@@ -987,6 +988,7 @@ export async function refreshNotificationSubject(
 		url,
 		{
 			method: "POST",
+			signal: options.signal,
 		},
 		options.fetch
 	);
@@ -1011,10 +1013,11 @@ export async function fetchNotificationTimeline(
 	githubId: string,
 	perPage: number,
 	page: number,
-	fetchImpl?: typeof fetch
+	fetchImpl?: typeof fetch,
+	signal?: AbortSignal
 ): Promise<NotificationTimelineResponse> {
 	const url = `/api/notifications/${encodeURIComponent(githubId)}/timeline?per_page=${perPage}&page=${page}`;
-	const response = await fetchWithAuth(url, {}, fetchImpl);
+	const response = await fetchWithAuth(url, { signal }, fetchImpl);
 
 	if (!response.ok) {
 		let errorMessage = `Failed to fetch timeline (${response.status})`;
@@ -1042,10 +1045,11 @@ export type ReviewCommentsByReviewId = Record<string, TimelineReviewComment[]>;
 
 export async function fetchReviewComments(
 	githubId: string,
-	fetchImpl?: typeof fetch
+	fetchImpl?: typeof fetch,
+	signal?: AbortSignal
 ): Promise<ReviewCommentsByReviewId> {
 	const url = `/api/notifications/${encodeURIComponent(githubId)}/review-comments`;
-	const response = await fetchWithAuth(url, {}, fetchImpl);
+	const response = await fetchWithAuth(url, { signal }, fetchImpl);
 
 	if (!response.ok) {
 		throw new Error(`Failed to fetch review comments (${response.status})`);
@@ -1060,10 +1064,11 @@ export type PRCommitAuthorsBySHA = Record<string, { login: string; avatarUrl: st
 
 export async function fetchPRCommits(
 	githubId: string,
-	fetchImpl?: typeof fetch
+	fetchImpl?: typeof fetch,
+	signal?: AbortSignal
 ): Promise<PRCommitAuthorsBySHA> {
 	const url = `/api/notifications/${encodeURIComponent(githubId)}/pr-commits`;
-	const response = await fetchWithAuth(url, {}, fetchImpl);
+	const response = await fetchWithAuth(url, { signal }, fetchImpl);
 
 	if (!response.ok) {
 		throw new Error(`Failed to fetch PR commits (${response.status})`);

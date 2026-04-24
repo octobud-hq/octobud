@@ -137,6 +137,15 @@
 	let lastKnownSortDate: string | null = null;
 	let lastKnownDetailGithubId: string | null = null;
 
+	// Cancels the detail + refresh-subject fetches when the user switches
+	// notifications or closes detail, so a slow GitHub response doesn't tie up
+	// a browser connection slot and stall subsequent navigation requests.
+	let detailFetchController: AbortController | null = null;
+
+	function isAbortError(err: unknown): boolean {
+		return err instanceof DOMException && err.name === "AbortError";
+	}
+
 	// Helper to check if a notification type is CI activity
 	function checkIsCIActivity(subjectType: string | undefined | null): boolean {
 		if (!subjectType) return false;
@@ -271,6 +280,13 @@
 		const notificationId = $detailNotificationId;
 		lastProcessedNotificationId = notificationId;
 
+		// Abort any in-flight fetches for the previously selected notification.
+		if (detailFetchController) {
+			detailFetchController.abort();
+		}
+		detailFetchController = new AbortController();
+		const detailSignal = detailFetchController.signal;
+
 		// Find the notification in the current page (read once, not reactive)
 		const pageDataSnapshot = get(pageData);
 		const notification = pageDataSnapshot.items.find(
@@ -293,6 +309,7 @@
 		const detailPromise = fetchNotificationDetail(notificationId, {
 			fallback: notification || undefined,
 			query: currentQuery,
+			signal: detailSignal,
 		})
 			.then((detail) => {
 				// Only update if this is still the notification we're viewing
@@ -315,6 +332,8 @@
 				return detail;
 			})
 			.catch((error) => {
+				// Aborted when user navigated away — don't show an error state.
+				if (isAbortError(error)) return null;
 				console.error("Failed to load notification detail:", error);
 				// Show stale data indicator
 				if (get(detailNotificationId) === notificationId) {
@@ -359,7 +378,7 @@
 				return;
 			}
 			// Pass the current query so the backend can calculate correct actionHints
-			refreshNotificationSubject(githubId, { query: currentQuery })
+			refreshNotificationSubject(githubId, { query: currentQuery, signal: detailSignal })
 				.then((refreshedNotification) => {
 					// Check if we're still viewing the same notification
 					if (get(detailNotificationId) === notificationId) {
@@ -384,6 +403,8 @@
 					}
 				})
 				.catch((refreshErr) => {
+					// Aborted when user navigated away — don't surface as error.
+					if (isAbortError(refreshErr)) return;
 					// Check if we're still viewing the same notification
 					if (get(detailNotificationId) === notificationId) {
 						// Check if this is a 403 Forbidden error (permission issue)
@@ -434,6 +455,13 @@
 		}
 		if (lastProcessedNotificationId !== null) {
 			lastProcessedNotificationId = null;
+		}
+
+		// Abort any in-flight detail/refresh fetches so a slow GitHub response
+		// doesn't hold a browser connection slot after the detail is closed.
+		if (detailFetchController) {
+			detailFetchController.abort();
+			detailFetchController = null;
 		}
 
 		// Reset timeline controller to abort any ongoing loading
@@ -982,6 +1010,12 @@
 	});
 
 	onDestroy(() => {
+		// Abort any in-flight detail/refresh fetches when navigating away to
+		// settings or another route, so they don't hold connection slots.
+		if (detailFetchController) {
+			detailFetchController.abort();
+			detailFetchController = null;
+		}
 		// Reset timeline controller when component is destroyed (e.g., navigating away)
 		timelineController.actions.reset();
 	});
