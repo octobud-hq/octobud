@@ -36,65 +36,37 @@ func NewConsoleLogger() *zap.Logger {
 	return NewConsoleLoggerWithFile(nil)
 }
 
-// NewConsoleLoggerWithFile creates a human-readable console logger that writes to both
-// stdout and an optional file writer. If fileWriter is nil, it only writes to stdout.
-// Output is colored and formatted for easy reading in a terminal.
+// NewConsoleLoggerWithFile creates a logger that writes human-readable console
+// output to stdout and structured JSON to an optional file writer. The JSON file
+// format lets the in-app log viewer parse entries reliably; if fileWriter is
+// nil, only stdout is used.
 func NewConsoleLoggerWithFile(fileWriter io.Writer) *zap.Logger {
-	// Create encoder config for human-readable output
-	encoderConfig := zapcore.EncoderConfig{
-		TimeKey:        "time",
-		LevelKey:       "level",
-		NameKey:        "logger",
-		CallerKey:      "",              // Omit caller for cleaner output
-		FunctionKey:    zapcore.OmitKey, // Omit function name
-		MessageKey:     "msg",
-		StacktraceKey:  "stacktrace",
-		LineEnding:     zapcore.DefaultLineEnding,
-		EncodeLevel:    zapcore.CapitalColorLevelEncoder, // Colored levels
-		EncodeTime:     formatTimestamp,
-		EncodeDuration: zapcore.StringDurationEncoder,
-		EncodeCaller:   zapcore.ShortCallerEncoder,
-	}
-
-	// Create console encoder
-	consoleEncoder := zapcore.NewConsoleEncoder(encoderConfig)
-
-	// Create sync writers - always write to stdout, optionally also to file
-	writeSyncer := zapcore.AddSync(os.Stdout)
-	if fileWriter != nil {
-		// Write to both stdout and file
-		writeSyncer = zapcore.NewMultiWriteSyncer(
-			zapcore.AddSync(os.Stdout),
-			zapcore.AddSync(fileWriter),
-		)
-	}
-
-	// Create core with info level (skip debug for cleaner output in desktop mode)
-	core := zapcore.NewCore(
-		consoleEncoder,
-		writeSyncer,
+	consoleCore := zapcore.NewCore(
+		zapcore.NewConsoleEncoder(consoleEncoderConfig()),
+		zapcore.AddSync(os.Stdout),
 		zapcore.InfoLevel,
 	)
 
-	return zap.New(core)
+	if fileWriter == nil {
+		return zap.New(consoleCore)
+	}
+
+	fileCore := zapcore.NewCore(
+		zapcore.NewJSONEncoder(jsonEncoderConfig()),
+		zapcore.AddSync(fileWriter),
+		zapcore.InfoLevel,
+	)
+
+	return zap.New(zapcore.NewTee(consoleCore, fileCore))
 }
 
-// NewDebugConsoleLogger creates a verbose console logger with debug level enabled.
-// Useful for development and debugging.
-func NewDebugConsoleLogger() *zap.Logger {
-	return NewDebugConsoleLoggerWithFile(nil)
-}
-
-// NewDebugConsoleLoggerWithFile creates a verbose console logger with debug level enabled
-// that writes to both stdout and an optional file writer. If fileWriter is nil, it only writes to stdout.
-// Useful for development and debugging.
-func NewDebugConsoleLoggerWithFile(fileWriter io.Writer) *zap.Logger {
-	// Create encoder config for human-readable output with more details
-	encoderConfig := zapcore.EncoderConfig{
+// consoleEncoderConfig is the human-readable config used for stdout.
+func consoleEncoderConfig() zapcore.EncoderConfig {
+	return zapcore.EncoderConfig{
 		TimeKey:        "time",
 		LevelKey:       "level",
 		NameKey:        "logger",
-		CallerKey:      "caller",
+		CallerKey:      "",
 		FunctionKey:    zapcore.OmitKey,
 		MessageKey:     "msg",
 		StacktraceKey:  "stacktrace",
@@ -104,26 +76,56 @@ func NewDebugConsoleLoggerWithFile(fileWriter io.Writer) *zap.Logger {
 		EncodeDuration: zapcore.StringDurationEncoder,
 		EncodeCaller:   zapcore.ShortCallerEncoder,
 	}
+}
 
-	// Create console encoder
-	consoleEncoder := zapcore.NewConsoleEncoder(encoderConfig)
-
-	// Create sync writers - always write to stdout, optionally also to file
-	writeSyncer := zapcore.AddSync(os.Stdout)
-	if fileWriter != nil {
-		// Write to both stdout and file
-		writeSyncer = zapcore.NewMultiWriteSyncer(
-			zapcore.AddSync(os.Stdout),
-			zapcore.AddSync(fileWriter),
-		)
+// jsonEncoderConfig is used for the on-disk log so the diagnostics viewer can
+// parse entries one-per-line. Uses ISO8601 timestamps and lowercase level names
+// for stable downstream consumption.
+func jsonEncoderConfig() zapcore.EncoderConfig {
+	return zapcore.EncoderConfig{
+		TimeKey:        "time",
+		LevelKey:       "level",
+		NameKey:        "logger",
+		CallerKey:      "caller",
+		FunctionKey:    zapcore.OmitKey,
+		MessageKey:     "msg",
+		StacktraceKey:  "stacktrace",
+		LineEnding:     zapcore.DefaultLineEnding,
+		EncodeLevel:    zapcore.LowercaseLevelEncoder,
+		EncodeTime:     zapcore.ISO8601TimeEncoder,
+		EncodeDuration: zapcore.StringDurationEncoder,
+		EncodeCaller:   zapcore.ShortCallerEncoder,
 	}
+}
 
-	// Create core with debug level
-	core := zapcore.NewCore(
-		consoleEncoder,
-		writeSyncer,
+// NewDebugConsoleLogger creates a verbose console logger with debug level enabled.
+// Useful for development and debugging.
+func NewDebugConsoleLogger() *zap.Logger {
+	return NewDebugConsoleLoggerWithFile(nil)
+}
+
+// NewDebugConsoleLoggerWithFile creates a verbose debug-level logger that writes
+// console-formatted output to stdout and JSON to an optional file writer.
+// Useful for development and debugging.
+func NewDebugConsoleLoggerWithFile(fileWriter io.Writer) *zap.Logger {
+	debugConsoleConfig := consoleEncoderConfig()
+	debugConsoleConfig.CallerKey = "caller"
+
+	consoleCore := zapcore.NewCore(
+		zapcore.NewConsoleEncoder(debugConsoleConfig),
+		zapcore.AddSync(os.Stdout),
 		zapcore.DebugLevel,
 	)
 
-	return zap.New(core, zap.AddCaller())
+	if fileWriter == nil {
+		return zap.New(consoleCore, zap.AddCaller())
+	}
+
+	fileCore := zapcore.NewCore(
+		zapcore.NewJSONEncoder(jsonEncoderConfig()),
+		zapcore.AddSync(fileWriter),
+		zapcore.DebugLevel,
+	)
+
+	return zap.New(zapcore.NewTee(consoleCore, fileCore), zap.AddCaller())
 }

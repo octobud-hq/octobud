@@ -31,6 +31,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 		{ id: "rules", label: "Rules", icon: "bolt" },
 		{ id: "data", label: "Data", icon: "database" },
 		{ id: "updates", label: "Updates", icon: "arrow-down" },
+		{ id: "debugging", label: "Debugging", icon: "bug" },
 	];
 
 	function handleSectionClick(sectionId: string) {
@@ -110,6 +111,25 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 							<ellipse cx="12" cy="5" rx="9" ry="3" />
 							<path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
 							<path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3" />
+						</svg>
+					{:else if section.icon === "bug"}
+						<svg
+							class="w-4 h-4 flex-shrink-0"
+							fill="none"
+							stroke="currentColor"
+							viewBox="0 0 24 24"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						>
+							<path d="M8 2l1.88 1.88" />
+							<path d="M14.12 3.88L16 2" />
+							<path
+								d="M9 7.13v-1a3.003 3.003 0 116 0v1M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 014-4h4a4 4 0 014 4v3c0 3.3-2.7 6-6 6z"
+							/>
+							<path
+								d="M12 20v-9M6.53 9C4.6 8.8 3 7.1 3 5M6 13H2M3 21c0-2.1 1.7-3.9 3.8-4M20.97 5c0 2.1-1.6 3.8-3.5 4M21 13h-4M21 21c0-2.1-1.7-3.9-3.8-4"
+							/>
 						</svg>
 					{:else if section.icon === "arrow-down"}
 						<svg

@@ -90,4 +90,8 @@ type Client interface {
 		number, first int,
 		after string,
 	) ([]types.TimelineEvent, bool, string, error)
+	// FetchRateLimit retrieves the current GitHub API rate-limit status. This
+	// endpoint does not itself count against the rate limit, so it's safe to
+	// call on demand (e.g. from a diagnostics page).
+	FetchRateLimit(ctx context.Context) (*types.RateLimit, error)
 }

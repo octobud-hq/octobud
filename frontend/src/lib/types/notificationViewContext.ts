@@ -30,7 +30,6 @@ export interface ListViewContext {
 	pageRangeStart: number;
 	pageRangeEnd: number;
 	items: Notification[];
-	isLoading: boolean;
 	selectionEnabled: boolean;
 	individualSelectionDisabled: boolean;
 	detailNotificationId: string | null;

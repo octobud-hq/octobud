@@ -136,6 +136,21 @@ func (mr *MockClientMockRecorder) FetchPullRequestReviews(ctx, owner, repo, numb
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FetchPullRequestReviews", reflect.TypeOf((*MockClient)(nil).FetchPullRequestReviews), ctx, owner, repo, number, perPage, page)
 }
 
+// FetchRateLimit mocks base method.
+func (m *MockClient) FetchRateLimit(ctx context.Context) (*types.RateLimit, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FetchRateLimit", ctx)
+	ret0, _ := ret[0].(*types.RateLimit)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FetchRateLimit indicates an expected call of FetchRateLimit.
+func (mr *MockClientMockRecorder) FetchRateLimit(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FetchRateLimit", reflect.TypeOf((*MockClient)(nil).FetchRateLimit), ctx)
+}
+
 // FetchSubjectRaw mocks base method.
 func (m *MockClient) FetchSubjectRaw(ctx context.Context, subjectURL string) (json.RawMessage, error) {
 	m.ctrl.T.Helper()

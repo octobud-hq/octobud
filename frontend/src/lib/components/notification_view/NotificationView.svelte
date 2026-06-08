@@ -60,7 +60,6 @@
 	export let pageRangeStart: number;
 	export let pageRangeEnd: number;
 	export let items: Notification[];
-	export let isLoading: boolean;
 	export let selectionEnabled: boolean;
 	export let individualSelectionDisabled: boolean;
 	export let detailNotificationId: string | null;
@@ -92,7 +91,6 @@
 			pageRangeStart,
 			pageRangeEnd,
 			items,
-			isLoading,
 			selectionEnabled,
 			individualSelectionDisabled,
 			detailNotificationId,
@@ -125,7 +123,6 @@
 			pageRangeStart,
 			pageRangeEnd,
 			items,
-			isLoading,
 			selectionEnabled,
 			individualSelectionDisabled,
 			detailNotificationId,

@@ -22,6 +22,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"go.uber.org/zap"
 
+	"github.com/octobud-hq/octobud/backend/internal/api/diagnostics"
 	"github.com/octobud-hq/octobud/backend/internal/api/navigation"
 	"github.com/octobud-hq/octobud/backend/internal/api/notifications"
 	"github.com/octobud-hq/octobud/backend/internal/api/oauth"
@@ -64,9 +65,12 @@ type Handler struct {
 	repositoriesH  *repositories.Handler
 	userH          *apiuser.Handler
 	oauthH         *oauth.Handler
+	diagnosticsH   *diagnostics.Handler
 
 	tokenManager          apiuser.TokenManagerInterface
 	navigationBroadcaster *navigation.Broadcaster
+
+	diagnosticsConfig *diagnostics.Config
 }
 
 // HandlerOption configures a Handler
@@ -119,6 +123,20 @@ func WithTokenManager(tokenManager apiuser.TokenManagerInterface) HandlerOption 
 func WithNavigationBroadcaster(broadcaster *navigation.Broadcaster) HandlerOption {
 	return func(h *Handler) {
 		h.navigationBroadcaster = broadcaster
+	}
+}
+
+// WithDiagnostics enables the /api/diagnostics/* routes. The token manager and
+// github client come from the existing handler wiring; the caller only needs
+// to supply version/data/log paths plus the app version.
+func WithDiagnostics(version, dataDir, logDir, logFileName string) HandlerOption {
+	return func(h *Handler) {
+		h.diagnosticsConfig = &diagnostics.Config{
+			Version:     version,
+			DataDir:     dataDir,
+			LogDir:      logDir,
+			LogFileName: logFileName,
+		}
 	}
 }
 
@@ -182,6 +200,19 @@ func NewHandler(store db.Store, opts ...HandlerOption) *Handler {
 	osActionsSvc := osactions.NewService()
 	h.userH = h.userH.WithOSActionsService(osActionsSvc)
 
+	// Diagnostics handler — needs paths from the caller plus the already-wired
+	// token manager and github client. Optional: skipped if WithDiagnostics
+	// wasn't supplied.
+	if h.diagnosticsConfig != nil {
+		cfg := *h.diagnosticsConfig
+		cfg.Logger = logger
+		cfg.GitHubClient = h.githubClient
+		if tm, ok := h.tokenManager.(diagnostics.TokenStatusProvider); ok {
+			cfg.TokenManager = tm
+		}
+		h.diagnosticsH = diagnostics.New(cfg)
+	}
+
 	return h
 }
 
@@ -211,6 +242,11 @@ func (h *Handler) RegisterAllRoutes(r chi.Router) {
 	if h.navigationBroadcaster != nil {
 		navHandler := navigation.NewHandler(h.logger, h.navigationBroadcaster)
 		navHandler.Register(r)
+	}
+
+	// Diagnostics routes (log viewer, github status, bundle for bug reports)
+	if h.diagnosticsH != nil {
+		h.diagnosticsH.Register(r)
 	}
 
 	// All other API routes

@@ -91,7 +91,6 @@
 		pageData,
 		page,
 		quickQuery,
-		isLoading,
 		multiselectMode,
 		selectAllMode,
 		detailOpen,
@@ -1045,7 +1044,6 @@
 	pageRangeStart={$pageRangeStart}
 	pageRangeEnd={$pageRangeEnd}
 	items={$pageData.items}
-	isLoading={$isLoading}
 	selectionEnabled={$selectionEnabled}
 	individualSelectionDisabled={$individualSelectionDisabled}
 	detailNotificationId={$detailNotificationId}

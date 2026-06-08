@@ -5,6 +5,21 @@ All notable changes to Octobud will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.3]
+
+### Added
+
+- **Debugging section** (`Settings → Debugging`): in-app diagnostic tools for troubleshooting and bug reporting
+  - Log viewer with level/search filters and auto-refresh
+  - App info panel showing version, platform, paths, and uptime
+  - GitHub connection status with token health and per-bucket rate-limit usage
+  - "Copy diagnostics" — paste-safe bundle (version, paths, token health) for public bug reports
+  - "Download logs (zip)" — full log files for private channel sharing
+
+### Fixed
+
+- Notification list scroll position is preserved when dismissing a notification instead of jumping back to the top
+
 ## [0.3.2]
 
 ### Added

@@ -26,13 +26,22 @@
 	import SyncOlderNotificationsSection from "$lib/components/settings/SyncOlderNotificationsSection.svelte";
 	import StorageSettingsSection from "$lib/components/settings/StorageSettingsSection.svelte";
 	import UpdateSettingsSection from "$lib/components/settings/UpdateSettingsSection.svelte";
+	import DebuggingSection from "$lib/components/settings/DebuggingSection.svelte";
 	import { registerListShortcuts } from "$lib/keyboard/listShortcuts";
 	import { registerCommand } from "$lib/keyboard/commandRegistry";
 
 	export let data: PageData;
 
 	// Valid section IDs
-	const validSections = ["account", "appearance", "notifications", "rules", "data", "updates"];
+	const validSections = [
+		"account",
+		"appearance",
+		"notifications",
+		"rules",
+		"data",
+		"updates",
+		"debugging",
+	];
 
 	// Active section state
 	let activeSection = "account";
@@ -233,6 +242,10 @@
 			title: "Updates",
 			description: "Configure automatic update checking",
 		},
+		debugging: {
+			title: "Debugging",
+			description: "Logs, GitHub status, and diagnostics for bug reports",
+		},
 	};
 
 	$: currentMeta = sectionMeta[activeSection] || sectionMeta.account;
@@ -267,5 +280,7 @@
 		</div>
 	{:else if activeSection === "updates"}
 		<UpdateSettingsSection />
+	{:else if activeSection === "debugging"}
+		<DebuggingSection />
 	{/if}
 </SettingsView>

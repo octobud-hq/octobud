@@ -101,6 +101,30 @@ type TokenManager struct {
 	healthMu       sync.RWMutex
 	tokenExpiresAt *time.Time
 	tokenInvalid   bool
+
+	// Recovery loop state — used when Initialize fails to load a previously
+	// configured token (typically a transient keychain access failure right
+	// after macOS login). Guarded by recoveryMu.
+	recoveryMu     sync.Mutex
+	recoveryCancel context.CancelFunc
+	// recoveryGen increments each time a recovery goroutine is started or
+	// canceled. The goroutine reads its generation at launch and only clears
+	// recoveryCancel on exit if the current generation still matches —
+	// preventing a stale defer from clobbering a newer goroutine's state.
+	recoveryGen int
+	// recoveryBackoff is the schedule of delays between retry attempts.
+	// Overridable in tests. The final entry repeats indefinitely.
+	recoveryBackoff []time.Duration
+}
+
+// defaultRecoveryBackoff is the schedule used in production: retry quickly at
+// first (keychain often becomes accessible within seconds of login) and then
+// back off so we don't spam the keychain or logs if the failure is persistent.
+var defaultRecoveryBackoff = []time.Duration{
+	5 * time.Second,
+	30 * time.Second,
+	2 * time.Minute,
+	10 * time.Minute,
 }
 
 // NewTokenManager creates a new TokenManager
@@ -122,7 +146,8 @@ func NewTokenManager(
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second,
 		},
-		currentSource: TokenSourceNone,
+		currentSource:   TokenSourceNone,
+		recoveryBackoff: defaultRecoveryBackoff,
 	}
 	githubClient.SetTokenObserver(m.observeResponse)
 	return m
@@ -241,6 +266,124 @@ func (m *TokenManager) Initialize(ctx context.Context) error {
 	return nil
 }
 
+// StartKeychainRecovery launches a background goroutine that retries
+// Initialize() on a backoff schedule when the app started with no loaded
+// token but the user was previously connected. This handles the case where
+// the macOS keychain is briefly inaccessible right after a system restart:
+// without this, sync runs with an empty token, GitHub returns 401, and the
+// user has to quit and relaunch the app to recover.
+//
+// No-op when the token loaded successfully, when there's no record of a
+// prior connection (fresh install), or when running on a platform without
+// keychain support (only macOS has the brief-inaccessibility issue this
+// addresses). Safe to call multiple times — concurrent calls beyond the
+// first are ignored.
+func (m *TokenManager) StartKeychainRecovery(ctx context.Context) {
+	if runtime.GOOS != darwinOS {
+		return
+	}
+
+	m.mu.RLock()
+	source := m.currentSource
+	m.mu.RUnlock()
+	if source != TokenSourceNone {
+		return
+	}
+
+	user, err := m.store.GetUser(ctx)
+	if err != nil || !user.GithubUsername.Valid || user.GithubUsername.String == "" {
+		return
+	}
+
+	m.recoveryMu.Lock()
+	if m.recoveryCancel != nil {
+		m.recoveryMu.Unlock()
+		return
+	}
+	recoveryCtx, cancel := context.WithCancel(ctx)
+	m.recoveryCancel = cancel
+	m.recoveryGen++
+	gen := m.recoveryGen
+	m.recoveryMu.Unlock()
+
+	m.logger.Info(
+		"token did not load on startup; starting keychain recovery loop",
+		zap.String("github_username", user.GithubUsername.String),
+	)
+	go m.runRecoveryLoop(recoveryCtx, gen)
+}
+
+// runRecoveryLoop retries Initialize on the configured backoff until the
+// token loads or the context is canceled. The final backoff entry repeats
+// indefinitely — a keychain that's failing now may become accessible later
+// (e.g. user finally taps through a Touch ID prompt).
+func (m *TokenManager) runRecoveryLoop(ctx context.Context, gen int) {
+	defer func() {
+		m.recoveryMu.Lock()
+		if m.recoveryGen == gen {
+			m.recoveryCancel = nil
+		}
+		m.recoveryMu.Unlock()
+	}()
+
+	if len(m.recoveryBackoff) == 0 {
+		return
+	}
+
+	for attempt := 0; ; attempt++ {
+		delay := m.recoveryBackoff[len(m.recoveryBackoff)-1]
+		if attempt < len(m.recoveryBackoff) {
+			delay = m.recoveryBackoff[attempt]
+		}
+
+		timer := time.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		case <-timer.C:
+		}
+
+		if err := m.Initialize(ctx); err != nil {
+			m.logger.Warn(
+				"keychain recovery attempt failed",
+				zap.Int("attempt", attempt+1),
+				zap.Error(err),
+			)
+			continue
+		}
+
+		m.mu.RLock()
+		source := m.currentSource
+		username := m.githubUsername
+		m.mu.RUnlock()
+		if source != TokenSourceNone {
+			m.logger.Info(
+				"GitHub token recovered from keychain",
+				zap.Int("attempt", attempt+1),
+				zap.String("source", string(source)),
+				zap.String("github_username", username),
+			)
+			return
+		}
+	}
+}
+
+// stopRecovery cancels any in-flight recovery loop. Called when the user
+// takes explicit action (set/clear token) — at that point the loop is
+// either redundant (we just got a working token) or moot (user cleared).
+func (m *TokenManager) stopRecovery() {
+	m.recoveryMu.Lock()
+	if m.recoveryCancel != nil {
+		m.recoveryCancel()
+		m.recoveryCancel = nil
+		// Bump the generation so the canceled goroutine's defer becomes a
+		// no-op — protects against it clobbering a future loop's state.
+		m.recoveryGen++
+	}
+	m.recoveryMu.Unlock()
+}
+
 // GetStatus returns the current GitHub connection status
 func (m *TokenManager) GetStatus() Status {
 	m.mu.RLock()
@@ -350,6 +493,8 @@ func (m *TokenManager) IsConnected() bool {
 // SetToken validates, encrypts, and stores a new GitHub token (PAT).
 // Returns the GitHub username associated with the token.
 func (m *TokenManager) SetToken(ctx context.Context, token string) (string, error) {
+	m.stopRecovery()
+
 	token = strings.TrimSpace(token)
 	if token == "" {
 		return "", fmt.Errorf("token cannot be empty")
@@ -436,6 +581,8 @@ func (m *TokenManager) SetToken(ctx context.Context, token string) (string, erro
 // SetTokenFromOAuth validates, encrypts, and stores a token from OAuth flow.
 // Returns the GitHub username associated with the token.
 func (m *TokenManager) SetTokenFromOAuth(ctx context.Context, token string) (string, error) {
+	m.stopRecovery()
+
 	token = strings.TrimSpace(token)
 	if token == "" {
 		return "", fmt.Errorf("token cannot be empty")
@@ -523,6 +670,8 @@ func (m *TokenManager) SetTokenFromOAuth(ctx context.Context, token string) (str
 
 // ClearToken removes the stored token.
 func (m *TokenManager) ClearToken(ctx context.Context) error {
+	m.stopRecovery()
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 

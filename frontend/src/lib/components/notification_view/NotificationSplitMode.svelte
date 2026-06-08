@@ -43,7 +43,6 @@
 	$: pageRangeStart = context.listView.pageRangeStart;
 	$: pageRangeEnd = context.listView.pageRangeEnd;
 	$: items = context.listView.items;
-	$: isLoading = context.listView.isLoading;
 	$: selectionEnabled = context.listView.selectionEnabled;
 	$: individualSelectionDisabled = context.listView.individualSelectionDisabled;
 	$: detailNotificationId = context.listView.detailNotificationId;
@@ -77,7 +76,6 @@
 			{pageRangeStart}
 			{pageRangeEnd}
 			{items}
-			{isLoading}
 			{selectionEnabled}
 			{individualSelectionDisabled}
 			{detailNotificationId}

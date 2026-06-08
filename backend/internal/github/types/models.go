@@ -207,6 +207,23 @@ type PullRequestComment struct {
 	HTMLURL             string     `json:"html_url"`
 }
 
+// RateLimitBucket represents the rate-limit state for a single GitHub API
+// resource bucket (core, search, graphql, etc.).
+type RateLimitBucket struct {
+	Limit     int   `json:"limit"`
+	Used      int   `json:"used"`
+	Remaining int   `json:"remaining"`
+	Reset     int64 `json:"reset"` // Unix timestamp (seconds)
+}
+
+// RateLimit mirrors GitHub's GET /rate_limit response. Resources is intentionally
+// a map so newly-introduced buckets (e.g. code_search) flow through without code
+// changes.
+type RateLimit struct {
+	Resources map[string]RateLimitBucket `json:"resources"`
+	Rate      RateLimitBucket            `json:"rate"`
+}
+
 // DiscussionReplyData represents a reply to a discussion comment.
 type DiscussionReplyData struct {
 	ID        string

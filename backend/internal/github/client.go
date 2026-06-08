@@ -735,6 +735,49 @@ func (c *clientImpl) FetchPRCommits(
 	return commits, nil
 }
 
+// FetchRateLimit retrieves the current GitHub API rate-limit status. GitHub's
+// /rate_limit endpoint does not itself count against the rate limit, so this is
+// safe to call on demand. Requires an authenticated token.
+func (c *clientImpl) FetchRateLimit(ctx context.Context) (*types.RateLimit, error) {
+	if c.token == "" {
+		return nil, fmt.Errorf("github: no token configured")
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "GET", c.baseURL+"/rate_limit", http.NoBody)
+	if err != nil {
+		return nil, fmt.Errorf("github: create rate limit request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("github: fetch rate limit: %w", err)
+	}
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			_ = closeErr
+		}
+	}()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("github: read rate limit body: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, newAPIError(resp.StatusCode, resp.Header, body)
+	}
+
+	var rl types.RateLimit
+	if err := json.Unmarshal(body, &rl); err != nil {
+		return nil, fmt.Errorf("github: unmarshal rate limit: %w", err)
+	}
+	return &rl, nil
+}
+
 // GraphQLRequest represents a GraphQL request payload.
 type GraphQLRequest struct {
 	Query     string                 `json:"query"`

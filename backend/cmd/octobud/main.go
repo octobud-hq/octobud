@@ -253,6 +253,12 @@ func runServer(cfg appConfig, trayApp *tray.Tray, logWriter *lumberjack.Logger) 
 		log.Printf("Warning: Failed to initialize GitHub token: %v", initErr)
 	}
 
+	// If the token didn't load but the user was previously connected (e.g.
+	// keychain wasn't accessible right after a system restart), retry in the
+	// background instead of leaving sync to spin on 401s until the user quits
+	// and relaunches the app.
+	tokenManager.StartKeychainRecovery(ctx)
+
 	// Check if token is configured
 	tokenConfigured := tokenManager.IsConnected()
 
@@ -305,11 +311,13 @@ func runServer(cfg appConfig, trayApp *tray.Tray, logWriter *lumberjack.Logger) 
 
 	// Configure API handler
 	// Always set up sync service - OAuth can configure the token later
+	diagnosticsLogDir := filepath.Join(cfg.dataDir, "logs")
 	opts := []api.HandlerOption{
 		api.WithScheduler(scheduler),
 		api.WithTokenManager(tokenManager),
 		api.WithSyncService(store, githubClient, logger),
 		api.WithNavigationBroadcaster(navBroadcaster),
+		api.WithDiagnostics(version.Get(), cfg.dataDir, diagnosticsLogDir, "octobud.log"),
 	}
 	if tokenConfigured {
 		status := tokenManager.GetStatus()

@@ -17,7 +17,7 @@
 	import NotificationRow from "./NotificationRow.svelte";
 	import type { Notification } from "$lib/api/types";
 
-	import { onMount, onDestroy } from "svelte";
+	import { onMount } from "svelte";
 
 	export let hasActiveFilters: boolean;
 	export let totalCount: number;
@@ -25,7 +25,6 @@
 	export let pageRangeEnd: number;
 
 	export let items: Notification[];
-	export let isLoading: boolean;
 	export let selectionEnabled: boolean;
 	export let individualSelectionDisabled: boolean = false;
 	export let detailNotificationId: string | null = null; // ID of notification currently open in detail view
@@ -68,37 +67,6 @@
 	export function resetScrollPosition() {
 		setScrollPosition(0);
 	}
-
-	let delayedLoading = false;
-	let loadingDelayTimer: number | null = null;
-
-	// Delay showing loading state by 200ms to avoid jank on quick loads
-	const LOADING_DELAY_MS = 200;
-
-	$: {
-		if (isLoading) {
-			// Start a timer to show loading state after delay
-			if (loadingDelayTimer === null) {
-				loadingDelayTimer = window.setTimeout(() => {
-					delayedLoading = true;
-					loadingDelayTimer = null;
-				}, LOADING_DELAY_MS);
-			}
-		} else {
-			// Clear the timer if loading completes before delay
-			if (loadingDelayTimer !== null) {
-				window.clearTimeout(loadingDelayTimer);
-				loadingDelayTimer = null;
-			}
-			delayedLoading = false;
-		}
-	}
-
-	onDestroy(() => {
-		if (loadingDelayTimer !== null) {
-			window.clearTimeout(loadingDelayTimer);
-		}
-	});
 </script>
 
 <section
@@ -150,7 +118,7 @@
 			</div>
 		{/if}
 
-		{#if items.length === 0 && !delayedLoading && !apiError}
+		{#if items.length === 0 && !apiError}
 			<!-- Empty state with vertical centering -->
 			<div class="flex flex-col h-full">
 				<!-- Page range indicator -->
@@ -196,32 +164,21 @@
 			</div>
 
 			<div class="space-y-2.5 pb-4">
-				{#if delayedLoading}
-					<div class="space-y-2.5">
-						{#each Array(3) as _, i (i)}
-							<div
-								class="h-24 animate-pulse rounded-2xl bg-gray-200 dark:bg-gray-800/60"
-								aria-hidden="true"
-							></div>
-						{/each}
-					</div>
-				{:else}
-					{#each items as notification, index (notification.id)}
-						{@const notificationKey = notification.githubId || notification.id}
-						{@const selected =
-							selectionMap.has(notificationKey) && selectionMap.get(notificationKey) === true}
-						{@const isDetailOpen =
-							detailNotificationId !== null &&
-							detailNotificationId === (notification.githubId ?? notification.id)}
-						<NotificationRow
-							{notification}
-							{selectionEnabled}
-							selectionDisabled={individualSelectionDisabled}
-							{selected}
-							{isDetailOpen}
-						/>
-					{/each}
-				{/if}
+				{#each items as notification (notification.id)}
+					{@const notificationKey = notification.githubId || notification.id}
+					{@const selected =
+						selectionMap.has(notificationKey) && selectionMap.get(notificationKey) === true}
+					{@const isDetailOpen =
+						detailNotificationId !== null &&
+						detailNotificationId === (notification.githubId ?? notification.id)}
+					<NotificationRow
+						{notification}
+						{selectionEnabled}
+						selectionDisabled={individualSelectionDisabled}
+						{selected}
+						{isDetailOpen}
+					/>
+				{/each}
 			</div>
 		{/if}
 	</div>
