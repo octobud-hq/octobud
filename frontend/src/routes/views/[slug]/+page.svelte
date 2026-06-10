@@ -164,9 +164,22 @@
 		timelineController.actions.refreshTimeline(githubId);
 	});
 
+	// Register a handler so scrollListToTop (e.g. desktop-notification click) can
+	// reach into the visible list and scroll it. The pageController doesn't have
+	// a ref to NotificationView itself.
+	pageController.actions.registerListScrollHandler((scrollTop: number) => {
+		notificationViewComponent?.setScrollPosition(scrollTop);
+	});
+
 	// Sync from parent data prop and reset state
 	$: if (data !== lastData) {
 		const viewChanged = lastData?.selectedViewSlug !== data.selectedViewSlug;
+		const previousPageNumber = lastData?.initialPageNumber ?? lastData?.initialPage?.page ?? null;
+		const nextPageNumber = data.initialPageNumber ?? data.initialPage?.page ?? null;
+		const pageChanged =
+			previousPageNumber !== null &&
+			nextPageNumber !== null &&
+			previousPageNumber !== nextPageNumber;
 		lastData = data;
 		// Sync page controller with fresh data
 		pageController.actions.syncFromData(data);
@@ -178,9 +191,14 @@
 
 		// Reset keyboard focus when navigating to a new view
 		keyboardFocusIndex.set(null);
-		// Reset saved scroll position only when changing views, not when opening/closing detail
-		if (viewChanged) {
-			pageController.stores.savedListScrollPosition.set(0);
+		// Reset scroll position on view change OR page change so each new page
+		// starts at the top instead of inheriting the prior page's scroll.
+		// scrollListToTop() also resets savedListScrollPosition, so SingleMode
+		// returns to the top when the detail is closed. Cross-page keyboard nav
+		// (j/k at page edges) later calls focusAt(last/first), which scrolls
+		// the focused row back into view on top of this.
+		if (viewChanged || pageChanged) {
+			pageController.actions.scrollListToTop();
 		}
 
 		// Execute any pending focus action from cross-page keyboard navigation

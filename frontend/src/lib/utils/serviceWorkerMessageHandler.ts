@@ -84,9 +84,18 @@ export function setupServiceWorkerHandlers(params: ServiceWorkerHandlerParams): 
 					keepFocus: true,
 					replaceState: true,
 					invalidateAll: false,
-				}).catch((error) => {
-					console.error("[App] Failed to navigate to notification:", error);
-				});
+				})
+					.then(() => {
+						// The notification may be anywhere on page 1 (or not on the
+						// current page at all if filters/state place it elsewhere).
+						// ensureNotificationVisible scrolls the row into view only if
+						// it's on the current page and we're in SplitMode; otherwise
+						// it leaves the list scroll alone.
+						getPageController()?.actions.ensureNotificationVisible(notificationIdStr);
+					})
+					.catch((error) => {
+						console.error("[App] Failed to navigate to notification:", error);
+					});
 			}
 		}
 	};

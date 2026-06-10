@@ -31,4 +31,15 @@ export interface ViewActions {
 	handleSyncNewNotifications: (updatedGithubIds?: string[]) => Promise<void>;
 	/** Register a callback invoked when the currently-open detail notification is refreshed by a sync. */
 	registerTimelineRefreshHandler: (handler: (githubId: string) => void) => void;
+	/** Register a callback invoked to scroll the visible list to a given scrollTop. */
+	registerListScrollHandler: (handler: (scrollTop: number) => void) => void;
+	/** Scroll the list back to the top — used on page change to start each new page at the top. */
+	scrollListToTop: () => void;
+	/**
+	 * Scroll the list just enough to show a specific notification — used for the
+	 * desktop-notification-click flow where the target may be at any index on
+	 * the current page (or not on it at all). No-op if the notification isn't in
+	 * the current pageData, or if not in SplitMode (the list isn't visible).
+	 */
+	ensureNotificationVisible: (notificationId: string) => void;
 }

@@ -76,23 +76,35 @@ export function createDetailActionController(
 		// Open detail - index is now derived automatically
 		detailStore.openDetail(notificationId);
 
-		// Wait for reactive updates to settle
-		await tick();
-
-		// Update URL with ?id= param for deep linking
-		// SingleMode: push new history entry so back button works
-		// SplitMode: replace state to avoid cluttering history
+		// Update URL with ?id= param for deep linking. We intentionally do NOT
+		// await goto() — focus + detail open are already applied to the stores
+		// synchronously above, so awaiting goto would just hold the click /
+		// keyboard handler in microtask-land and delay the browser paint. Fire
+		// and forget; the URL reactive in +page.svelte short-circuits when the
+		// detail already matches, so this won't fight the eager state update.
+		// SingleMode: push new history entry so back button works.
+		// SplitMode: replace state to avoid cluttering history.
 		if (typeof window !== "undefined" && options.navigateToUrl) {
 			const url = new URL(window.location.href);
 			url.searchParams.set("id", notificationId);
-			await options.navigateToUrl(url.pathname + url.search, {
-				state: getCurrentNavState(),
-				replace: isSplitModeMode, // Push for SingleMode, replace for SplitMode
-			});
+			void options
+				.navigateToUrl(url.pathname + url.search, {
+					state: getCurrentNavState(),
+					replace: isSplitModeMode,
+				})
+				.catch((err) => {
+					console.error("Failed to update URL on detail open", err);
+				});
 		} else {
 			// Fallback if navigateToUrl not available (e.g., tests)
 			openDetail(notificationId);
 		}
+
+		// Yield one microtask so callers that await this function still get
+		// the post-reactive-flush ordering guarantee. The click handler doesn't
+		// await this function, so it isn't slowed down — only the cross-detail
+		// keyboard nav callers (which currently do nothing after the await) wait.
+		await tick();
 	}
 
 	async function handleCloseInlineDetail(opts: { clearFocus?: boolean } = {}): Promise<void> {

@@ -78,6 +78,50 @@ export function createViewActionController(
 		timelineRefreshHandler = handler;
 	}
 
+	let listScrollHandler: ((scrollTop: number) => void) | null = null;
+
+	function registerListScrollHandler(handler: (scrollTop: number) => void): void {
+		listScrollHandler = handler;
+	}
+
+	function scrollListToTop(): void {
+		// Reset saved scroll position so SingleMode returns to the top of the list
+		// when the detail is closed, and actively scroll the visible list (SplitMode).
+		uiStore.savedListScrollPosition.set(0);
+		listScrollHandler?.(0);
+	}
+
+	function ensureNotificationVisible(notificationId: string): void {
+		// Scroll the list just enough to show this notification — used for the
+		// desktop-notification-click flow where the target may be anywhere on
+		// page 1 (or not on the current page at all). Unlike scrollListToTop,
+		// we deliberately do NOT touch savedListScrollPosition: if the user is
+		// in SingleMode and closes the detail, they should return to wherever
+		// they were rather than have the list jump.
+		const pageData = get(notificationStore.pageData);
+		const index = pageData.items.findIndex((n) => (n.githubId ?? n.id) === notificationId);
+
+		if (index === -1) {
+			// Notification isn't on the current page (e.g., on another page or
+			// filtered out). The detail still opens, but the list shows other
+			// items — leave its scroll alone.
+			return;
+		}
+
+		const isSplitMode = get(uiStore.splitModeEnabled);
+		if (!isSplitMode) {
+			// SingleMode: list is hidden behind the open detail, so scrolling
+			// it has no visible effect. Preserving savedListScrollPosition is
+			// already handled by us not setting it.
+			return;
+		}
+
+		// SplitMode: list is visible. focusAt triggers the row's existing
+		// scrollIntoViewMinimal via pendingFocusIndex (and DOM-focuses the
+		// row, mirroring click-to-open behavior).
+		keyboardStore.focusAt(index);
+	}
+
 	async function refresh(): Promise<void> {
 		return sharedHelpers.refresh();
 	}
@@ -282,8 +326,25 @@ export function createViewActionController(
 				? refreshedItems.findIndex((n) => (n.githubId ?? n.id) === focusedNotificationId)
 				: -1;
 
-		// Restore keyboard focus if the notification is still on the page
-		if (refreshedFocusIndex !== -1) {
+		// If a desktop-notification click landed mid-refresh, the detail will have
+		// switched to a different notification while we were awaiting. In that case
+		// the keyboard focus should follow the detail rather than snap back to the
+		// previously focused row — otherwise the list shows two focus indicators
+		// (detail-open on the new row, keyboard-focus on the old row).
+		const latestDetailId = get(detailStore.detailNotificationId);
+		const detailChangedDuringRefresh =
+			latestDetailId !== null && latestDetailId !== currentDetailId;
+
+		if (detailChangedDuringRefresh) {
+			const newDetailIndex = refreshedItems.findIndex(
+				(n) => (n.githubId ?? n.id) === latestDetailId
+			);
+			if (newDetailIndex !== -1) {
+				keyboardStore.setFocusIndex(newDetailIndex);
+			} else {
+				keyboardStore.resetFocus();
+			}
+		} else if (refreshedFocusIndex !== -1) {
 			keyboardStore.setFocusIndex(refreshedFocusIndex);
 		} else if (focusedNotificationId !== null) {
 			keyboardStore.resetFocus();
@@ -309,5 +370,8 @@ export function createViewActionController(
 		navigateToPreviousView,
 		handleSyncNewNotifications,
 		registerTimelineRefreshHandler,
+		registerListScrollHandler,
+		scrollListToTop,
+		ensureNotificationVisible,
 	};
 }
