@@ -22,7 +22,7 @@
 	import { onMount, onDestroy, tick, getContext } from "svelte";
 	import { get } from "svelte/store";
 	import { SvelteSet } from "svelte/reactivity";
-	import { goto } from "$app/navigation";
+	import { goto, afterNavigate } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import { page as pageStore } from "$app/stores";
 	import type { PageData } from "./$types";
@@ -107,6 +107,7 @@
 		listPaneWidth,
 		sidebarCollapsed,
 		savedListScrollPosition,
+		tags,
 	} = pageController.stores;
 
 	const {
@@ -140,6 +141,20 @@
 	// notifications or closes detail, so a slow GitHub response doesn't tie up
 	// a browser connection slot and stall subsequent navigation requests.
 	let detailFetchController: AbortController | null = null;
+
+	// Debounce the refresh-subject (GitHub-backed) call so flying through
+	// notifications doesn't spawn a refresh-from-GitHub per press. The cached
+	// detail fetch is still immediate; only the expensive subject refresh
+	// waits for the user to settle. Cleared when detail changes/closes/unmounts.
+	let refreshSubjectTimer: ReturnType<typeof setTimeout> | null = null;
+	const REFRESH_SUBJECT_DEBOUNCE_MS = 250;
+
+	// Split-mode only: debounce the detail fetch so rapid j/k navigation through
+	// a list (where each press already shows cache-first content) doesn't fire a
+	// network call per press. Single mode and URL-loads bypass this and fetch
+	// immediately because they have no cached content to show.
+	let detailFetchTimer: ReturnType<typeof setTimeout> | null = null;
+	const DETAIL_FETCH_DEBOUNCE_MS = 200;
 
 	function isAbortError(err: unknown): boolean {
 		return err instanceof DOMException && err.name === "AbortError";
@@ -189,8 +204,15 @@
 			pageController.actions.clearSelection();
 		}
 
-		// Reset keyboard focus when navigating to a new view
-		keyboardFocusIndex.set(null);
+		// Reset keyboard focus on view OR page change. Detail-only data updates
+		// (e.g. rapid j/k cross-detail nav, polling refreshes, ?id-only gotos)
+		// must NOT reset focus — doing so caused rapid keypresses to feel
+		// "swallowed" because focus would snap back between presses. The
+		// separate clearFocusIfNeeded reactive below clamps out-of-range
+		// indices, so safety is preserved.
+		if (viewChanged || pageChanged) {
+			keyboardFocusIndex.set(null);
+		}
 		// Reset scroll position on view change OR page change so each new page
 		// starts at the top instead of inheriting the prior page's scroll.
 		// scrollListToTop() also resets savedListScrollPosition, so SingleMode
@@ -213,36 +235,56 @@
 	}
 
 	// ============================================================================
-	// REACTIVE STATEMENTS - URL & Navigation
+	// URL → DETAIL SYNC
 	// ============================================================================
+	//
+	// We need to react to URL state from THREE sources:
+	//   1. Initial mount / full navigation (view change, pagination, goto from
+	//      link / form / desktop notification): afterNavigate fires.
+	//   2. Browser back/forward across SHALLOW history entries (pushState'd
+	//      detail opens): afterNavigate does NOT fire here — SvelteKit's
+	//      popstate handler returns early for shallow entries. But it DOES call
+	//      update_url(), which notifies $pageStore. So a reactive on $pageStore
+	//      catches these cases.
+	//   3. Shallow pushState (in-app click / j/k detail open): neither fires.
+	//      That's correct — handleOpenInlineDetail already updated the stores
+	//      synchronously; no URL→store sync needed.
+	//
+	// Crucially, the reactive depends ONLY on $pageStore — NOT on
+	// $detailNotificationId. If it depended on the latter, shallow pushState
+	// (which updates detailNotificationId but leaves $page.url stale) would
+	// re-fire it and reconcile against the stale URL, breaking detail open.
+	//
+	// The function is naturally idempotent (Svelte writables don't notify when
+	// set to the same value, and openDetail/closeDetail compare to current
+	// state), so we don't dedupe across signals — letting all three fire is
+	// safe and self-correcting. An earlier dedupe attempt by `lastReconciledUrlId`
+	// caused bugs because shallow pushState never updates the URL it tracked,
+	// so its "last seen" state drifted from the actual URL/store state.
 
-	// Reactive statement to open detail view based on URL ?id= param
-	$: {
-		const urlIdParam = $pageStore.url.searchParams.get("id");
-		const currentDetailId = $detailNotificationId;
+	function reconcileDetailFromUrl(urlIdParam: string | null): void {
+		const currentDetailId = get(detailNotificationId);
+		const itemsSnapshot = get(pageData).items;
 
-		// If URL has ?id= but detail is not open or different notification
+		// URL has ?id= and store doesn't match — open the right detail
 		if (urlIdParam && urlIdParam !== currentDetailId) {
 			let notification;
 			let notificationIndex = -1;
 
-			// Handle special markers for cross-page navigation
-			if (urlIdParam === "__first__" && $pageData.items.length > 0) {
-				notification = $pageData.items[0];
+			if (urlIdParam === "__first__" && itemsSnapshot.length > 0) {
+				notification = itemsSnapshot[0];
 				notificationIndex = 0;
-			} else if (urlIdParam === "__last__" && $pageData.items.length > 0) {
-				notification = $pageData.items[$pageData.items.length - 1];
-				notificationIndex = $pageData.items.length - 1;
+			} else if (urlIdParam === "__last__" && itemsSnapshot.length > 0) {
+				notification = itemsSnapshot[itemsSnapshot.length - 1];
+				notificationIndex = itemsSnapshot.length - 1;
 			} else {
-				// Find notification in current page
-				// Convert both sides to strings for comparison
 				const urlIdParamStr = String(urlIdParam);
-				notificationIndex = $pageData.items.findIndex((n) => {
+				notificationIndex = itemsSnapshot.findIndex((n) => {
 					const itemId = String(n.githubId ?? n.id);
 					return itemId === urlIdParamStr;
 				});
 				if (notificationIndex !== -1) {
-					notification = $pageData.items[notificationIndex];
+					notification = itemsSnapshot[notificationIndex];
 				}
 			}
 
@@ -260,28 +302,59 @@
 					});
 				}
 
-				// Open detail without modifying URL (URL already correct or being fixed)
 				pageController.actions.openDetail(actualId);
 
-				// Sync keyboard focus index to match the selected notification
-				// Use setFocusIndex (not focusNotificationAt) to avoid triggering scroll
-				// The DOM focus and scroll are handled separately by click handlers or keyboard nav
 				if (notificationIndex !== -1) {
 					pageController.actions.setFocusIndex(notificationIndex);
 				}
-			} else if (urlIdParam && urlIdParam !== "__first__" && urlIdParam !== "__last__") {
-				// Notification not found in current pageData - still open it by ID
-				// The detail fetching logic will load it from the API
-				const urlIdParamStr = String(urlIdParam);
-				pageController.actions.openDetail(urlIdParamStr);
+			} else if (urlIdParam !== "__first__" && urlIdParam !== "__last__") {
+				// Notification not on the current page — open by ID; the detail
+				// fetch reactive will load it from the API.
+				pageController.actions.openDetail(String(urlIdParam));
 			}
+			return;
 		}
 
-		// If URL has no ?id= but detail is open, close it
-		if (!urlIdParam && $detailOpen) {
+		// URL has no ?id= and detail is open — close it. This handles view
+		// changes, pagination that strips ?id=, and browser back-to-list.
+		if (!urlIdParam && get(detailOpen)) {
 			pageController.actions.closeDetail();
 		}
 	}
+
+	// Source 1: afterNavigate for real navigations (initial enter, goto,
+	// popstate across real-nav boundaries, link, form). We read from
+	// window.location rather than $pageStore because under SvelteKit 2 +
+	// Svelte 5, the legacy $app/stores `page` only gets re-notified by
+	// update_url() (shallow popstate); during a full navigation it's not
+	// guaranteed to reflect the current URL by the time afterNavigate fires.
+	// window.location is always up-to-date with the browser's URL bar.
+	afterNavigate(() => {
+		if (typeof window === "undefined") return;
+		reconcileDetailFromUrl(new URL(window.location.href).searchParams.get("id"));
+	});
+
+	// Source 2: direct popstate listener — handles browser back/forward
+	// through shallow (pushState'd) detail history. SvelteKit's popstate
+	// handler returns early for shallow entries without firing afterNavigate,
+	// so we need our own listener. We read window.location directly rather
+	// than the $pageStore because SvelteKit's handler runs first (registered
+	// in start()) so update_url has already completed by the time we read.
+	//
+	// We do NOT use a `$: reconcileDetailFromUrl($pageStore.url...)` reactive
+	// as a third backup. Under Svelte 5 compat mode, that block re-runs more
+	// eagerly than expected — e.g., when handleOpenInlineDetail updates the
+	// detail store (which doesn't change $page.url because shallow pushState
+	// leaves it stale). The reactive would then call reconcileDetailFromUrl
+	// with a null urlIdParam against an open detail and incorrectly close it.
+	onMount(() => {
+		if (typeof window === "undefined") return;
+		const handlePopstate = () => {
+			reconcileDetailFromUrl(new URL(window.location.href).searchParams.get("id"));
+		};
+		window.addEventListener("popstate", handlePopstate);
+		return () => window.removeEventListener("popstate", handlePopstate);
+	});
 
 	// ============================================================================
 	// REACTIVE STATEMENTS - Detail Data Fetching
@@ -304,151 +377,226 @@
 		detailFetchController = new AbortController();
 		const detailSignal = detailFetchController.signal;
 
+		// Cancel any pending debounced refresh-subject call for the previously
+		// selected notification — if the user navigated before it fired, we
+		// don't want to fire it now against the wrong (or no longer current) id.
+		if (refreshSubjectTimer !== null) {
+			clearTimeout(refreshSubjectTimer);
+			refreshSubjectTimer = null;
+		}
+
+		// Cancel any pending debounced detail-fetch from the previously selected
+		// notification (cache-first path only). The in-flight fetch (if any) is
+		// already canceled via the AbortController above; this clears the timer
+		// window before the fetch has even started.
+		if (detailFetchTimer !== null) {
+			clearTimeout(detailFetchTimer);
+			detailFetchTimer = null;
+		}
+
 		// Find the notification in the current page (read once, not reactive)
 		const pageDataSnapshot = get(pageData);
 		const notification = pageDataSnapshot.items.find(
 			(n) => (n.githubId ?? n.id) === notificationId
 		);
 
-		// Start loading state
-		detailLoading.set(true);
-		// Start refreshing in background (no loading skeleton, just refresh spinner)
+		const isSplitMode = get(splitModeEnabled);
+		// Cache-first display: in split mode, when the notification is on the
+		// current page with a parseable subjectRaw, render immediately from the
+		// list cache and debounce the network fetch behind it. Single mode and
+		// URL-loads (no cached entry) fall back to the loading skeleton + an
+		// immediate fetch because they have nothing else to show.
+		const canCacheFirst = isSplitMode && !!notification && !!notification.subjectRaw;
+
+		if (canCacheFirst && notification) {
+			currentDetail.set({
+				notification,
+				subject: parseSubjectSummary(notification.subjectRaw) ?? null,
+			});
+			detailLoading.set(false);
+		} else {
+			// Start loading state — no cached content to show yet
+			detailLoading.set(true);
+		}
+		// Refresh-subject spinner shows until the GitHub-backed refresh returns
+		// (or is skipped for CI activities/missing githubId).
 		detailIsRefreshing.set(true);
 		detailShowingStaleData.set(false);
 		detailHasPermissionError.set(false);
 
 		const currentQuery = get(quickQuery);
 
-		// Step 1: Fetch detail immediately (fast lookup)
-		// This will populate the detail state with subject from the detail fetch
-		// Pass the current query so the backend can calculate correct actionHints
-		// If notification is in pageData, use it as fallback; otherwise fetch by ID only
-		const detailPromise = fetchNotificationDetail(notificationId, {
-			fallback: notification || undefined,
-			query: currentQuery,
-			signal: detailSignal,
-		})
-			.then((detail) => {
-				// Only update if this is still the notification we're viewing
-				if (get(detailNotificationId) === notificationId) {
-					// Update the notification in the store with actionHints from backend
-					// Backend has computed correct actionHints with query context
-					pageController.actions.updateNotification(detail.notification);
-
-					// Populate detail state with subject from detail fetch
-					currentDetail.set(detail);
-					detailLoading.set(false);
-					detailShowingStaleData.set(false);
-
-					// SINGLE MODE: Mark as read when detail loads
-					const isSplitMode = get(splitModeEnabled);
-					if (!isSplitMode) {
-						pageController.actions.softMarkRead(detail.notification);
-					}
-				}
-				return detail;
-			})
-			.catch((error) => {
-				// Aborted when user navigated away — don't show an error state.
-				if (isAbortError(error)) return null;
-				console.error("Failed to load notification detail:", error);
-				// Show stale data indicator
-				if (get(detailNotificationId) === notificationId) {
-					detailLoading.set(false);
-					detailShowingStaleData.set(true);
-					// Fall back to cached data if we have it, otherwise show error state
-					if (notification) {
-						const cachedDetail: NotificationDetail = {
-							notification,
-							subject: parseSubjectSummary(notification.subjectRaw) ?? null,
-						};
-						currentDetail.set(cachedDetail);
-					}
-				}
-				return null;
-			});
-
-		// Step 2: Kick off refresh subject call concurrently (if we have a githubId from the fetched detail)
-		// Skip refresh for CI activities (workflowrun, checksuite, checkrun) as they don't have refreshable subject data
-		detailPromise.then((detail) => {
-			if (!detail) {
-				// No detail fetched, just clear the refreshing indicator
-				if (get(detailNotificationId) === notificationId) {
+		if (canCacheFirst) {
+			// Debounce the network fetch so rapid j/k navigation in split mode
+			// doesn't spawn a fetch per press — the cached content covers the gap.
+			detailFetchTimer = setTimeout(() => {
+				detailFetchTimer = null;
+				if (get(detailNotificationId) !== notificationId) {
 					detailIsRefreshing.set(false);
+					return;
 				}
-				return;
-			}
-			const githubId = detail.notification.githubId;
-			if (!githubId) {
-				// No githubId, just clear the refreshing indicator
-				if (get(detailNotificationId) === notificationId) {
-					detailIsRefreshing.set(false);
-				}
-				return;
-			}
-			// Skip refresh for CI activities - they don't have refreshable subject data
-			if (checkIsCIActivity(detail.notification.subjectType)) {
-				// Clear refreshing indicator immediately for CI activities
-				if (get(detailNotificationId) === notificationId) {
-					detailIsRefreshing.set(false);
-				}
-				return;
-			}
+				// eslint-disable-next-line svelte/infinite-reactive-loop -- the timer assignments inside doFetchDetail() target refreshSubjectTimer/detailFetchTimer, neither of which is a reactive dep of this $: block (which gates on $detailOpen + $detailNotificationId + lastProcessedNotificationId).
+				doFetchDetail();
+			}, DETAIL_FETCH_DEBOUNCE_MS);
+		} else {
+			// Immediate fetch — single mode, or URL load with no cache to show.
+			doFetchDetail();
+		}
+
+		function doFetchDetail() {
+			// Step 1: Fetch detail (fast lookup)
+			// This will populate the detail state with subject from the detail fetch
 			// Pass the current query so the backend can calculate correct actionHints
-			refreshNotificationSubject(githubId, { query: currentQuery, signal: detailSignal })
-				.then((refreshedNotification) => {
-					// Check if we're still viewing the same notification
+			// If notification is in pageData, use it as fallback; otherwise fetch by ID only
+			const detailPromise = fetchNotificationDetail(notificationId, {
+				fallback: notification || undefined,
+				query: currentQuery,
+				signal: detailSignal,
+			})
+				.then((detail) => {
+					// Only update if this is still the notification we're viewing
 					if (get(detailNotificationId) === notificationId) {
-						// Update the notification - backend has computed correct actionHints with query context
-						pageController.actions.updateNotification(refreshedNotification);
+						// Update the notification in the store with actionHints from backend
+						// Backend has computed correct actionHints with query context
+						pageController.actions.updateNotification(detail.notification);
 
-						// Step 3: When refresh returns, replace the subject in the detail
-						// Parse the refreshed subject from the refreshed notification's subjectRaw
-						const refreshedSubject = parseSubjectSummary(refreshedNotification.subjectRaw);
-
-						// Update the current detail with the refreshed subject
-						const currentDetailValue = get(currentDetail);
-						if (currentDetailValue) {
-							currentDetail.set({
-								...currentDetailValue,
-								subject: refreshedSubject,
-								notification: refreshedNotification,
-							});
-						}
+						// Populate detail state with subject from detail fetch
+						currentDetail.set(detail);
+						detailLoading.set(false);
 						detailShowingStaleData.set(false);
-						detailHasPermissionError.set(false);
-					}
-				})
-				.catch((refreshErr) => {
-					// Aborted when user navigated away — don't surface as error.
-					if (isAbortError(refreshErr)) return;
-					// Check if we're still viewing the same notification
-					if (get(detailNotificationId) === notificationId) {
-						// Check if this is a 403 Forbidden error (permission issue)
-						const errorWithStatus = refreshErr as Error & { status?: number };
-						const statusCode = errorWithStatus?.status;
-						const errorMessage = refreshErr?.message ?? "";
-						const is403Error = statusCode === 403 || errorMessage.includes("403");
 
-						if (is403Error) {
-							detailHasPermissionError.set(true);
-							detailShowingStaleData.set(false);
-						} else {
-							// Only show stale indicator if we have cached subject data
-							if (notification?.subjectRaw) {
-								detailShowingStaleData.set(true);
-							}
-							detailHasPermissionError.set(false);
+						// SINGLE MODE: Mark as read when detail loads
+						if (!isSplitMode) {
+							pageController.actions.softMarkRead(detail.notification);
 						}
 					}
+					return detail;
 				})
-				.finally(() => {
-					// Clear refreshing indicator
+				.catch((error) => {
+					// Aborted when user navigated away — don't show an error state.
+					if (isAbortError(error)) return null;
+					console.error("Failed to load notification detail:", error);
+					// Show stale data indicator
+					if (get(detailNotificationId) === notificationId) {
+						detailLoading.set(false);
+						detailShowingStaleData.set(true);
+						// Fall back to cached data if we have it, otherwise show error state
+						if (notification) {
+							const cachedDetail: NotificationDetail = {
+								notification,
+								subject: parseSubjectSummary(notification.subjectRaw) ?? null,
+							};
+							currentDetail.set(cachedDetail);
+						}
+					}
+					return null;
+				});
+
+			// Step 2: Kick off refresh subject call concurrently (if we have a githubId from the fetched detail)
+			// Skip refresh for CI activities (workflowrun, checksuite, checkrun) as they don't have refreshable subject data
+			detailPromise.then((detail) => {
+				if (!detail) {
+					// No detail fetched, just clear the refreshing indicator
 					if (get(detailNotificationId) === notificationId) {
 						detailIsRefreshing.set(false);
 					}
-				});
-		});
+					return;
+				}
+				const githubId = detail.notification.githubId;
+				if (!githubId) {
+					// No githubId, just clear the refreshing indicator
+					if (get(detailNotificationId) === notificationId) {
+						detailIsRefreshing.set(false);
+					}
+					return;
+				}
+				// Skip refresh for CI activities - they don't have refreshable subject data
+				if (checkIsCIActivity(detail.notification.subjectType)) {
+					// Clear refreshing indicator immediately for CI activities
+					if (get(detailNotificationId) === notificationId) {
+						detailIsRefreshing.set(false);
+					}
+					return;
+				}
+
+				// Debounce the GitHub-backed refresh so rapid detail nav (j/k or
+				// clicks) doesn't fire one network call per press. Cleared at the
+				// top of this reactive when detailNotificationId changes again, in
+				// the close branch below, and in onDestroy.
+				// eslint-disable-next-line svelte/infinite-reactive-loop -- refreshSubjectTimer is not a reactive dep of the enclosing $: block (which gates on $detailOpen + $detailNotificationId + lastProcessedNotificationId); the write also happens inside a deferred setTimeout callback.
+				refreshSubjectTimer = setTimeout(() => {
+					// eslint-disable-next-line svelte/infinite-reactive-loop -- same as above; clearing the handle inside the deferred callback does not affect any reactive dep.
+					refreshSubjectTimer = null;
+					// Guard against a final-moment store change between the timer
+					// firing and the network call leaving (AbortController handles
+					// in-flight cancellation past this point).
+					if (get(detailNotificationId) !== notificationId) {
+						detailIsRefreshing.set(false);
+						return;
+					}
+					doRefreshSubject();
+				}, REFRESH_SUBJECT_DEBOUNCE_MS);
+
+				// The actual refresh logic lives in this nested helper so the
+				// outer .then can return without losing readability.
+				function doRefreshSubject() {
+					// Pass the current query so the backend can calculate correct actionHints
+					refreshNotificationSubject(githubId, { query: currentQuery, signal: detailSignal })
+						.then((refreshedNotification) => {
+							// Check if we're still viewing the same notification
+							if (get(detailNotificationId) === notificationId) {
+								// Update the notification - backend has computed correct actionHints with query context
+								pageController.actions.updateNotification(refreshedNotification);
+
+								// Step 3: When refresh returns, replace the subject in the detail
+								// Parse the refreshed subject from the refreshed notification's subjectRaw
+								const refreshedSubject = parseSubjectSummary(refreshedNotification.subjectRaw);
+
+								// Update the current detail with the refreshed subject
+								const currentDetailValue = get(currentDetail);
+								if (currentDetailValue) {
+									currentDetail.set({
+										...currentDetailValue,
+										subject: refreshedSubject,
+										notification: refreshedNotification,
+									});
+								}
+								detailShowingStaleData.set(false);
+								detailHasPermissionError.set(false);
+							}
+						})
+						.catch((refreshErr) => {
+							// Aborted when user navigated away — don't surface as error.
+							if (isAbortError(refreshErr)) return;
+							// Check if we're still viewing the same notification
+							if (get(detailNotificationId) === notificationId) {
+								// Check if this is a 403 Forbidden error (permission issue)
+								const errorWithStatus = refreshErr as Error & { status?: number };
+								const statusCode = errorWithStatus?.status;
+								const errorMessage = refreshErr?.message ?? "";
+								const is403Error = statusCode === 403 || errorMessage.includes("403");
+
+								if (is403Error) {
+									detailHasPermissionError.set(true);
+									detailShowingStaleData.set(false);
+								} else {
+									// Only show stale indicator if we have cached subject data
+									if (notification?.subjectRaw) {
+										detailShowingStaleData.set(true);
+									}
+									detailHasPermissionError.set(false);
+								}
+							}
+						})
+						.finally(() => {
+							// Clear refreshing indicator
+							if (get(detailNotificationId) === notificationId) {
+								detailIsRefreshing.set(false);
+							}
+						});
+				}
+			});
+		}
 	} else if (!$detailOpen) {
 		// Clear detail when closed
 		// NOTE: currentDetailNotification is automatically cleared via derived store
@@ -479,6 +627,18 @@
 		if (detailFetchController) {
 			detailFetchController.abort();
 			detailFetchController = null;
+		}
+
+		// Cancel any pending debounced refresh-subject call.
+		if (refreshSubjectTimer !== null) {
+			clearTimeout(refreshSubjectTimer);
+			refreshSubjectTimer = null;
+		}
+
+		// Cancel any pending debounced detail-fetch (cache-first path).
+		if (detailFetchTimer !== null) {
+			clearTimeout(detailFetchTimer);
+			detailFetchTimer = null;
 		}
 
 		// Reset timeline controller to abort any ongoing loading
@@ -1033,6 +1193,16 @@
 			detailFetchController.abort();
 			detailFetchController = null;
 		}
+		// Cancel any pending debounced refresh-subject call.
+		if (refreshSubjectTimer !== null) {
+			clearTimeout(refreshSubjectTimer);
+			refreshSubjectTimer = null;
+		}
+		// Cancel any pending debounced detail-fetch (cache-first path).
+		if (detailFetchTimer !== null) {
+			clearTimeout(detailFetchTimer);
+			detailFetchTimer = null;
+		}
 		// Reset timeline controller when component is destroyed (e.g., navigating away)
 		timelineController.actions.reset();
 	});
@@ -1077,6 +1247,6 @@
 	totalCount={$pageData.total}
 	listPaneWidth={$listPaneWidth}
 	onPaneResize={handlePaneResize}
-	tags={data.tags ?? []}
+	tags={$tags}
 	initialScrollPosition={$savedListScrollPosition}
 />

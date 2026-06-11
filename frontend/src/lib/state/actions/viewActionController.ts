@@ -17,9 +17,11 @@ import { get } from "svelte/store";
 import { tick } from "svelte";
 import { page } from "$app/stores";
 import type { NotificationView } from "$lib/api/types";
+import type { Tag } from "$lib/api/tags";
 import type { PageData as ViewPageData } from "../../../routes/views/[slug]/$types";
 import type { ViewActions } from "../interfaces/viewActions";
 import { fetchViews } from "$lib/api/views";
+import { fetchTags } from "$lib/api/tags";
 import { fetchNotificationDetail } from "$lib/api/notifications";
 import {
 	getAllViewsInOrder,
@@ -139,8 +141,25 @@ export function createViewActionController(
 		}
 	}
 
+	async function refreshTagCounts(): Promise<void> {
+		if (typeof window === "undefined") {
+			return;
+		}
+
+		try {
+			const updatedTags = await fetchTags();
+			viewStore.setTags(updatedTags);
+		} catch (error) {
+			console.error("Failed to refresh tag counts:", error);
+		}
+	}
+
 	function setViews(views: NotificationView[]): void {
 		viewStore.setViews(views);
+	}
+
+	function setTags(tags: Tag[]): void {
+		viewStore.setTags(tags);
 	}
 
 	function syncFromData(data: ViewPageData): void {
@@ -363,7 +382,9 @@ export function createViewActionController(
 	return {
 		refresh,
 		refreshViewCounts,
+		refreshTagCounts,
 		setViews,
+		setTags,
 		syncFromData,
 		selectViewBySlug,
 		navigateToNextView,

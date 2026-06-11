@@ -16,14 +16,22 @@
 import { writable, derived } from "svelte/store";
 import type { Writable, Readable } from "svelte/store";
 import type { NotificationView } from "$lib/api/types";
+import type { Tag } from "$lib/api/tags";
 import { BUILT_IN_VIEWS, normalizeViewId, normalizeViewSlug } from "$lib/state/types";
 
 /**
  * View Store
- * Manages view selection and view list
+ * Manages view selection, view list, and tags list. Tags live here (rather than
+ * a separate store) because they share the sidebar UI and are refreshed together
+ * with views when notification read-state changes.
  */
-export function createViewStore(initialViews: NotificationView[], initialViewId: string) {
+export function createViewStore(
+	initialViews: NotificationView[],
+	initialTags: Tag[],
+	initialViewId: string
+) {
 	const views = writable<NotificationView[]>(initialViews);
+	const tags = writable<Tag[]>(initialTags);
 	const selectedViewId = writable<string>(initialViewId);
 
 	// Built-in view definitions (derived from BUILT_IN_VIEWS)
@@ -165,6 +173,7 @@ export function createViewStore(initialViews: NotificationView[], initialViewId:
 	return {
 		// Expose stores
 		views: views as Writable<NotificationView[]>,
+		tags: tags as Writable<Tag[]>,
 		selectedViewId: selectedViewId as Writable<string>,
 
 		// Derived stores
@@ -181,6 +190,9 @@ export function createViewStore(initialViews: NotificationView[], initialViewId:
 		// Actions
 		setViews: (newViews: NotificationView[]) => {
 			views.set(newViews);
+		},
+		setTags: (newTags: Tag[]) => {
+			tags.set(newTags);
 		},
 		selectView: (id: string) => {
 			selectedViewId.set(id);

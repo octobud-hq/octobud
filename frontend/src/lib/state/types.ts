@@ -138,6 +138,7 @@ export function normalizeViewSlug(viewIdOrSlug: string | null | undefined): stri
 export interface NotificationPageControllerStores {
 	// View state
 	views: Writable<NotificationView[]>;
+	tags: Writable<Tag[]>;
 	selectedViewId: Writable<string>;
 	pageData: Writable<NotificationPage>;
 	page: Writable<number>;

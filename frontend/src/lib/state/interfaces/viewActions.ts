@@ -14,6 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import type { NotificationView } from "$lib/api/types";
+import type { Tag } from "$lib/api/tags";
 import type { PageData as ViewPageData } from "../../../routes/views/[slug]/$types";
 
 /**
@@ -23,7 +24,10 @@ import type { PageData as ViewPageData } from "../../../routes/views/[slug]/$typ
 export interface ViewActions {
 	refresh: () => Promise<void>;
 	refreshViewCounts: () => Promise<void>;
+	/** Targeted tag count refresh (fetchTags + setTags). Pairs with refreshViewCounts for sidebar count updates after read-state changes. */
+	refreshTagCounts: () => Promise<void>;
 	setViews: (views: NotificationView[]) => void;
+	setTags: (tags: Tag[]) => void;
 	syncFromData: (data: ViewPageData) => void;
 	selectViewBySlug: (slug: string, shouldInvalidate?: boolean) => Promise<void>;
 	navigateToNextView: () => boolean;

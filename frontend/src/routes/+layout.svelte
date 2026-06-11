@@ -25,7 +25,7 @@
 	import { getContext, onDestroy, onMount, setContext } from "svelte";
 	import { get, derived, readable } from "svelte/store";
 	import { browser } from "$app/environment";
-	import { goto, afterNavigate } from "$app/navigation";
+	import { goto, afterNavigate, pushState, replaceState } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import { page as pageStore } from "$app/stores";
 	import { invalidateAll } from "$app/navigation";
@@ -108,11 +108,16 @@
 	// UNIFIED PAGE CONTROLLER - SINGLE SOURCE OF TRUTH
 	// ============================================================================
 
-	// Store current tags for getTags function
-	let currentTags: Tag[] = data.tags ?? [];
-
-	// Update tags when data changes
-	$: currentTags = data.tags ?? [];
+	// Tags live in the page controller's view store. The layout still seeds
+	// from `data.tags` on every load (initial mount and view changes), but
+	// targeted updates from refreshTagCounts() can update the store directly
+	// without rerunning the layout load.
+	//
+	// Forward-binding for getTags: the pageController doesn't exist yet at the
+	// point we pass options to its factory, so we read tags through a closure
+	// that we wire up after construction. Until that, getTags falls back to
+	// the load's data.tags.
+	let getTagsImpl: () => Tag[] = () => data.tags ?? [];
 
 	// ============================================================================
 	// SERVICE WORKER MESSAGE LISTENER - Set up immediately, not in onMount
@@ -222,7 +227,36 @@
 					url,
 					typeof window !== "undefined" ? window.location.origin : "http://localhost"
 				);
-				await goto(resolve(urlObj.pathname as any) + urlObj.search, {
+				const target = resolve(urlObj.pathname as any) + urlObj.search;
+
+				// Shallow routing: update the URL (and $page.url) but do NOT rerun
+				// load functions. Used for purely deep-link URL updates like the
+				// ?id= param when opening a detail pane, where the data hasn't
+				// changed — only the address has. Avoids /api/views, /api/tags,
+				// /api/notifications calls per detail open.
+				//
+				// The svelte/no-navigation-without-resolve lint rule wants the
+				// URL argument to come from a bare resolve() call, but resolve()
+				// from $app/paths only handles the pathname — we have to
+				// concatenate the search params separately (same pattern used
+				// by every goto() callsite in this codebase, which the rule
+				// already ignores via ignoreGoto: true). pushState/replaceState
+				// don't have an equivalent ignore option, so we disable the rule
+				// for these two lines specifically.
+				if (navOptions?.shallow) {
+					const resolvedTarget = resolve(urlObj.pathname as any) + urlObj.search;
+					const state = navOptions.state ?? {};
+					if (navOptions.replace ?? true) {
+						// eslint-disable-next-line svelte/no-navigation-without-resolve
+						replaceState(resolvedTarget, state);
+					} else {
+						// eslint-disable-next-line svelte/no-navigation-without-resolve
+						pushState(resolvedTarget, state);
+					}
+					return;
+				}
+
+				await goto(target, {
 					replaceState: navOptions?.replace ?? true, // Default to replace for backwards compat
 					noScroll: true,
 					keepFocus: true,
@@ -238,7 +272,7 @@
 					bulkConfirmIsQueryBased = isQueryBased ?? false;
 				});
 			},
-			getTags: () => currentTags,
+			getTags: () => getTagsImpl(),
 		}
 	);
 
@@ -247,6 +281,10 @@
 
 	// Update the service worker message handler with the pageController reference
 	pageControllerRef = pageController;
+
+	// Now that pageController exists, route getTags through its tags store so
+	// targeted refreshTagCounts() updates flow through to controllers.
+	getTagsImpl = () => get(pageController.stores.tags);
 
 	// Initialize undo store with refresh callback.
 	// Initialization happens here (rather than at store creation) because:
@@ -290,6 +328,7 @@
 
 	const {
 		views,
+		tags,
 		selectedViewId,
 		quickQuery,
 		hydrated,
@@ -767,6 +806,7 @@
 
 	$: if (!isLoginRoute) {
 		pageController.actions.setViews(data.views);
+		pageController.actions.setTags(data.tags ?? []);
 	}
 
 	// ============================================================================
@@ -886,7 +926,7 @@
 				onToggleSidebar={pageController.actions.toggleSidebar}
 				builtInViews={$builtInViewList}
 				views={$views}
-				tags={data.tags}
+				tags={$tags}
 				selectedViewSlug={$selectedViewSlug}
 				onLogoClick={handleLogoClick}
 				onSelectView={selectViewBySlug}
@@ -935,7 +975,7 @@
 					bind:this={pageSidebarComponent}
 					builtInViewList={$builtInViewList}
 					views={$views}
-					tags={data.tags}
+					tags={$tags}
 					selectedViewId={$selectedViewId}
 					selectedViewSlug={$selectedViewSlug}
 					{inboxView}

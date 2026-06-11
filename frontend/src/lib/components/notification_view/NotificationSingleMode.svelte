@@ -30,7 +30,6 @@
 	// Subscribe to context store and extract individual properties for reactivity
 	$: context = $contextStore;
 	$: detailOpen = context.detailView.detailOpen;
-	$: currentDetailNotification = context.detailView.currentDetailNotification;
 	$: currentDetail = context.detailView.currentDetail;
 	$: detailLoading = context.detailView.detailLoading;
 	$: detailShowingStaleData = context.detailView.detailShowingStaleData;
@@ -60,7 +59,7 @@
 	}
 </script>
 
-{#if detailOpen && currentDetailNotification}
+{#if detailOpen}
 	<!-- Gmail-style inline detail view -->
 	<InlineDetailView
 		detail={currentDetail}

@@ -91,6 +91,7 @@ export function createDetailActionController(
 				.navigateToUrl(url.pathname + url.search, {
 					state: getCurrentNavState(),
 					replace: isSplitModeMode,
+					shallow: true,
 				})
 				.catch((err) => {
 					console.error("Failed to update URL on detail open", err);

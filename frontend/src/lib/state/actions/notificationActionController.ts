@@ -65,7 +65,10 @@ export function createNotificationActionController(
 	sharedHelpers: SharedHelpers,
 	/** Targeted view count refresh (fetchViews + setViews) — NOT invalidateAll().
 	 *  Used by softMarkRead to avoid full page invalidation. */
-	refreshViewCounts: () => Promise<void>
+	refreshViewCounts: () => Promise<void>,
+	/** Targeted tag count refresh (fetchTags + setTags). Paired with refreshViewCounts
+	 *  so sidebar tag counts stay in sync with read-state changes. */
+	refreshTagCounts: () => Promise<void>
 ): NotificationActions {
 	const { notificationStore, paginationStore, detailStore, selectionStore, keyboardStore } = stores;
 
@@ -225,8 +228,10 @@ export function createNotificationActionController(
 		// Optimistically update the UI
 		notificationStore.updateNotification({ ...current, isRead: true });
 
-		// Refresh sidebar unread counts (targeted fetch, NOT invalidateAll)
+		// Refresh sidebar unread counts (targeted fetches, NOT invalidateAll).
+		// Both views AND tags carry unread counts, so both must refresh.
 		void refreshViewCounts().catch(() => {});
+		void refreshTagCounts().catch(() => {});
 
 		// Guard against polling race condition
 		notificationStore.addPendingMarkRead(key);
@@ -237,6 +242,7 @@ export function createNotificationActionController(
 				// Revert optimistic update on error
 				notificationStore.updateNotification(current);
 				void refreshViewCounts().catch(() => {});
+				void refreshTagCounts().catch(() => {});
 			})
 			.finally(() => {
 				notificationStore.removePendingMarkRead(key);

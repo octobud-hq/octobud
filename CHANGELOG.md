@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Notification list scroll position is preserved when dismissing a notification instead of jumping back to the top
 - General tweaks and improvements to notification list navigation and scroll behavior
+- Fix a reactivity issue that was causing re-calls to several endpoints every time a notification was opened
 
 ## [0.3.2]
 

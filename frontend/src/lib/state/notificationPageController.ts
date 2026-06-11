@@ -66,6 +66,7 @@ export function createNotificationPageController(
 	const queryStore = createQueryStore(initialQuery, initialViewQuery);
 	const viewStore = createViewStore(
 		initialData.views,
+		(initialData as any).tags ?? [],
 		normalizeViewId(initialData.selectedViewId ?? BUILT_IN_VIEWS.inbox.id)
 	);
 	const eventBus = createEventBus();
@@ -145,7 +146,8 @@ export function createNotificationPageController(
 		options,
 		optimisticUpdateHelpers,
 		sharedHelpers,
-		viewActions.refreshViewCounts
+		viewActions.refreshViewCounts,
+		viewActions.refreshTagCounts
 	);
 
 	// Create detail controller with markRead from notificationActions (clean dependency order)
@@ -247,6 +249,7 @@ export function createNotificationPageController(
 		stores: {
 			// View state
 			views: viewStore.views,
+			tags: viewStore.tags,
 			selectedViewId: viewStore.selectedViewId,
 			pageData: notificationStore.pageData,
 			page: paginationStore.page,

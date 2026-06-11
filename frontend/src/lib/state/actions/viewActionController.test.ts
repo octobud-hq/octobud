@@ -20,6 +20,7 @@ import { createViewActionController } from "./viewActionController";
 import { createSharedHelpers } from "./sharedHelpers";
 import { createDebounceManager } from "./debounceManager";
 import { fetchViews } from "$lib/api/views";
+import { fetchTags } from "$lib/api/tags";
 import { fetchNotificationDetail } from "$lib/api/notifications";
 import type { NotificationStore } from "../../stores/notificationStore";
 import type { PaginationStore } from "../../stores/paginationStore";
@@ -34,6 +35,10 @@ import type { ControllerOptions } from "../interfaces/common";
 // Mock fetchViews
 vi.mock("$lib/api/views", () => ({
 	fetchViews: vi.fn(),
+}));
+
+vi.mock("$lib/api/tags", () => ({
+	fetchTags: vi.fn(),
 }));
 
 vi.mock("$lib/api/notifications", () => ({
@@ -116,11 +121,17 @@ describe("ViewActionController", () => {
 				keyboardStore.keyboardFocusIndex.set(null);
 				return true;
 			}),
+			focusAt: vi.fn((index: number) => {
+				keyboardStore.keyboardFocusIndex.set(index);
+				return true;
+			}),
 		} as any;
 
 		const splitModeEnabled = writable(false);
+		const savedListScrollPosition = writable(0);
 		uiStore = {
 			splitModeEnabled,
+			savedListScrollPosition,
 		} as any;
 
 		queryStore = {
@@ -140,6 +151,7 @@ describe("ViewActionController", () => {
 
 		viewStore = {
 			views: writable([]),
+			tags: writable([]),
 			selectedViewId: writable("inbox"),
 			selectedViewSlug: writable("inbox"),
 			builtInViewList: writable([
@@ -151,6 +163,9 @@ describe("ViewActionController", () => {
 			}),
 			setViews: vi.fn((views: any[]) => {
 				viewStore.views.set(views);
+			}),
+			setTags: vi.fn((tags: any[]) => {
+				viewStore.tags.set(tags);
 			}),
 		} as any;
 
@@ -420,6 +435,157 @@ describe("ViewActionController", () => {
 
 			// Focus should be restored if notification still exists
 			expect(keyboardStore.setFocusIndex).toHaveBeenCalled();
+		});
+
+		it("focuses the new detail when detail changed during refresh (desktop-notif mid-sync)", async () => {
+			// Simulates: handleSyncNewNotifications starts with detail open on
+			// gh-A in SplitMode (so the refresh path runs on page 1), then
+			// during the awaited refresh the user clicks a desktop notification
+			// for gh-B (changing detailNotificationId). After the refresh,
+			// focus should follow the new detail rather than snap back to the
+			// previously focused gh-A row — otherwise the list shows two focus
+			// indicators (the bug we shipped a fix for).
+			vi.mocked(fetchViews).mockResolvedValue([]);
+			paginationStore.page.set(1);
+			(uiStore.splitModeEnabled as any).set(true);
+			(detailStore.detailOpen as any).set(true);
+			(detailStore.detailNotificationId as any).set("gh-A");
+			// Pre-refresh: list has gh-A at index 0, focused there.
+			notificationStore.pageData.set({
+				items: [{ id: "1", githubId: "gh-A" }],
+				total: 1,
+				page: 1,
+				pageSize: 50,
+			} as any);
+			keyboardStore.keyboardFocusIndex.set(0);
+
+			// Mid-refresh: swap detail to gh-B and prepend gh-B to the list.
+			vi.spyOn(sharedHelpers, "refresh").mockImplementation(async () => {
+				(detailStore.detailNotificationId as any).set("gh-B");
+				notificationStore.pageData.set({
+					items: [
+						{ id: "2", githubId: "gh-B" },
+						{ id: "1", githubId: "gh-A" },
+					],
+					total: 2,
+					page: 1,
+					pageSize: 50,
+				} as any);
+			});
+
+			await controller.handleSyncNewNotifications();
+			await tick();
+
+			// Focus should follow the new detail (gh-B at index 0), not snap
+			// back to gh-A (now at index 1).
+			expect(keyboardStore.setFocusIndex).toHaveBeenLastCalledWith(0);
+		});
+	});
+
+	describe("refreshTagCounts", () => {
+		it("fetches and updates tags", async () => {
+			const mockTags = [{ id: "t1", slug: "bug", name: "Bug", unreadCount: 3 }];
+			vi.mocked(fetchTags).mockResolvedValue(mockTags as any);
+
+			await controller.refreshTagCounts();
+
+			expect(fetchTags).toHaveBeenCalled();
+			expect(viewStore.setTags).toHaveBeenCalledWith(mockTags);
+		});
+
+		it("handles errors gracefully without updating the store", async () => {
+			vi.mocked(fetchTags).mockRejectedValue(new Error("Network error"));
+
+			await controller.refreshTagCounts();
+
+			expect(viewStore.setTags).not.toHaveBeenCalled();
+		});
+	});
+
+	describe("scrollListToTop", () => {
+		it("resets savedListScrollPosition and invokes the registered scroll handler", () => {
+			(uiStore.savedListScrollPosition as any).set(420);
+			const scrollHandler = vi.fn();
+			controller.registerListScrollHandler(scrollHandler);
+
+			controller.scrollListToTop();
+
+			expect(get(uiStore.savedListScrollPosition)).toBe(0);
+			expect(scrollHandler).toHaveBeenCalledWith(0);
+		});
+
+		it("is a no-op for the scroll handler when none is registered (but still resets saved position)", () => {
+			(uiStore.savedListScrollPosition as any).set(120);
+
+			// Should not throw despite no handler
+			controller.scrollListToTop();
+
+			expect(get(uiStore.savedListScrollPosition)).toBe(0);
+		});
+	});
+
+	describe("ensureNotificationVisible", () => {
+		it("does nothing when the notification is not on the current page", () => {
+			notificationStore.pageData.set({
+				items: [{ id: "1", githubId: "gh-1" }],
+				total: 1,
+				page: 1,
+				pageSize: 50,
+			} as any);
+			(uiStore.splitModeEnabled as any).set(true);
+
+			controller.ensureNotificationVisible("gh-not-here");
+
+			expect(keyboardStore.focusAt).not.toHaveBeenCalled();
+		});
+
+		it("does nothing in SingleMode even when the notification is on the page", () => {
+			// Preserves the user's prior list scroll when they close the detail.
+			notificationStore.pageData.set({
+				items: [{ id: "1", githubId: "gh-1" }],
+				total: 1,
+				page: 1,
+				pageSize: 50,
+			} as any);
+			(uiStore.splitModeEnabled as any).set(false);
+
+			controller.ensureNotificationVisible("gh-1");
+
+			expect(keyboardStore.focusAt).not.toHaveBeenCalled();
+		});
+
+		it("calls focusAt with the matched index in SplitMode", () => {
+			// focusAt routes through pendingFocusIndex → row scrollIntoViewMinimal.
+			notificationStore.pageData.set({
+				items: [
+					{ id: "1", githubId: "gh-1" },
+					{ id: "2", githubId: "gh-2" },
+					{ id: "3", githubId: "gh-3" },
+				],
+				total: 3,
+				page: 1,
+				pageSize: 50,
+			} as any);
+			(uiStore.splitModeEnabled as any).set(true);
+
+			controller.ensureNotificationVisible("gh-2");
+
+			expect(keyboardStore.focusAt).toHaveBeenCalledWith(1);
+		});
+
+		it("does not touch savedListScrollPosition (preserves prior scroll)", () => {
+			notificationStore.pageData.set({
+				items: [{ id: "1", githubId: "gh-1" }],
+				total: 1,
+				page: 1,
+				pageSize: 50,
+			} as any);
+			(uiStore.splitModeEnabled as any).set(true);
+			(uiStore.savedListScrollPosition as any).set(250);
+
+			controller.ensureNotificationVisible("gh-1");
+
+			expect(get(uiStore.savedListScrollPosition)).toBe(250);
 		});
 	});
 

@@ -29,6 +29,14 @@ export interface NavigateOptions {
 	state?: NavigationState;
 	/** If true, replaces the current history entry instead of creating a new one */
 	replace?: boolean;
+	/**
+	 * If true, use SvelteKit shallow routing (pushState/replaceState from
+	 * $app/navigation) instead of goto(). Updates the URL and $page.url but
+	 * does NOT rerun load functions. Use for URL changes that are purely for
+	 * deep-linking / back-button (e.g. opening a detail pane) — not for changes
+	 * that should refresh data (e.g. pagination, view switching).
+	 */
+	shallow?: boolean;
 }
 
 export interface ControllerOptions {

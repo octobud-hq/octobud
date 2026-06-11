@@ -52,7 +52,6 @@ func NewRouter(cfg Config) chi.Router {
 
 	// Core middleware
 	router.Use(middleware.RequestID)
-	router.Use(middleware.RealIP)
 	router.Use(middleware.Recoverer)
 
 	// Optional request logging

@@ -182,6 +182,7 @@ describe("NotificationActionController", () => {
 		);
 
 		refreshViewCounts = vi.fn<() => Promise<void>>(async () => {});
+		const refreshTagCounts = vi.fn<() => Promise<void>>(async () => {});
 		controller = createNotificationActionController(
 			{
 				notificationStore,
@@ -193,7 +194,8 @@ describe("NotificationActionController", () => {
 			options,
 			optimisticUpdateHelpers,
 			sharedHelpers,
-			refreshViewCounts
+			refreshViewCounts,
+			refreshTagCounts
 		);
 	});
 
