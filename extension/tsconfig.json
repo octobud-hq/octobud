@@ -6,8 +6,10 @@
 		"lib": ["ES2022", "DOM", "DOM.Iterable"],
 		"types": ["chrome", "node", "vite/client"],
 		"strict": true,
-		"noUnusedLocals": true,
-		"noUnusedParameters": true,
+		// `noUnusedLocals`/`noUnusedParameters` are deliberately off: the vendored
+		// api/ modules carry a few unused imports and must stay byte-identical to
+		// frontend/ (see src/lib/VENDORED.md). ESLint covers unused vars in code
+		// this package actually owns.
 		"noImplicitOverride": true,
 		"esModuleInterop": true,
 		"forceConsistentCasingInFileNames": true,
@@ -24,6 +26,6 @@
 			"$lib/*": ["./src/lib/*"]
 		}
 	},
-	"include": ["src/**/*.ts", "src/**/*.svelte", "test/**/*.ts", "*.config.ts"],
+	"include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.svelte", "test/**/*.ts", "*.config.ts"],
 	"exclude": ["node_modules", "dist"]
 }

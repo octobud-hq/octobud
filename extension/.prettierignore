@@ -1,0 +1,17 @@
+dist
+node_modules
+web-ext-artifacts
+
+# Vendored byte-identically from frontend/src/lib — see src/lib/VENDORED.md.
+# Reformatting them here would break test/vendored.test.ts, and the canonical
+# copies live in frontend/, so they are formatted (or not) over there.
+src/lib/api/types.ts
+src/lib/api/views.ts
+src/lib/api/notifications.ts
+src/lib/api/tags.ts
+src/lib/utils/time.ts
+src/lib/utils/notificationHelpers.ts
+src/lib/utils/notificationIcons.ts
+src/lib/utils/viewIcons.ts
+src/lib/utils/githubUrls.ts
+src/lib/utils/snoozeFormat.ts
