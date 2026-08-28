@@ -3,11 +3,14 @@
 backend/.env
 frontend/.env
 frontend/.env.local
+extension/.env
 
 # Dependencies and build
 frontend/node_modules
 frontend/.svelte-kit
 frontend/build
+extension/node_modules
+extension/web-ext-artifacts
 
 # Synced from repo root by npm prebuild/predev (see frontend/package.json)
 frontend/static/CHANGELOG.md
