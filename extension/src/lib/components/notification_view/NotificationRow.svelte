@@ -18,8 +18,12 @@
 	// The markup, class strings and read/unread visual language are kept identical
 	// so a row looks the same in the panel as in the app. Four deliberate changes:
 	//
-	//  1. Action buttons are h-9 w-9 rather than h-10 w-10. Seven 40px buttons plus
-	//     padding overflow a default-width side panel; 36px fits.
+	//  1. Action buttons are h-9 w-9 rather than h-10 w-10, and the bar is
+	//     bottom-aligned. Seven 40px buttons plus padding overflow a default-width
+	//     side panel; 36px fits in 268px of 360px. The desktop bar takes its
+	//     vertical position from static flow, which puts it over the title — fine
+	//     when it covers the right third of a wide row, but at panel width it hides
+	//     most of the title you are deciding about, so it moves to the metadata line.
 	//  2. The status gutter is a plain indicator. The desktop version doubles as the
 	//     entry point to multiselect, which the panel has no bulk mode for.
 	//  3. Clicking the row opens the item on GitHub instead of an inline detail pane.
@@ -327,7 +331,7 @@
 
 		<!-- Action Buttons (bottom right, absolutely positioned) -->
 		<footer
-			class="absolute right-1 flex items-center gap-1 transition-opacity {isSnoozeDropdownOpen ||
+			class="absolute bottom-1 right-1 flex items-center gap-1 transition-opacity {isSnoozeDropdownOpen ||
 			isTagDropdownOpen
 				? 'opacity-100'
 				: 'opacity-0 group-hover:opacity-100'}"

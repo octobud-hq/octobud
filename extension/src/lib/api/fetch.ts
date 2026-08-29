@@ -136,6 +136,17 @@ export function buildApiUrl(path: string): string {
 }
 
 /**
+ * A connection to a port nothing is listening on does not always fail fast — it
+ * can hang until the OS gives up, which is minutes. The desktop app is served
+ * from the backend's own origin, so it never sees this; the panel talks to
+ * localhost over the network stack and does. Without a ceiling the panel sits in
+ * a loading state indefinitely instead of saying Octobud isn't running.
+ *
+ * Generous enough that a slow local query is never cut short.
+ */
+const REQUEST_TIMEOUT_MS = 10_000;
+
+/**
  * Simple fetch wrapper for API calls.
  */
 export async function fetchAPI(
@@ -144,15 +155,22 @@ export async function fetchAPI(
 	fetchImpl?: typeof fetch
 ): Promise<Response> {
 	const fetchFn = fetchImpl || fetch;
+	const controller = new AbortController();
+	const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+	// Respect a caller-supplied signal as well as the timeout.
+	options.signal?.addEventListener("abort", () => controller.abort(), { once: true });
 
 	try {
-		return await fetchFn(buildApiUrl(url), options);
+		return await fetchFn(buildApiUrl(url), { ...options, signal: controller.signal });
 	} catch (error) {
 		// Network errors (TypeError: Failed to fetch) indicate the API is unreachable
-		if (isNetworkError(error)) {
+		if (isNetworkError(error) || (error instanceof DOMException && error.name === "AbortError")) {
 			throw new ApiUnreachableError();
 		}
 		throw error;
+	} finally {
+		clearTimeout(timer);
 	}
 }
 

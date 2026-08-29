@@ -14,6 +14,15 @@
 	// You should have received a copy of the GNU Affero General Public License
 	// along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+	// Adopted from frontend/src/lib/components/shared/TagDropdown.svelte rather
+	// than vendored verbatim, because its positioning breaks in a side panel: the
+	// tag button sits well inside the row's action bar, so right-anchoring a
+	// 280px-min dropdown put its left edge at roughly -39px in a 360px panel and
+	// cut off the search field and tag names. Two changes, both correct on desktop
+	// too and worth upstreaming: the width is clamped to the viewport, and
+	// positioning resolves to a single clamped `left` instead of discarding the
+	// clamp whenever the right-anchor branch is taken.
+
 	import type { Notification, Tag } from "$lib/api/types";
 	import { tick, onMount, onDestroy } from "svelte";
 	import { fetchTags } from "$lib/api/tags";
@@ -119,40 +128,45 @@
 		await tick();
 
 		const buttonRect = buttonElement.getBoundingClientRect();
-		const dropdownWidth = 280;
-		const dropdownHeight = dropdownElement.scrollHeight || 300;
+		const margin = 10;
 		const viewportWidth = window.innerWidth;
 		const viewportHeight = window.innerHeight;
 		const padding = 8;
 
-		let top = buttonRect.bottom + padding;
-		let left: number | "auto" = buttonRect.left;
-		let right: number | "auto" = "auto";
+		// Never assume the dropdown's declared min-width fits: in a side panel the
+		// viewport can be narrower than it, in which case the CSS max-width clamp
+		// wins and the real rendered width is all we can position against.
+		const dropdownWidth = Math.min(dropdownElement.offsetWidth || 280, viewportWidth - margin * 2);
+		const dropdownHeight = dropdownElement.scrollHeight || 300;
 
-		const wouldOverflowRight = (left as number) + dropdownWidth > viewportWidth - 20;
-		if (wouldOverflowRight) {
-			right = viewportWidth - buttonRect.right;
+		let top = buttonRect.bottom + padding;
+
+		// Prefer left-aligning with the button, falling back to right-aligning when
+		// that would overflow, then clamp into the viewport either way.
+		//
+		// The upstream version anchored by `right` in the overflow case and dropped
+		// the clamped `left`, which is fine on a desktop window but pushes the left
+		// edge off-screen once the viewport is only a little wider than the
+		// dropdown. Resolving to a single clamped `left` cannot do that.
+		let left = buttonRect.left;
+		if (left + dropdownWidth > viewportWidth - margin) {
 			left = buttonRect.right - dropdownWidth;
 		}
+		left = Math.min(
+			Math.max(margin, left),
+			Math.max(margin, viewportWidth - dropdownWidth - margin)
+		);
 
 		const wouldOverflowBottom = top + dropdownHeight > viewportHeight - 20;
 		if (wouldOverflowBottom) {
 			top = buttonRect.top - dropdownHeight - padding;
 		}
 
-		if (top < 10) {
-			top = 10;
+		if (top < margin) {
+			top = margin;
 		}
 
-		if (left < 10) {
-			left = 10;
-		}
-
-		dropdownPosition = {
-			top,
-			left: right === "auto" ? left : "auto",
-			right: right === "auto" ? "auto" : right,
-		};
+		dropdownPosition = { top, left, right: "auto" };
 		isPositioned = true;
 	}
 
@@ -291,7 +305,7 @@
 {#if isOpen}
 	<div
 		bind:this={dropdownElement}
-		class="fixed z-[150] min-w-[280px] max-w-[320px] rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-800 dark:bg-gray-900"
+		class="fixed z-[150] min-w-[min(280px,calc(100vw-20px))] max-w-[min(320px,calc(100vw-20px))] rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-800 dark:bg-gray-900"
 		style="top: {dropdownPosition.top}px; {dropdownPosition.left !== 'auto'
 			? `left: ${dropdownPosition.left}px`
 			: `right: ${dropdownPosition.right}px`}; opacity: {isPositioned ? 1 : 0};"

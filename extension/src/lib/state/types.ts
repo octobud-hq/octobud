@@ -54,6 +54,8 @@ export interface PanelControllerStores {
 	page: Readable<number>;
 	totalPages: Readable<number>;
 	loading: Readable<boolean>;
+	/** True once a list request has settled, so "empty" can be told from "not asked yet". */
+	loaded: Readable<boolean>;
 	error: Readable<PanelError | null>;
 	snoozeDropdownState: Writable<DropdownState | null>;
 	tagDropdownState: Writable<DropdownState | null>;

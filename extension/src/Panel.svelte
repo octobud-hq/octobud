@@ -27,7 +27,8 @@
 	const controller = createPanelController();
 	setContext(PANEL_CONTROLLER_KEY, controller);
 
-	const { views, items, total, page, totalPages, loading, error, selectedSlug } = controller.stores;
+	const { views, items, total, page, totalPages, loading, loaded, error, selectedSlug } =
+		controller.stores;
 	const { customSnoozeNotificationId } = controller.stores;
 
 	const PAGE_SIZE = 30;
@@ -91,7 +92,11 @@
 	{:else}
 		<div class="flex items-center justify-between gap-2 px-3 pb-1 pt-2.5">
 			<span class="truncate text-xs text-gray-500 dark:text-gray-500">
-				{#if $total === 0}
+				{#if !$loaded}
+					<!-- Before the first response, "No notifications" would be a claim we
+					     can't make yet — it reads as an answer rather than a pending state. -->
+					Loading…
+				{:else if $total === 0}
 					No notifications
 				{:else if $total <= PAGE_SIZE}
 					{$total}
@@ -119,7 +124,7 @@
 			</div>
 		{/if}
 
-		{#if $items.length === 0 && !$loading}
+		{#if $items.length === 0 && $loaded}
 			<PanelMessage title="Nothing here yet" body="This view has no notifications right now." />
 		{:else}
 			<div class="flex-1 overflow-y-auto px-2 pb-4" style="scrollbar-gutter: stable;">

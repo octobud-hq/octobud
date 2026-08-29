@@ -37,9 +37,7 @@ const VENDORED_PATHS = [
 	"utils/snoozeFormat.ts",
 	"utils/archiveIcons.ts",
 	"utils/muteIcons.ts",
-	"components/timeline/ViewDropdown.svelte",
 	"components/shared/SnoozeDropdown.svelte",
-	"components/shared/TagDropdown.svelte",
 	"components/shared/CompactPagination.svelte",
 ];
 

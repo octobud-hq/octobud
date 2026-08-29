@@ -23,14 +23,11 @@ notification row needs — the code most likely to drift and silently break the 
 | `utils/snoozeFormat.ts` |
 | `utils/archiveIcons.ts` |
 | `utils/muteIcons.ts` |
-| `components/timeline/ViewDropdown.svelte` |
 | `components/shared/SnoozeDropdown.svelte` |
-| `components/shared/TagDropdown.svelte` |
 | `components/shared/CompactPagination.svelte` |
 
-Those four components turned out to need no adaptation at all — they depend only on
-`api/types`, `api/tags` and Svelte, and they are already sized for narrow layouts. The
-view switcher the feature asks for *is* the app's own `ViewDropdown`, unmodified.
+Those two components needed no adaptation at all — they depend only on `api/types` and
+Svelte, and are already sized for narrow layouts.
 
 A byte-identity failure on a component is a real signal, not noise: if the desktop row or
 dropdown changes, the panel should be re-synced or the divergence justified, because
@@ -54,6 +51,23 @@ of this list with a note explaining why.
   cannot be copied. Its `BUILT_IN_VIEWS` constants were not lifted either: the backend
   already returns system views from `GET /api/views` flagged `systemView: true`, so the
   panel partitions the API response instead of keeping a second local copy of the list.
+- **`components/timeline/ViewDropdown.svelte`** — **adopted**, not vendored. Nothing in the
+  desktop app imports it; it is dead code there, and the panel is now its only consumer.
+  Holding it byte-identical to an unused file would have meant keeping its two stale bits:
+  `starred` had no icon (an empty, misaligned span for a view the backend does return) and
+  `done` mapped an icon for a built-in slug that no longer exists. Both are fixed here.
+- **`components/shared/TagDropdown.svelte`** — **adopted**, not vendored. Its positioning
+  is only correct when the viewport is comfortably wider than the dropdown. The tag button
+  sits inside the row's action bar, so right-anchoring the 280px-min panel put its left
+  edge near −39px in a 360px sidebar, cutting off the search field and the tag names. The
+  width is now clamped to the viewport and positioning resolves to a single clamped `left`
+  rather than discarding the clamp on the right-anchor branch. Both changes are correct on
+  desktop too and are worth upstreaming.
+
+  `SnoozeDropdown.svelte` shares the same positioning logic and the same latent bug, but
+  it is only 220px wide and its button is the last in the bar, so it lands on-screen at
+  panel widths and is left vendored. If a narrower sidebar ever breaks it, adopt it the
+  same way.
 - **`components/notification_view/NotificationRow.svelte`** — ported, not copied. It is
   the one component that genuinely has to change for a ~360px panel. The four
   differences are listed in a comment at the top of the file: smaller action buttons, a

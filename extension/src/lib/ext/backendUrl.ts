@@ -47,6 +47,20 @@ export async function setBackendUrl(raw: string): Promise<string> {
 	return activeBaseUrl;
 }
 
+/**
+ * Cheap liveness check against `/healthz`, which is the one unauthenticated
+ * endpoint the backend exposes.
+ *
+ * Worth doing before the first real request even when the URL is already known:
+ * a connection to a port nothing is listening on can hang for as long as the OS
+ * allows, and the request timeout that backstops that is deliberately generous.
+ * Probing first turns "Octobud isn't running" into an answer in under two
+ * seconds instead of ten.
+ */
+export async function isBackendReachable(baseUrl: string = activeBaseUrl): Promise<boolean> {
+	return isReachable(baseUrl);
+}
+
 async function isReachable(baseUrl: string): Promise<boolean> {
 	const controller = new AbortController();
 	const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);

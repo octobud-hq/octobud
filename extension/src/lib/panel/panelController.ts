@@ -42,6 +42,7 @@ import type {
 	PanelError,
 } from "$lib/state/types";
 import { storageGet, storageSet } from "$lib/ext/browser";
+import { isBackendReachable } from "$lib/ext/backendUrl";
 
 const SELECTED_SLUG_KEY = "octobud:selectedViewSlug";
 const PAGE_SIZE = 30;
@@ -72,6 +73,7 @@ export function createPanelController(): NotificationPageController {
 	const total = writable(0);
 	const page = writable(1);
 	const loading = writable(false);
+	const loaded = writable(false);
 	const error = writable<PanelError | null>(null);
 	const snoozeDropdownState = writable<DropdownState | null>(null);
 	const tagDropdownState = writable<DropdownState | null>(null);
@@ -104,12 +106,12 @@ export function createPanelController(): NotificationPageController {
 			total.set(0);
 		} finally {
 			loading.set(false);
+			loaded.set(true);
 		}
 	}
 
 	async function loadViews(): Promise<void> {
-		const loaded = await fetchViews();
-		views.set(loaded);
+		views.set(await fetchViews());
 	}
 
 	/**
@@ -177,6 +179,7 @@ export function createPanelController(): NotificationPageController {
 			page,
 			totalPages,
 			loading,
+			loaded,
 			error,
 			snoozeDropdownState,
 			tagDropdownState,
@@ -186,6 +189,11 @@ export function createPanelController(): NotificationPageController {
 		actions: {
 			async initialize() {
 				loading.set(true);
+				if (!(await isBackendReachable())) {
+					error.set({ kind: "unreachable", message: "Can't reach Octobud." });
+					loading.set(false);
+					return;
+				}
 				try {
 					await loadViews();
 					// Tags only drive the tag dropdown; failing to load them should not
