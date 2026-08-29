@@ -60,5 +60,13 @@ for (const target of TARGETS) {
 	const manifest = { ...base, ...readJson(`manifest/${target}.json`), version };
 	writeFileSync(`${outDir}/manifest.json`, `${JSON.stringify(manifest, null, "\t")}\n`, "utf8");
 
+	// Vite emits one shared bundle for both targets, so drop anything this
+	// target's manifest does not reference. Firefox has no `background` — its
+	// sidebar_action needs no script — and shipping an unreferenced one is dead
+	// weight a reviewer has to ask about.
+	if (!manifest.background) {
+		rmSync(`${outDir}/background.js`, { force: true });
+	}
+
 	console.log(`Built dist/${target} (manifest v${version})`);
 }

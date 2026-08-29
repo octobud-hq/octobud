@@ -13,12 +13,15 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-// Runs as a service worker on Chrome and an event page on Firefox. Kept as
-// dependency-free classic JavaScript in public/ so one file works as both
-// without asking Rollup to emit two module formats from a single build.
+// Chrome's MV3 service worker. Its only job is making the toolbar button open
+// the side panel, which Chrome does not do by default.
 //
-// The only job is making the toolbar button open the panel. Firefox's
-// sidebar_action does that natively; Chrome needs to be told once.
+// Firefox does not load this: `sidebar_action` wires its toolbar button to the
+// panel natively, so the Firefox manifest omits `background` entirely rather
+// than shipping an event page that would do nothing.
+//
+// Kept as dependency-free classic JavaScript in public/ so it is copied through
+// verbatim instead of asking Rollup to emit a second module format.
 
 (function () {
 	var ext = globalThis.chrome || globalThis.browser;

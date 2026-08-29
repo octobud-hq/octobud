@@ -8,9 +8,6 @@
 		},
 		"open_at_install": false
 	},
-	"background": {
-		"scripts": ["background.js"]
-	},
 	"browser_specific_settings": {
 		"gecko": {
 			"id": "octobud@octobud-hq.github.io",
