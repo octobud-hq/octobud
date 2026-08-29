@@ -1,0 +1,9 @@
+{
+	"permissions": ["storage", "sidePanel"],
+	"side_panel": {
+		"default_path": "panel.html"
+	},
+	"background": {
+		"service_worker": "background.js"
+	}
+}
