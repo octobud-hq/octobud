@@ -21,6 +21,20 @@ notification row needs — the code most likely to drift and silently break the 
 | `utils/viewIcons.ts` |
 | `utils/githubUrls.ts` |
 | `utils/snoozeFormat.ts` |
+| `utils/archiveIcons.ts` |
+| `utils/muteIcons.ts` |
+| `components/timeline/ViewDropdown.svelte` |
+| `components/shared/SnoozeDropdown.svelte` |
+| `components/shared/TagDropdown.svelte` |
+| `components/shared/CompactPagination.svelte` |
+
+Those four components turned out to need no adaptation at all — they depend only on
+`api/types`, `api/tags` and Svelte, and they are already sized for narrow layouts. The
+view switcher the feature asks for *is* the app's own `ViewDropdown`, unmodified.
+
+A byte-identity failure on a component is a real signal, not noise: if the desktop row or
+dropdown changes, the panel should be re-synced or the divergence justified, because
+matching the app's design language is the point of the feature.
 
 They live at the same relative paths on purpose. With `$lib` aliased to
 `extension/src/lib`, every internal import (`./time`, `$lib/utils/viewIcons`) resolves
@@ -40,8 +54,19 @@ of this list with a note explaining why.
   cannot be copied. Its `BUILT_IN_VIEWS` constants were not lifted either: the backend
   already returns system views from `GET /api/views` flagged `systemView: true`, so the
   panel partitions the API response instead of keeping a second local copy of the list.
-- **Svelte components** — ported rather than vendored. They genuinely have to change for
-  a ~360px panel, so byte-identity would be a lie. See `src/lib/components/`.
+- **`components/notification_view/NotificationRow.svelte`** — ported, not copied. It is
+  the one component that genuinely has to change for a ~360px panel. The four
+  differences are listed in a comment at the top of the file: smaller action buttons, a
+  plain status gutter instead of the multiselect entry point, click-opens-GitHub instead
+  of an inline detail pane, and no keyboard focus index.
+- **`components/shared/ApiErrorState.svelte`** — not reused. It is a `max-w-2xl`, `p-8`,
+  `text-2xl` card telling you to check the API server, worker and database; none of that
+  fits a side panel or describes the panel's actual failure mode. `components/panel/
+  PanelMessage.svelte` covers the same ground at panel scale.
+- **`@primer/octicons`** — not vendored, but aliased. `utils/notificationIcons.ts` imports
+  the whole 4 MB registry for twelve 16px paths, which cost about a megabyte of bundled
+  JS. Vite redirects the import to the generated `octicons-subset.ts`
+  (`npm run octicons`), leaving the vendored file untouched.
 
 ## Longer term
 

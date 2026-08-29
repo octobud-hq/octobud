@@ -8,6 +8,7 @@
         "dev": "vite",
         "build": "vite build && node scripts/build-manifest.mjs",
         "icons": "node scripts/make-icons.mjs",
+        "octicons": "node scripts/build-octicons-subset.mjs",
         "stub": "node dev/stub-server/server.mjs",
         "check": "svelte-check --tsconfig ./tsconfig.json",
         "lint": "eslint .",

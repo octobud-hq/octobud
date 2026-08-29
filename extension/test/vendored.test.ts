@@ -35,6 +35,12 @@ const VENDORED_PATHS = [
 	"utils/viewIcons.ts",
 	"utils/githubUrls.ts",
 	"utils/snoozeFormat.ts",
+	"utils/archiveIcons.ts",
+	"utils/muteIcons.ts",
+	"components/timeline/ViewDropdown.svelte",
+	"components/shared/SnoozeDropdown.svelte",
+	"components/shared/TagDropdown.svelte",
+	"components/shared/CompactPagination.svelte",
 ];
 
 function read(relative: string): string {

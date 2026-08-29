@@ -14,9 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { describe, expect, it } from "vitest";
-// @ts-expect-error -- plain JS dev tooling, deliberately untyped
 import { evaluateQuery, parseQuery } from "../dev/stub-server/query.mjs";
-// @ts-expect-error -- plain JS dev tooling, deliberately untyped
 import { createNotifications, SYSTEM_VIEWS, USER_VIEWS } from "../dev/stub-server/fixtures.mjs";
 
 interface StubNotification {

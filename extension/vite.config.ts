@@ -28,6 +28,10 @@ export default defineConfig({
 	resolve: {
 		alias: {
 			$lib: fileURLToPath(new URL("./src/lib", import.meta.url)),
+			// utils/notificationIcons.ts is vendored byte-identically and imports the
+			// whole 4 MB octicons registry for twelve 16px paths. Redirect it to the
+			// generated subset instead of editing the copy. See scripts/build-octicons-subset.mjs.
+			"@primer/octicons": fileURLToPath(new URL("./src/lib/octicons-subset.ts", import.meta.url)),
 		},
 	},
 	build: {
