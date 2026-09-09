@@ -22,7 +22,7 @@
 	const { theme } = themeStore;
 
 	const settingsStore = getNotificationSettingsStore();
-	const { timelineAutoScroll } = settingsStore;
+	const { timelineAutoScroll, hoverActionsEnabled } = settingsStore;
 
 	function handleThemeToggle() {
 		themeStore.toggle();
@@ -35,6 +35,13 @@
 		} else {
 			toastStore.success("Auto-scroll to new timeline activity disabled");
 		}
+	}
+
+	function handleHoverActionsToggle(enabled: boolean) {
+		settingsStore.setHoverActionsEnabled(enabled);
+		toastStore.success(
+			enabled ? "Notification hover actions enabled" : "Notification hover actions disabled"
+		);
 	}
 
 	$: isDark = $theme === "dark";
@@ -76,6 +83,31 @@
 				type="checkbox"
 				checked={$timelineAutoScroll}
 				on:change={(e) => handleTimelineAutoScrollToggle(e.currentTarget.checked)}
+				class="sr-only peer"
+			/>
+			<div
+				class="relative w-9 h-5 bg-gray-300 dark:bg-gray-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600 peer-disabled:opacity-50"
+			></div>
+		</label>
+	</div>
+
+	<!-- Notification Hover Actions Toggle -->
+	<div class="flex items-center justify-between py-3 border-t border-gray-200 dark:border-gray-800">
+		<div class="flex-1">
+			<div class="flex items-center gap-2">
+				<span class="text-md font-medium text-gray-900 dark:text-gray-100">
+					Show notification actions on hover
+				</span>
+			</div>
+			<p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
+				Show quick-action buttons when the pointer moves over a notification in a list.
+			</p>
+		</div>
+		<label class="relative flex items-center cursor-pointer">
+			<input
+				type="checkbox"
+				checked={$hoverActionsEnabled}
+				on:change={(e) => handleHoverActionsToggle(e.currentTarget.checked)}
 				class="sr-only peer"
 			/>
 			<div
