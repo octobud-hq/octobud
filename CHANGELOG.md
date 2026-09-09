@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Notification hover actions setting**: Option to hide quick-action controls when hovering over notification rows, preventing accidental actions
 - **Debugging section** (`Settings → Debugging`): in-app diagnostic tools for troubleshooting and bug reporting
   - Log viewer with level/search filters and auto-refresh
   - App info panel showing version, platform, paths, and uptime
@@ -213,4 +214,3 @@ some users randomly can't fetch more than 10-15 notifications without getting 50
 
 - **macOS**: Full support with menu bar integration, auto-start, and Keychain storage
 - **Linux & Windows**: Core functionality available, with encrypted token storage (Keychain support planned)
-
