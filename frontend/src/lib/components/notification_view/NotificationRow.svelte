@@ -31,6 +31,7 @@
 	import type { NotificationPageController } from "$lib/state/types";
 	import { formatSnoozeMessage } from "$lib/utils/snoozeFormat";
 	import { currentTime } from "$lib/stores/timeStore";
+	import { getNotificationSettingsStore } from "$lib/stores/notificationSettings";
 	import type { SnoozeDropdownComponent, TagDropdownComponent } from "$lib/types/components";
 
 	// Subscribe to time store to trigger re-renders when time updates
@@ -40,6 +41,7 @@
 
 	// Get page controller from context
 	const pageController = getContext<NotificationPageController>("notificationPageController");
+	const { hoverActionsEnabled } = getNotificationSettingsStore();
 
 	// Extract stores for reactivity
 	const {
@@ -510,7 +512,9 @@
 				<div
 					class="flex items-center gap-2 transition-opacity {isSnoozeDropdownOpen
 						? 'opacity-0'
-						: 'group-hover:opacity-0'}"
+						: $hoverActionsEnabled
+							? 'group-hover:opacity-0'
+							: ''}"
 				>
 					{#if snoozeMessage}
 						<span
@@ -563,7 +567,9 @@
 			class="absolute right-1 flex items-center gap-1 transition-opacity {isSnoozeDropdownOpen ||
 			isTagDropdownOpen
 				? 'opacity-100'
-				: 'opacity-0 group-hover:opacity-100'}"
+				: $hoverActionsEnabled
+					? 'opacity-0 group-hover:opacity-100'
+					: 'invisible opacity-0 pointer-events-none'}"
 		>
 			<div class="{buttonGroupBg} rounded-full p-0.5 flex items-center gap-0.5 shadow-lg">
 				{#if subjectLink}

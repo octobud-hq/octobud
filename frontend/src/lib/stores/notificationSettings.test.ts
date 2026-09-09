@@ -39,6 +39,7 @@ describe("NotificationSettings Store", () => {
 
 			expect(get(store.notificationsEnabled)).toBe(true);
 			expect(get(store.faviconBadgeEnabled)).toBe(true);
+			expect(get(store.hoverActionsEnabled)).toBe(true);
 		});
 
 		it("loads saved notification enabled state from localStorage", () => {
@@ -55,6 +56,14 @@ describe("NotificationSettings Store", () => {
 			const store = createNotificationSettingsStore();
 
 			expect(get(store.faviconBadgeEnabled)).toBe(false);
+		});
+
+		it("loads saved hover actions state from localStorage", () => {
+			localStorage.setItem("octobud:notifications:hoverActions", "false");
+
+			const store = createNotificationSettingsStore();
+
+			expect(get(store.hoverActionsEnabled)).toBe(false);
 		});
 
 		it("can set notification enabled state", () => {
@@ -79,6 +88,14 @@ describe("NotificationSettings Store", () => {
 			store.setFaviconBadgeEnabled(true);
 
 			expect(get(store.faviconBadgeEnabled)).toBe(true);
+		});
+
+		it("can set the hover actions state", () => {
+			const store = createNotificationSettingsStore();
+
+			store.setHoverActionsEnabled(false);
+
+			expect(get(store.hoverActionsEnabled)).toBe(false);
 		});
 
 		it("toggles notification enabled state", () => {

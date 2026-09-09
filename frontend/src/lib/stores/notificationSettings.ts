@@ -19,6 +19,7 @@ import { browser } from "$app/environment";
 const NOTIFICATIONS_ENABLED_KEY = "octobud:notifications:enabled";
 const FAVICON_BADGE_ENABLED_KEY = "octobud:notifications:faviconBadge";
 const TIMELINE_AUTO_SCROLL_KEY = "octobud:timeline:autoScroll";
+const HOVER_ACTIONS_ENABLED_KEY = "octobud:notifications:hoverActions";
 
 /**
  * Notification Settings Store
@@ -42,9 +43,15 @@ export function createNotificationSettingsStore() {
 			? localStorage.getItem(TIMELINE_AUTO_SCROLL_KEY) === "true"
 			: false;
 
+	const storedHoverActionsEnabled =
+		typeof window !== "undefined"
+			? localStorage.getItem(HOVER_ACTIONS_ENABLED_KEY) !== "false"
+			: true;
+
 	const notificationsEnabled = writable<boolean>(storedEnabled);
 	const faviconBadgeEnabled = writable<boolean>(storedFaviconBadgeEnabled);
 	const timelineAutoScroll = writable<boolean>(storedTimelineAutoScroll);
+	const hoverActionsEnabled = writable<boolean>(storedHoverActionsEnabled);
 
 	// Persist to localStorage and notify service worker
 	if (browser) {
@@ -67,20 +74,28 @@ export function createNotificationSettingsStore() {
 		timelineAutoScroll.subscribe((value) => {
 			localStorage.setItem(TIMELINE_AUTO_SCROLL_KEY, value.toString());
 		});
+		hoverActionsEnabled.subscribe((value) => {
+			localStorage.setItem(HOVER_ACTIONS_ENABLED_KEY, value.toString());
+		});
 	}
 
 	return {
 		notificationsEnabled: notificationsEnabled as Writable<boolean>,
 		faviconBadgeEnabled: faviconBadgeEnabled as Writable<boolean>,
 		timelineAutoScroll: timelineAutoScroll as Writable<boolean>,
+		hoverActionsEnabled: hoverActionsEnabled as Writable<boolean>,
 		syncFromStorage: () => {
 			if (typeof window === "undefined") return;
 			const newEnabled = localStorage.getItem(NOTIFICATIONS_ENABLED_KEY) !== "false";
 			const newFaviconBadge = localStorage.getItem(FAVICON_BADGE_ENABLED_KEY) !== "false";
 			const newAutoScroll = localStorage.getItem(TIMELINE_AUTO_SCROLL_KEY) === "true";
+			const newHoverActions = localStorage.getItem(HOVER_ACTIONS_ENABLED_KEY) !== "false";
 			if (newEnabled !== get(notificationsEnabled)) notificationsEnabled.set(newEnabled);
 			if (newFaviconBadge !== get(faviconBadgeEnabled)) faviconBadgeEnabled.set(newFaviconBadge);
 			if (newAutoScroll !== get(timelineAutoScroll)) timelineAutoScroll.set(newAutoScroll);
+			if (newHoverActions !== get(hoverActionsEnabled)) {
+				hoverActionsEnabled.set(newHoverActions);
+			}
 		},
 		setEnabled: (enabled: boolean) => {
 			notificationsEnabled.set(enabled);
@@ -91,6 +106,9 @@ export function createNotificationSettingsStore() {
 		setTimelineAutoScroll: (enabled: boolean) => {
 			timelineAutoScroll.set(enabled);
 		},
+		setHoverActionsEnabled: (enabled: boolean) => {
+			hoverActionsEnabled.set(enabled);
+		},
 		toggle: () => {
 			notificationsEnabled.update((enabled) => !enabled);
 		},
@@ -99,6 +117,9 @@ export function createNotificationSettingsStore() {
 		},
 		toggleTimelineAutoScroll: () => {
 			timelineAutoScroll.update((enabled) => !enabled);
+		},
+		toggleHoverActions: () => {
+			hoverActionsEnabled.update((enabled) => !enabled);
 		},
 	};
 }

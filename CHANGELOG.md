@@ -5,6 +5,12 @@ All notable changes to Octobud will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.4]
+
+### Added
+
+- **Notification hover actions setting**: Option to hide quick-action controls when hovering over notification rows, preventing accidental actions
+
 ## [0.3.3]
 
 ### Added
@@ -213,4 +219,3 @@ some users randomly can't fetch more than 10-15 notifications without getting 50
 
 - **macOS**: Full support with menu bar integration, auto-start, and Keychain storage
 - **Linux & Windows**: Core functionality available, with encrypted token storage (Keychain support planned)
-
