@@ -70,7 +70,7 @@ func (s *Service) BulkUpdate(
 	if len(target.IDs) > 0 {
 		return s.executeBulkUpdateByIDs(ctx, userID, op, target.IDs, params)
 	}
-	return s.executeBulkUpdateByQuery(ctx, userID, op, target.Query, params)
+	return s.executeBulkUpdateByQuery(ctx, userID, op, target, params)
 }
 
 // executeBulkUpdateByIDs executes a bulk operation using notification IDs
@@ -121,18 +121,20 @@ func (s *Service) executeBulkUpdateByIDs(
 	}
 }
 
-// executeBulkUpdateByQuery executes a bulk operation using a query string
+// executeBulkUpdateByQuery executes a bulk operation using a query string,
+// optionally narrowed to the target's repositories.
 func (s *Service) executeBulkUpdateByQuery(
 	ctx context.Context,
 	userID string,
 	op models.BulkOperationType,
-	queryStr string,
+	target models.BulkOperationTarget,
 	params models.BulkUpdateParams,
 ) (int64, error) {
-	dbQuery, err := query.BuildQuery(queryStr, 0, 0)
+	dbQuery, err := query.BuildQuery(target.Query, 0, 0)
 	if err != nil {
 		return 0, errors.Join(ErrFailedToBuildQuery, err)
 	}
+	dbQuery = query.ApplyRepositoryFilter(dbQuery, target.RepositoryIDs)
 
 	switch op {
 	case models.BulkOpMarkRead:

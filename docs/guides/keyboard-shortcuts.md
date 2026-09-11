@@ -16,12 +16,17 @@ Octobud is designed for keyboard-first navigation. Press `h` at any time to see 
 | `Shift + g` | Jump to last notification |
 | `[` / `]` | Navigate pages |
 | `Shift + j` / `Shift + k` | Navigate views |
+| `f` | Open the repository filter |
+| `Shift + f` | Clear the repository filter |
 | `/` | Focus query input |
 | `Cmd + b` | Toggle sidebar |
 
 **Conditional Behaviors:**
 - **`[` / `]` (Navigate pages)**: Disabled when detail view is open in list mode (not split view)
+- **`f` (Repository filter)**: Disabled when detail view is open in list mode (not split view)
 - **`Cmd + b`**: In multiselect mode, opens bulk command palette instead of toggling sidebar
+
+**Repository filter** (opened with `f`): `↑` / `↓` move, `Space` toggles the highlighted repository, `Enter` selects only that repository and closes, `Esc` closes. Type to filter the list; the highlight jumps to the first match. Pin a repository with the pin button on its row to keep it at the top of every repository filter.
 
 ## Recent action history
 

@@ -16,6 +16,7 @@
 package notifications
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -222,7 +223,7 @@ func TestHandler_handleBulkAssignTag(t *testing.T) {
 					GetTag(gomock.Any(), "test-user-id", "1").
 					Return(db.Tag{ID: "1", Name: "test"}, nil)
 				mockSvc.EXPECT().
-					ListNotificationsFromQueryString(gomock.Any(), "test-user-id", "is:unread", int32(999999)).
+					ListNotificationsFromQueryString(gomock.Any(), "test-user-id", "is:unread", gomock.Nil(), int32(999999)).
 					Return([]db.Notification{
 						{GithubID: "id1"},
 						{GithubID: "id2"},
@@ -348,7 +349,7 @@ func TestHandler_handleBulkRemoveTag(t *testing.T) {
 			},
 			setupMock: func(mockSvc *notificationmocks.MockNotificationService) {
 				mockSvc.EXPECT().
-					ListNotificationsFromQueryString(gomock.Any(), "test-user-id", "is:unread", int32(999999)).
+					ListNotificationsFromQueryString(gomock.Any(), "test-user-id", "is:unread", gomock.Nil(), int32(999999)).
 					Return([]db.Notification{
 						{GithubID: "id1"},
 						{GithubID: "id2"},
@@ -418,4 +419,48 @@ func TestHandler_handleBulkRemoveTag(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestHandler_handleBulkOperation_PassesRepositoryIDs(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	const testUserID = "test-user-id"
+	handler, mockSvc, _, mockAuthSvc := setupTestHandler(ctrl)
+	mockAuthSvc.EXPECT().
+		GetUser(gomock.Any()).
+		Return(&models.User{GithubUserID: testUserID}, nil).
+		AnyTimes()
+	mockSvc.EXPECT().
+		BulkUpdate(gomock.Any(), testUserID, models.BulkOpArchive, gomock.Any(), gomock.Any()).
+		DoAndReturn(func(
+			_ context.Context,
+			_ string,
+			_ models.BulkOperationType,
+			target models.BulkOperationTarget,
+			_ models.BulkUpdateParams,
+		) (int64, error) {
+			require.Equal(t, "in:inbox", target.Query)
+			require.Equal(t, []int64{3, 4}, target.RepositoryIDs)
+			require.Empty(t, target.IDs)
+			return 12, nil
+		})
+
+	req := createRequest(
+		http.MethodPost,
+		"/notifications/bulk/archive",
+		bulkMarkNotificationsRequest{
+			Query:         "in:inbox",
+			RepositoryIDs: []int64{3, 0, 4, 3}, // normalized to [3, 4], matching the list endpoint
+		},
+	)
+	req = req.WithContext(helpers.ContextWithUserID(req.Context(), testUserID))
+
+	w := httptest.NewRecorder()
+	handler.handleBulkArchiveNotifications(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	var response bulkNotificationsResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+	require.Equal(t, 12, response.Count)
 }

@@ -22,6 +22,8 @@ import { createSelectionStore } from "../stores/selectionStore";
 import { createKeyboardNavigationStore } from "../stores/keyboardNavigationStore";
 import { createUIStateStore } from "../stores/uiStateStore";
 import { createQueryStore } from "../stores/queryStore";
+import { createRepositoryFilterStore } from "../stores/repositoryFilterStore";
+import { getRepositoryPinsStore } from "../stores/repositoryPinsStore";
 import { createViewStore } from "../stores/viewStore";
 import { createEventBus } from "../stores/eventBus";
 import type { ControllerOptions, NotificationPageControllerActions } from "./interfaces";
@@ -39,6 +41,7 @@ import { createKeyboardActionController } from "./actions/keyboardActionControll
 import { createDetailActionController } from "./actions/detailActionController";
 import { createNotificationActionController } from "./actions/notificationActionController";
 import { createBulkActionController } from "./actions/bulkActionController";
+import { createRepositoryFilterActionController } from "./actions/repositoryFilterActionController";
 import { createKeyboardShortcutActionController } from "./actions/keyboardShortcutActionController";
 
 /**
@@ -64,6 +67,13 @@ export function createNotificationPageController(
 	const keyboardStore = createKeyboardNavigationStore(notificationStore);
 	const uiStore = createUIStateStore();
 	const queryStore = createQueryStore(initialQuery, initialViewQuery);
+	// The layout seeds the controller with partial data before any route loads.
+	const repositoryFilterStore = createRepositoryFilterStore(
+		initialData.initialRepositoryIds ?? [],
+		initialData.initialRepositoryCounts ?? [],
+		initialData.initialRepositoryCounts ? initialQuery || initialViewQuery : null
+	);
+	const repositoryPinsStore = getRepositoryPinsStore();
 	const viewStore = createViewStore(
 		initialData.views,
 		(initialData as any).tags ?? [],
@@ -78,7 +88,9 @@ export function createNotificationPageController(
 		paginationStore,
 		queryStore,
 		options,
-		debounceManager
+		debounceManager,
+		repositoryFilterStore,
+		repositoryPinsStore
 	);
 
 	// Store collection for controllers that need all stores
@@ -91,6 +103,7 @@ export function createNotificationPageController(
 		uiStore,
 		queryStore,
 		viewStore,
+		repositoryFilterStore,
 	};
 
 	// Create action controllers in dependency order
@@ -187,7 +200,17 @@ export function createNotificationPageController(
 			selectionStore,
 			queryStore,
 			uiStore,
+			repositoryFilterStore,
 		},
+		options,
+		sharedHelpers
+	);
+
+	const repositoryFilterActions = createRepositoryFilterActionController(
+		repositoryFilterStore,
+		repositoryPinsStore,
+		queryStore,
+		paginationStore,
 		options,
 		sharedHelpers
 	);
@@ -227,6 +250,8 @@ export function createNotificationPageController(
 		...keyboardShortcutActions,
 		// Bulk operation actions
 		...bulkActions,
+		// Repository filter actions
+		...repositoryFilterActions,
 		// UI state actions (exposed directly from store)
 		toggleSidebar: uiStore.toggleSidebar,
 		openSnoozeDropdown: uiStore.openSnoozeDropdown,
@@ -260,6 +285,13 @@ export function createNotificationPageController(
 			quickQuery: queryStore.quickQuery,
 			viewQuery: queryStore.viewQuery,
 			quickFilters: queryStore.quickFilters,
+
+			// Repository filter
+			selectedRepositoryIds: repositoryFilterStore.selectedRepositoryIds,
+			repositoryCounts: repositoryFilterStore.repositoryCounts,
+			repositoryCountsLoading: repositoryFilterStore.countsLoading,
+			repositoryFilterOpen: repositoryFilterStore.dropdownOpen,
+			pinnedRepositoryIds: repositoryPinsStore.pinnedRepositoryIds,
 
 			// Selection & multiselect
 			selectedIds: selectionStore.selectedIds,
@@ -308,6 +340,10 @@ export function createNotificationPageController(
 			// Query-related derived
 			isQueryModified: queryStore.isQueryModified,
 			hasActiveFilters: queryStore.hasActiveFilters,
+
+			// Repository filter derived
+			hasRepositoryFilter: repositoryFilterStore.hasRepositoryFilter,
+			selectedRepositories: repositoryFilterStore.selectedRepositories,
 
 			// Pagination-related derived
 			totalPages: paginationStore.totalPages,

@@ -38,6 +38,7 @@ import type { KeyboardStore } from "../../stores/keyboardNavigationStore";
 import type { UIStore } from "../../stores/uiStateStore";
 import type { QueryStore } from "../../stores/queryStore";
 import type { ViewStore } from "../../stores/viewStore";
+import type { RepositoryFilterStore } from "../../stores/repositoryFilterStore";
 import type { ControllerOptions } from "../interfaces/common";
 import type { SharedHelpers } from "./sharedHelpers";
 import type { DebounceManager } from "./debounceManager";
@@ -51,6 +52,7 @@ interface StoreCollection {
 	uiStore: UIStore;
 	queryStore: QueryStore;
 	viewStore: ViewStore;
+	repositoryFilterStore?: RepositoryFilterStore;
 }
 
 /**
@@ -72,6 +74,7 @@ export function createViewActionController(
 		queryStore,
 		viewStore,
 		uiStore,
+		repositoryFilterStore,
 	} = stores;
 
 	let timelineRefreshHandler: ((githubId: string) => void) | null = null;
@@ -175,6 +178,18 @@ export function createViewActionController(
 		queryStore.setQuickQuery(nextQuery || nextViewQuery);
 		queryStore.setViewQuery(nextViewQuery);
 
+		if (repositoryFilterStore) {
+			// The layout seeds the controller with partial data before any route loads, so
+			// these can be absent even though the route loader always returns them.
+			repositoryFilterStore.setSelectedRepositoryIds(data.initialRepositoryIds ?? []);
+			if (data.initialRepositoryCounts) {
+				repositoryFilterStore.setRepositoryCounts(
+					data.initialRepositoryCounts,
+					nextQuery || nextViewQuery
+				);
+			}
+		}
+
 		// Clear debounce timeouts
 		debounceManager.clearAll();
 
@@ -263,14 +278,24 @@ export function createViewActionController(
 		const currentDetailId = get(detailStore.detailNotificationId);
 		const currentPageData = get(notificationStore.pageData);
 
-		// Always refresh views/tags for up-to-date unread counts
-		await refreshViewCounts();
-
 		// Determine if we should refresh notifications
 		// Always refresh if page data is empty (fresh load)
 		const hasEmptyPageData = currentPageData.items.length === 0;
 		const shouldRefreshNotifications =
 			hasEmptyPageData || (currentPage === 1 && ((!isSplitMode && !isDetailOpen) || isSplitMode));
+
+		// Always refresh views/tags for up-to-date unread counts. The repository selector's
+		// counts only matter when the list itself refreshes or the dropdown is open, so
+		// refresh them then, concurrently rather than serialised behind the view counts.
+		const repositoryDropdownOpen = repositoryFilterStore
+			? get(repositoryFilterStore.dropdownOpen)
+			: false;
+		await Promise.all([
+			refreshViewCounts(),
+			shouldRefreshNotifications || repositoryDropdownOpen
+				? sharedHelpers.refreshRepositoryCounts()
+				: Promise.resolve(),
+		]);
 
 		// Check if the currently-open notification was updated (for timeline refresh)
 		const currentDetailUpdated =

@@ -15,15 +15,19 @@
 
 import { get } from "svelte/store";
 import { tick } from "svelte";
-import { fetchNotifications } from "$lib/api/notifications";
+import { fetchNotifications, fetchRepositoryCounts } from "$lib/api/notifications";
 import type { NotificationStore } from "../../stores/notificationStore";
 import type { PaginationStore } from "../../stores/paginationStore";
 import type { QueryStore } from "../../stores/queryStore";
+import type { RepositoryFilterStore } from "../../stores/repositoryFilterStore";
+import type { RepositoryPinsStore } from "../../stores/repositoryPinsStore";
 import type { ControllerOptions } from "../interfaces/common";
 import type { DebounceManager } from "./debounceManager";
 
 export interface SharedHelpers {
 	refresh: () => Promise<void>;
+	/** Refetch per-repository counts for the current query (ignores the repository filter). */
+	refreshRepositoryCounts: () => Promise<void>;
 	syncQueryToUrl: () => Promise<void>;
 	scheduleDebouncedRefresh: () => void;
 	updateUrlWithDetailId: (notificationId: string) => Promise<void>;
@@ -38,8 +42,12 @@ export function createSharedHelpers(
 	paginationStore: PaginationStore,
 	queryStore: QueryStore,
 	options: ControllerOptions,
-	debounceManager: DebounceManager
+	debounceManager: DebounceManager,
+	repositoryFilterStore?: RepositoryFilterStore,
+	repositoryPinsStore?: RepositoryPinsStore
 ): SharedHelpers {
+	// Sequence number so an older counts response never overwrites a newer one.
+	let repositoryCountsRequest = 0;
 	/**
 	 * Refresh notifications from API
 	 */
@@ -48,9 +56,13 @@ export function createSharedHelpers(
 		try {
 			const currentPage = get(paginationStore.page);
 			const currentQuery = get(queryStore.quickQuery);
+			const repositoryIds = repositoryFilterStore
+				? get(repositoryFilterStore.selectedRepositoryIds)
+				: [];
 
 			const response = await fetchNotifications({
 				page: currentPage,
+				...(repositoryIds.length > 0 ? { repositoryIds } : {}),
 				filters: {
 					query: currentQuery || undefined,
 					filters: [],
@@ -65,6 +77,36 @@ export function createSharedHelpers(
 			console.error("Failed to refresh notifications", error);
 		} finally {
 			paginationStore.setLoading(false);
+		}
+	}
+
+	/**
+	 * Refresh the per-repository counts that back the repository selector. Uses the
+	 * current query without the repository filter so every candidate repository is
+	 * listed. Failures are logged and leave the previous counts in place.
+	 */
+	async function refreshRepositoryCounts(): Promise<void> {
+		if (!repositoryFilterStore || typeof window === "undefined") {
+			return;
+		}
+		const requestId = ++repositoryCountsRequest;
+		const query = get(queryStore.quickQuery) ?? "";
+		const includeIds = [
+			...get(repositoryFilterStore.selectedRepositoryIds),
+			...(repositoryPinsStore ? get(repositoryPinsStore.pinnedRepositoryIds) : []),
+		];
+		repositoryFilterStore.countsLoading.set(true);
+		try {
+			const counts = await fetchRepositoryCounts(query, includeIds);
+			if (requestId === repositoryCountsRequest) {
+				repositoryFilterStore.setRepositoryCounts(counts, query);
+			}
+		} catch (error) {
+			console.error("Failed to refresh repository counts", error);
+		} finally {
+			if (requestId === repositoryCountsRequest) {
+				repositoryFilterStore.countsLoading.set(false);
+			}
 		}
 	}
 
@@ -135,6 +177,7 @@ export function createSharedHelpers(
 
 	return {
 		refresh,
+		refreshRepositoryCounts,
 		syncQueryToUrl,
 		scheduleDebouncedRefresh,
 		updateUrlWithDetailId,

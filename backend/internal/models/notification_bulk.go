@@ -39,6 +39,8 @@ type BulkOperationTarget struct {
 	IDs []string
 	// Query is a query string to find notifications. Mutually exclusive with IDs.
 	Query string
+	// RepositoryIDs optionally narrows Query to these repositories. Ignored when IDs is set.
+	RepositoryIDs []int64
 }
 
 // BulkUpdateParams holds optional parameters for bulk operations

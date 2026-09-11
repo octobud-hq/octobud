@@ -46,6 +46,7 @@
 	export let onClear: () => void;
 	export let onUpdateView: () => void;
 	export let onSaveAsNewView: () => void;
+	export let saveNote: string | null = null;
 	export let page: number;
 	export let totalPages: number;
 	export let onPrevious: () => void;
@@ -159,14 +160,6 @@
 		return headerComponent?.focusSearchInput() ?? false;
 	}
 
-	export function toggleFilterDropdown() {
-		// This is a placeholder - implement if needed
-	}
-
-	export function isFilterDropdownOpen() {
-		return false;
-	}
-
 	export function openBulkSnoozeDropdown() {
 		return headerComponent?.openBulkSnoozeDropdown() ?? false;
 	}
@@ -229,6 +222,7 @@
 				{onClear}
 				{onUpdateView}
 				{onSaveAsNewView}
+				{saveNote}
 				{page}
 				{totalPages}
 				{onPrevious}

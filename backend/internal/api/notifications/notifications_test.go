@@ -33,6 +33,7 @@ import (
 
 	"github.com/octobud-hq/octobud/backend/internal/api/helpers"
 	authmocks "github.com/octobud-hq/octobud/backend/internal/core/auth/mocks"
+	"github.com/octobud-hq/octobud/backend/internal/core/notification"
 	notificationmocks "github.com/octobud-hq/octobud/backend/internal/core/notification/mocks"
 	repositorymocks "github.com/octobud-hq/octobud/backend/internal/core/repository/mocks"
 	tagmocks "github.com/octobud-hq/octobud/backend/internal/core/tag/mocks"
@@ -354,6 +355,164 @@ func TestHandler_handleRefreshNotificationSubject_Basic(t *testing.T) {
 			handler.handleRefreshNotificationSubject(w, req)
 
 			require.Equal(t, tt.expectedStatus, w.Code)
+		})
+	}
+}
+
+func Test_parseRepositoryIDs(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  string
+		want []int64
+	}{
+		{name: "empty", raw: "", want: nil},
+		{name: "single", raw: "12", want: []int64{12}},
+		{name: "multiple with spaces", raw: " 12, 34 ,56", want: []int64{12, 34, 56}},
+		{name: "drops invalid, zero and negative", raw: "12,abc,0,-4,34", want: []int64{12, 34}},
+		{name: "dedupes preserving order", raw: "34,12,34", want: []int64{34, 12}},
+		{name: "only garbage yields nil", raw: "x,,y", want: nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, parseRepositoryIDs(tt.raw))
+		})
+	}
+}
+
+func TestHandler_handleListNotifications_PassesRepositoryIDs(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	const testUserID = "test-user-id"
+	handler, mockSvc, _, mockAuthSvc := setupTestHandler(ctrl)
+	mockAuthSvc.EXPECT().
+		GetUser(gomock.Any()).
+		Return(&models.User{GithubUserID: testUserID}, nil).
+		AnyTimes()
+	mockSvc.EXPECT().
+		ListNotifications(gomock.Any(), testUserID, gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ string, opts models.ListOptions) (models.ListDetailsResult, error) {
+			require.Equal(t, "in:inbox", opts.Query)
+			require.Equal(t, []int64{7, 9}, opts.RepositoryIDs)
+			return models.ListDetailsResult{Notifications: []models.Notification{}}, nil
+		})
+
+	req := createRequest(http.MethodGet, "/notifications?query=in:inbox&repos=7,9", nil)
+	req = req.WithContext(helpers.ContextWithUserID(req.Context(), testUserID))
+
+	w := httptest.NewRecorder()
+	handler.handleListNotifications(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestHandler_handleListRepositoryCounts(t *testing.T) {
+	tests := []struct {
+		name           string
+		queryParams    map[string]string
+		setupMock      func(*notificationmocks.MockNotificationService)
+		expectedStatus int
+		expectedBody   func(*testing.T, *httptest.ResponseRecorder)
+	}{
+		{
+			name:        "success returns repositories with counts",
+			queryParams: map[string]string{"query": "in:inbox"},
+			setupMock: func(mockSvc *notificationmocks.MockNotificationService) {
+				mockSvc.EXPECT().
+					ListRepositoryCounts(gomock.Any(), "test-user-id", "in:inbox", gomock.Nil()).
+					Return([]models.RepositoryCount{
+						{
+							Repository: models.Repository{ID: 1, FullName: "org/a"},
+							Total:      5,
+							Unread:     2,
+						},
+					}, nil)
+			},
+			expectedStatus: http.StatusOK,
+			expectedBody: func(t *testing.T, w *httptest.ResponseRecorder) {
+				var response listRepositoryCountsResponse
+				require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+				require.Len(t, response.Repositories, 1)
+				require.Equal(t, "org/a", response.Repositories[0].Repository.FullName)
+				require.Equal(t, int64(5), response.Repositories[0].Total)
+				require.Equal(t, int64(2), response.Repositories[0].Unread)
+			},
+		},
+		{
+			name:        "include ids are parsed and normalized",
+			queryParams: map[string]string{"query": "in:inbox", "include": "4,4,0,9"},
+			setupMock: func(mockSvc *notificationmocks.MockNotificationService) {
+				mockSvc.EXPECT().
+					ListRepositoryCounts(gomock.Any(), "test-user-id", "in:inbox", []int64{4, 9}).
+					Return([]models.RepositoryCount{}, nil)
+			},
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:        "empty result serializes as empty array",
+			queryParams: map[string]string{},
+			setupMock: func(mockSvc *notificationmocks.MockNotificationService) {
+				mockSvc.EXPECT().
+					ListRepositoryCounts(gomock.Any(), "test-user-id", "", gomock.Nil()).
+					Return([]models.RepositoryCount{}, nil)
+			},
+			expectedStatus: http.StatusOK,
+			expectedBody: func(t *testing.T, w *httptest.ResponseRecorder) {
+				require.JSONEq(t, `{"repositories":[]}`, w.Body.String())
+			},
+		},
+		{
+			name:        "invalid query returns 400",
+			queryParams: map[string]string{"query": "badfield:x"},
+			setupMock: func(mockSvc *notificationmocks.MockNotificationService) {
+				mockSvc.EXPECT().
+					ListRepositoryCounts(gomock.Any(), "test-user-id", "badfield:x", gomock.Nil()).
+					Return(nil, errors.Join(notification.ErrInvalidQuery, errors.New("unknown field")))
+			},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:        "service error returns 500",
+			queryParams: map[string]string{},
+			setupMock: func(mockSvc *notificationmocks.MockNotificationService) {
+				mockSvc.EXPECT().
+					ListRepositoryCounts(gomock.Any(), "test-user-id", "", gomock.Nil()).
+					Return(nil, errors.New("database error"))
+			},
+			expectedStatus: http.StatusInternalServerError,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			const testUserID = "test-user-id"
+			handler, mockSvc, _, mockAuthSvc := setupTestHandler(ctrl)
+			mockAuthSvc.EXPECT().
+				GetUser(gomock.Any()).
+				Return(&models.User{GithubUserID: testUserID}, nil).
+				AnyTimes()
+			tt.setupMock(mockSvc)
+
+			req := createRequest(http.MethodGet, "/notifications/repositories", nil)
+			if len(tt.queryParams) > 0 {
+				q := req.URL.Query()
+				for k, v := range tt.queryParams {
+					q.Set(k, v)
+				}
+				req.URL.RawQuery = q.Encode()
+			}
+			req = req.WithContext(helpers.ContextWithUserID(req.Context(), testUserID))
+
+			w := httptest.NewRecorder()
+			handler.handleListRepositoryCounts(w, req)
+
+			require.Equal(t, tt.expectedStatus, w.Code)
+			if tt.expectedBody != nil {
+				tt.expectedBody(t, w)
+			}
 		})
 	}
 }

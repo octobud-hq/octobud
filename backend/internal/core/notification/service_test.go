@@ -27,6 +27,7 @@ import (
 
 	"github.com/octobud-hq/octobud/backend/internal/db"
 	"github.com/octobud-hq/octobud/backend/internal/db/mocks"
+	"github.com/octobud-hq/octobud/backend/internal/models"
 )
 
 func TestService_GetByGithubID(t *testing.T) {
@@ -165,6 +166,7 @@ func TestService_ListNotificationsFromQueryString(t *testing.T) {
 				ctx,
 				testUserID,
 				tt.queryStr,
+				nil,
 				tt.limit,
 			)
 
@@ -500,4 +502,149 @@ func TestService_IndexRepositories(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestService_ListRepositoryCounts(t *testing.T) {
+	const testUserID = "test-user-id"
+
+	t.Run(
+		"maps joined rows in store order and appends included repositories with zero counts",
+		func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockQuerier := mocks.NewMockStore(ctrl)
+			mockQuerier.EXPECT().
+				CountNotificationsByRepository(gomock.Any(), testUserID, gomock.Any()).
+				DoAndReturn(func(_ context.Context, _ string, q db.NotificationQuery) ([]db.RepositoryNotificationCount, error) {
+					// The counts query must not be paginated.
+					require.Equal(t, int32(0), q.Limit)
+					require.Equal(t, int32(0), q.Offset)
+					return []db.RepositoryNotificationCount{
+						{
+							RepositoryID: 3,
+							Name:         "Zeta",
+							FullName:     "org/Zeta",
+							OwnerLogin:   sql.NullString{String: "org", Valid: true},
+							OwnerAvatarURL: sql.NullString{
+								String: "https://avatars/org",
+								Valid:  true,
+							},
+							Total:  7,
+							Unread: 2,
+						},
+						{RepositoryID: 1, Name: "a", FullName: "org/a", Total: 10, Unread: 0},
+					}, nil
+				})
+			// Included repositories: 1 is already counted, 9 is unknown, 5 and 4 are appended by name.
+			mockQuerier.EXPECT().
+				GetRepositoryByID(gomock.Any(), testUserID, int64(9)).
+				Return(db.Repository{}, sql.ErrNoRows)
+			mockQuerier.EXPECT().
+				GetRepositoryByID(gomock.Any(), testUserID, int64(5)).
+				Return(db.Repository{ID: 5, FullName: "org/quiet-b"}, nil)
+			mockQuerier.EXPECT().
+				GetRepositoryByID(gomock.Any(), testUserID, int64(4)).
+				Return(db.Repository{ID: 4, FullName: "org/quiet-A"}, nil)
+
+			service := NewService(mockQuerier)
+			result, err := service.ListRepositoryCounts(
+				context.Background(), testUserID, "in:inbox", []int64{1, 9, 5, 4},
+			)
+			require.NoError(t, err)
+
+			names := make([]string, 0, len(result))
+			for _, rc := range result {
+				names = append(names, rc.Repository.FullName)
+			}
+			require.Equal(t, []string{"org/Zeta", "org/a", "org/quiet-A", "org/quiet-b"}, names)
+
+			require.Equal(t, int64(7), result[0].Total)
+			require.Equal(t, int64(2), result[0].Unread)
+			require.NotNil(t, result[0].Repository.OwnerAvatarURL)
+			require.Equal(t, "https://avatars/org", *result[0].Repository.OwnerAvatarURL)
+			require.Nil(t, result[1].Repository.OwnerLogin)
+
+			require.Equal(t, int64(0), result[2].Total)
+			require.Equal(t, int64(0), result[2].Unread)
+			require.Nil(t, result[2].Repository.Raw)
+		},
+	)
+
+	t.Run("returns empty slice when nothing matches", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockQuerier := mocks.NewMockStore(ctrl)
+		mockQuerier.EXPECT().
+			CountNotificationsByRepository(gomock.Any(), testUserID, gomock.Any()).
+			Return([]db.RepositoryNotificationCount{}, nil)
+
+		service := NewService(mockQuerier)
+		result, err := service.ListRepositoryCounts(context.Background(), testUserID, "", nil)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.Empty(t, result)
+	})
+
+	t.Run("invalid query is reported as ErrInvalidQuery", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		service := NewService(mocks.NewMockStore(ctrl))
+		_, err := service.ListRepositoryCounts(
+			context.Background(),
+			testUserID,
+			"badfield:value",
+			nil,
+		)
+		require.ErrorIs(t, err, ErrInvalidQuery)
+	})
+
+	t.Run("store errors are wrapped", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockQuerier := mocks.NewMockStore(ctrl)
+		mockQuerier.EXPECT().
+			CountNotificationsByRepository(gomock.Any(), testUserID, gomock.Any()).
+			Return(nil, errors.New("boom"))
+
+		service := NewService(mockQuerier)
+		_, err := service.ListRepositoryCounts(context.Background(), testUserID, "", nil)
+		require.ErrorIs(t, err, ErrFailedToCountRepositories)
+
+		mockQuerier.EXPECT().
+			CountNotificationsByRepository(gomock.Any(), testUserID, gomock.Any()).
+			Return([]db.RepositoryNotificationCount{}, nil)
+		mockQuerier.EXPECT().
+			GetRepositoryByID(gomock.Any(), testUserID, int64(2)).
+			Return(db.Repository{}, errors.New("disk on fire"))
+		_, err = service.ListRepositoryCounts(context.Background(), testUserID, "", []int64{2})
+		require.ErrorIs(t, err, ErrFailedToGetRepository)
+	})
+}
+
+func TestService_ListNotifications_AppliesRepositoryFilter(t *testing.T) {
+	const testUserID = "test-user-id"
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockQuerier := mocks.NewMockStore(ctrl)
+	mockQuerier.EXPECT().
+		ListNotificationsFromQuery(gomock.Any(), testUserID, gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ string, q db.NotificationQuery) (db.ListNotificationsFromQueryResult, error) {
+			require.Contains(t, q.Where, "n.repository_id IN (?, ?)")
+			require.Equal(t, int64(5), q.Args[len(q.Args)-2])
+			require.Equal(t, int64(6), q.Args[len(q.Args)-1])
+			return db.ListNotificationsFromQueryResult{}, nil
+		})
+	mockQuerier.EXPECT().ListRepositories(gomock.Any(), testUserID).Return(nil, nil)
+
+	service := NewService(mockQuerier)
+	_, err := service.ListNotifications(context.Background(), testUserID, models.ListOptions{
+		Query:         "in:inbox",
+		RepositoryIDs: []int64{5, 6},
+	})
+	require.NoError(t, err)
 }

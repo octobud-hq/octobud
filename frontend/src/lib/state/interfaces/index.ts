@@ -30,6 +30,7 @@ export type { DetailActions } from "./detailActions";
 export type { NotificationActions } from "./notificationActions";
 export type { KeyboardShortcutActions } from "./keyboardShortcutActions";
 export type { BulkActions } from "./bulkActions";
+export type { RepositoryFilterActions } from "./repositoryFilterActions";
 export type { NavigationState, NavigateOptions, ControllerOptions } from "./common";
 
 // Import all interfaces to ensure they're available for the composed interface
@@ -42,6 +43,7 @@ import type { DetailActions } from "./detailActions";
 import type { NotificationActions } from "./notificationActions";
 import type { KeyboardShortcutActions } from "./keyboardShortcutActions";
 import type { BulkActions } from "./bulkActions";
+import type { RepositoryFilterActions } from "./repositoryFilterActions";
 
 /**
  * NotificationPageControllerActions
@@ -57,7 +59,8 @@ export interface NotificationPageControllerActions
 		DetailActions,
 		NotificationActions,
 		KeyboardShortcutActions,
-		BulkActions {
+		BulkActions,
+		RepositoryFilterActions {
 	// Pending mark-read tracking (prevents polling from overwriting optimistic reads)
 	addPendingMarkRead: (id: string) => void;
 	removePendingMarkRead: (id: string) => void;

@@ -21,6 +21,7 @@
 	// Framework & Core
 	import { onMount, onDestroy, tick, getContext } from "svelte";
 	import { get } from "svelte/store";
+	import { sameRepositoryIds } from "$lib/stores/repositoryFilterStore";
 	import { SvelteSet } from "svelte/reactivity";
 	import { goto, afterNavigate } from "$app/navigation";
 	import { resolve } from "$app/paths";
@@ -108,6 +109,7 @@
 		sidebarCollapsed,
 		savedListScrollPosition,
 		tags,
+		repositoryFilterOpen,
 	} = pageController.stores;
 
 	const {
@@ -123,6 +125,7 @@
 		selectionMap,
 		individualSelectionDisabled,
 		selectionEnabled,
+		hasRepositoryFilter,
 	} = pageController.derived;
 
 	// ============================================================================
@@ -195,12 +198,17 @@
 			previousPageNumber !== null &&
 			nextPageNumber !== null &&
 			previousPageNumber !== nextPageNumber;
+		const repositoryFilterChanged =
+			lastData !== null &&
+			!sameRepositoryIds(lastData.initialRepositoryIds ?? [], data.initialRepositoryIds ?? []);
 		lastData = data;
 		// Sync page controller with fresh data
 		pageController.actions.syncFromData(data);
 
-		// Only clear selection when navigating to a different view, not on refresh
-		if (viewChanged) {
+		// Clear selection when navigating to a different view or changing the repository
+		// filter (a "select all" or explicit selection made under one scope must not carry
+		// over to another), but not on a plain refresh.
+		if (viewChanged || repositoryFilterChanged) {
 			pageController.actions.clearSelection();
 		}
 
@@ -210,7 +218,7 @@
 		// "swallowed" because focus would snap back between presses. The
 		// separate clearFocusIfNeeded reactive below clamps out-of-range
 		// indices, so safety is preserved.
-		if (viewChanged || pageChanged) {
+		if (viewChanged || pageChanged || repositoryFilterChanged) {
 			keyboardFocusIndex.set(null);
 		}
 		// Reset scroll position on view change OR page change so each new page
@@ -219,7 +227,7 @@
 		// returns to the top when the detail is closed. Cross-page keyboard nav
 		// (j/k at page edges) later calls focusAt(last/first), which scrolls
 		// the focused row back into view on top of this.
-		if (viewChanged || pageChanged) {
+		if (viewChanged || pageChanged || repositoryFilterChanged) {
 			pageController.actions.scrollListToTop();
 		}
 
@@ -736,12 +744,25 @@
 	}
 
 	function toggleFilterDropdown(): boolean {
-		notificationViewComponent?.toggleFilterDropdown();
-		return true;
+		if (get(repositoryFilterOpen)) {
+			pageController.actions.closeRepositoryFilter();
+			return true;
+		}
+		return openRepositoryFilter();
+	}
+
+	// The selector only exists while the list is rendered: in single (non-split) mode with
+	// a detail open there is nothing to show, and opening the store flag would silently
+	// swallow every other shortcut.
+	function openRepositoryFilter(): boolean {
+		if ($detailOpen && !$splitModeEnabled) {
+			return false;
+		}
+		return pageController.actions.openRepositoryFilter();
 	}
 
 	function isFilterDropdownOpen(): boolean {
-		return notificationViewComponent?.isFilterDropdownOpen() ?? false;
+		return get(repositoryFilterOpen);
 	}
 
 	function isAnyDialogOpen(): boolean {
@@ -876,6 +897,15 @@
 		registerCommand("openPaletteBulk", () => openCommandPaletteBulk());
 		registerCommand("focusViewSearch", () => focusViewSearchInput());
 		registerCommand("toggleFilterDropdown", () => toggleFilterDropdown());
+		registerCommand("openRepositoryFilter", () => openRepositoryFilter());
+		registerCommand("closeRepositoryFilter", () => {
+			pageController.actions.closeRepositoryFilter();
+			return true;
+		});
+		registerCommand("clearRepositoryFilter", () => {
+			void pageController.actions.clearRepositoryFilter();
+			return true;
+		});
 		registerCommand("toggleShortcutsModal", () => toggleShortcutsModal());
 		registerCommand("focusNext", () => {
 			void pageController.actions.navigateToNextNotification();
@@ -1122,6 +1152,9 @@
 			"openPaletteBulk",
 			"focusViewSearch",
 			"toggleFilterDropdown",
+			"openRepositoryFilter",
+			"closeRepositoryFilter",
+			"clearRepositoryFilter",
 			"toggleShortcutsModal",
 			"toggleHistoryDropdown",
 			"closeHistoryDropdown",
@@ -1228,7 +1261,10 @@
 	onToggleMultiselect={pageController.actions.toggleMultiselectMode}
 	splitModeEnabled={$splitModeEnabled}
 	onToggleSplitMode={toggleSplitMode}
-	hasActiveFilters={$hasActiveFilters}
+	hasActiveFilters={$hasActiveFilters || $hasRepositoryFilter}
+	saveNote={$hasRepositoryFilter
+		? "The repository selection is not saved with the view; only the query is."
+		: null}
 	pageRangeStart={$pageRangeStart}
 	pageRangeEnd={$pageRangeEnd}
 	items={$pageData.items}

@@ -20,6 +20,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/octobud-hq/octobud/backend/internal/db"
@@ -34,6 +36,8 @@ var (
 	ErrFailedToBuildQuery                = errors.New("failed to build query")
 	ErrFailedToListNotifications         = errors.New("failed to list notifications")
 	ErrFailedToIndexRepositories         = errors.New("failed to index repositories")
+	ErrFailedToCountRepositories         = errors.New("failed to count notifications by repository")
+	ErrFailedToGetRepository             = errors.New("failed to get repository")
 	ErrFailedToBuildNotificationResponse = errors.New("failed to build notification response")
 	ErrFailedToUpsertNotification        = errors.New("failed to upsert notification")
 	ErrFailedToUpdateNotificationSubject = errors.New("failed to update notification subject")
@@ -67,6 +71,7 @@ func (s *Service) ListNotifications(
 		// Wrap query errors in a high-level error type
 		return models.ListDetailsResult{}, errors.Join(ErrInvalidQuery, err)
 	}
+	dbQuery = query.ApplyRepositoryFilter(dbQuery, opts.RepositoryIDs)
 
 	// Execute query
 	result, err := s.queries.ListNotificationsFromQuery(ctx, userID, dbQuery)
@@ -133,6 +138,7 @@ func (s *Service) ListPollNotifications(
 	if err != nil {
 		return models.ListPollResult{}, err
 	}
+	dbQuery = query.ApplyRepositoryFilter(dbQuery, opts.RepositoryIDs)
 
 	// Execute query
 	result, err := s.queries.ListNotificationsFromQuery(ctx, userID, dbQuery)
@@ -178,16 +184,19 @@ func (s *Service) ListPollNotifications(
 	}, nil
 }
 
-// ListNotificationsFromQueryString lists notifications from a query string (for bulk operations)
+// ListNotificationsFromQueryString lists notifications from a query string (for bulk operations).
+// repositoryIDs optionally narrows the query to those repositories.
 func (s *Service) ListNotificationsFromQueryString(
 	ctx context.Context,
 	userID, queryStr string,
+	repositoryIDs []int64,
 	limit int32,
 ) ([]db.Notification, error) {
 	dbQuery, err := query.BuildQuery(queryStr, limit, 0)
 	if err != nil {
 		return nil, errors.Join(ErrFailedToBuildQuery, err)
 	}
+	dbQuery = query.ApplyRepositoryFilter(dbQuery, repositoryIDs)
 
 	result, err := s.queries.ListNotificationsFromQuery(ctx, userID, dbQuery)
 	if err != nil {
@@ -195,6 +204,69 @@ func (s *Service) ListNotificationsFromQueryString(
 	}
 
 	return result.Notifications, nil
+}
+
+// ListRepositoryCounts returns, for every repository with at least one notification matching
+// queryStr, the repository's identity plus total and unread counts, ordered by unread, then
+// total, then name (the order the repository selector displays them in). Repositories in
+// includeIDs that have no matches are appended with zero counts so the caller always has
+// an identity for selected and pinned repositories.
+func (s *Service) ListRepositoryCounts(
+	ctx context.Context,
+	userID, queryStr string,
+	includeIDs []int64,
+) ([]models.RepositoryCount, error) {
+	dbQuery, err := query.BuildQueryWithOptions(queryStr, 0, 0, false)
+	if err != nil {
+		return nil, errors.Join(ErrInvalidQuery, err)
+	}
+
+	counts, err := s.queries.CountNotificationsByRepository(ctx, userID, dbQuery)
+	if err != nil {
+		return nil, errors.Join(ErrFailedToCountRepositories, err)
+	}
+
+	result := make([]models.RepositoryCount, 0, len(counts)+len(includeIDs))
+	seen := make(map[int64]struct{}, len(counts))
+	for _, count := range counts {
+		seen[count.RepositoryID] = struct{}{}
+		result = append(result, models.RepositoryCount{
+			Repository: models.Repository{
+				ID:             count.RepositoryID,
+				Name:           count.Name,
+				FullName:       count.FullName,
+				OwnerLogin:     models.NullStringPtr(count.OwnerLogin),
+				OwnerAvatarURL: models.NullStringPtr(count.OwnerAvatarURL),
+				HTMLURL:        models.NullStringPtr(count.HTMLURL),
+			},
+			Total:  count.Total,
+			Unread: count.Unread,
+		})
+	}
+
+	extra := make([]models.RepositoryCount, 0, len(includeIDs))
+	for _, id := range includeIDs {
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		repo, err := s.queries.GetRepositoryByID(ctx, userID, id)
+		if errors.Is(err, sql.ErrNoRows) {
+			continue // unknown or deleted repository: nothing to identify
+		}
+		if err != nil {
+			return nil, errors.Join(ErrFailedToGetRepository, err)
+		}
+		repoResponse := models.RepositoryFromDB(repo)
+		repoResponse.Raw = nil
+		extra = append(extra, models.RepositoryCount{Repository: repoResponse})
+	}
+	sort.SliceStable(extra, func(i, j int) bool {
+		return strings.ToLower(extra[i].Repository.FullName) <
+			strings.ToLower(extra[j].Repository.FullName)
+	})
+
+	return append(result, extra...), nil
 }
 
 // GetTagsForNotification returns tags for a notification

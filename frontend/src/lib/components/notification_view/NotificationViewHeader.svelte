@@ -26,6 +26,7 @@
 	export let onClear: () => void;
 	export let onUpdateView: () => void;
 	export let onSaveAsNewView: () => void;
+	export let saveNote: string | null = null;
 	export let page: number;
 	export let totalPages: number;
 	export let onPrevious: () => void;
@@ -73,6 +74,7 @@
 		{onClear}
 		{onUpdateView}
 		{onSaveAsNewView}
+		{saveNote}
 		{page}
 		{totalPages}
 		{onPrevious}
