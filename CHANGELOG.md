@@ -5,21 +5,16 @@ All notable changes to Octobud will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
-### Added
-
-- **Repository selector**: A new repo selector now sits above the notification list. Open it (or press `f`) to see every repository with notifications in the current view, with unread and total counts, and check one or more to scope the list. `Shift+F` clears the selection. Pin repositories to keep them at the top of the selector across all views. Bulk "select all" actions respect the selection, and it is carried in the URL (`?repos=`), so it survives reloads and can be shared.
-  - The new repo selector is applied on top of the currently selected view, but selected repos are not persisted or saved as part of that view permanently. You can, of course, still update the view's query to persist a restriction to one or more repos.
-  - The repos included in the selector are limited to those that appear in notifications returned for the current view. That is, if you are on a view that only has notifications for a single repo, that is is the only repo that will show in the selector for that view.
-  - Example use case: open a view you have for PR reviews, select one repo you want to focus on, and you will see only notifications for that repo.
-- API: `GET /api/notifications/repositories?query=` returns per-repository totals for a query; list, poll, and bulk endpoints accept repository IDs (`repos=` / `repositoryIds`) to scope results.
-
 ## [0.3.4]
 
 ### Added
 
 - **Notification hover actions setting**: Option to hide quick-action controls when hovering over notification rows, preventing accidental actions
+- **Repository selector**: A new repo selector now sits above the notification list. Open it (or press `f`) to see every repository with notifications in the current view, with unread and total counts, and check one or more to scope the list. `Shift+F` clears the selection. Pin repositories to keep them at the top of the selector across all views. Bulk "select all" actions respect the selection, and it is carried in the URL (`?repos=`), so it survives reloads and can be shared.
+  - The new repo selector is applied on top of the currently selected view, but selected repos are not persisted or saved as part of that view permanently. You can, of course, still update the view's query to persist a restriction to one or more repos.
+  - The repos included in the selector are limited to those that appear in notifications returned for the current view. That is, if you are on a view that only has notifications for a single repo, that is is the only repo that will show in the selector for that view.
+  - Example use case: open a view you have for PR reviews, select one repo you want to focus on, and you will see only notifications for that repo.
+- API: `GET /api/notifications/repositories?query=` returns per-repository totals for a query; list, poll, and bulk endpoints accept repository IDs (`repos=` / `repositoryIds`) to scope results.
 
 ## [0.3.3]
 
