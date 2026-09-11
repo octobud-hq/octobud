@@ -36,6 +36,19 @@ type ListNotificationsFromQueryResult struct {
 	Total         int64
 }
 
+// RepositoryNotificationCount is the number of notifications matching a query,
+// grouped by repository, together with the repository's display identity.
+type RepositoryNotificationCount struct {
+	RepositoryID   int64
+	Name           string
+	FullName       string
+	OwnerLogin     sql.NullString
+	OwnerAvatarURL sql.NullString
+	HTMLURL        sql.NullString
+	Total          int64
+	Unread         int64
+}
+
 // BulkSnoozeNotificationsByQueryParams contains the parameters for snoozing by query
 type BulkSnoozeNotificationsByQueryParams struct {
 	Query        NotificationQuery

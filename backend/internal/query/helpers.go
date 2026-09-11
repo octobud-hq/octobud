@@ -16,6 +16,8 @@
 package query
 
 import (
+	"strings"
+
 	"github.com/octobud-hq/octobud/backend/internal/db"
 )
 
@@ -44,5 +46,26 @@ func ApplyMutedOnlyDefaults(query db.NotificationQuery) db.NotificationQuery {
 	}
 
 	query.Where = append(query.Where, defaultFilters...)
+	return query
+}
+
+// ApplyRepositoryFilter restricts a query to notifications belonging to the given repositories.
+// It is applied after the query language is compiled so the list UI can scope any view or
+// query to a set of repositories without changing the query text. Empty input is a no-op.
+func ApplyRepositoryFilter(query db.NotificationQuery, repositoryIDs []int64) db.NotificationQuery {
+	if len(repositoryIDs) == 0 {
+		return query
+	}
+
+	placeholders := make([]string, len(repositoryIDs))
+	for i, id := range repositoryIDs {
+		placeholders[i] = "?"
+		query.Args = append(query.Args, id)
+	}
+
+	query.Where = append(
+		query.Where,
+		"n.repository_id IN ("+strings.Join(placeholders, ", ")+")",
+	)
 	return query
 }

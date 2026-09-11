@@ -58,12 +58,16 @@ const (
 type bulkMarkNotificationsRequest struct {
 	GithubIDs []string `json:"githubIDs,omitempty"`
 	Query     string   `json:"query,omitempty"`
+	// RepositoryIDs optionally narrows Query to these repositories (ignored with GithubIDs).
+	RepositoryIDs []int64 `json:"repositoryIds,omitempty"`
 }
 
 type bulkTagNotificationsRequest struct {
 	GithubIDs []string `json:"githubIDs,omitempty"`
 	TagID     string   `json:"tagId"`
 	Query     string   `json:"query,omitempty"`
+	// RepositoryIDs optionally narrows Query to these repositories (ignored with GithubIDs).
+	RepositoryIDs []int64 `json:"repositoryIds,omitempty"`
 }
 
 // handleBulkOperation handles bulk operations that follow the standard pattern
@@ -123,7 +127,9 @@ func (h *Handler) handleBulkOperation(w http.ResponseWriter, r *http.Request, op
 	}
 
 	if hasQuery {
-		count, err = h.executeBulkOperationByQuery(ctx, userID, op, req.Query)
+		count, err = h.executeBulkOperationByQuery(
+			ctx, userID, op, req.Query, normalizeRepositoryIDs(req.RepositoryIDs),
+		)
 	} else {
 		count, err = h.executeBulkOperationByIDs(ctx, userID, op, req.GithubIDs)
 	}
@@ -155,12 +161,13 @@ func (h *Handler) executeBulkOperationByQuery(
 	userID string,
 	op BulkOperation,
 	queryStr string,
+	repositoryIDs []int64,
 ) (int64, error) {
 	return h.notifications.BulkUpdate(
 		ctx,
 		userID,
 		models.BulkOperationType(op),
-		models.BulkOperationTarget{Query: queryStr},
+		models.BulkOperationTarget{Query: queryStr, RepositoryIDs: repositoryIDs},
 		models.BulkUpdateParams{},
 	)
 }
@@ -297,6 +304,7 @@ func (h *Handler) handleBulkAssignTag(w http.ResponseWriter, r *http.Request) {
 			ctx,
 			userID,
 			req.Query,
+			normalizeRepositoryIDs(req.RepositoryIDs),
 			999999,
 		)
 		if err != nil {
@@ -402,6 +410,7 @@ func (h *Handler) handleBulkRemoveTag(w http.ResponseWriter, r *http.Request) {
 			ctx,
 			userID,
 			req.Query,
+			normalizeRepositoryIDs(req.RepositoryIDs),
 			999999,
 		)
 		if err != nil {

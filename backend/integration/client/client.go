@@ -26,6 +26,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -81,6 +82,140 @@ type NotificationResponse struct {
 // BulkResponse represents the response from bulk operations.
 type BulkResponse struct {
 	Count int `json:"count"`
+}
+
+// RepositoryCount represents a repository with notification counts.
+type RepositoryCount struct {
+	Repository struct {
+		ID       int64  `json:"id"`
+		FullName string `json:"fullName"`
+	} `json:"repository"`
+	Total  int64 `json:"total"`
+	Unread int64 `json:"unread"`
+}
+
+// ListRepositoryCountsResponse represents the response from the repository counts endpoint.
+type ListRepositoryCountsResponse struct {
+	Repositories []RepositoryCount `json:"repositories"`
+}
+
+// ListRepositoryCounts retrieves the repositories matching a query with their counts.
+// includeIDs are returned even when they have no matches.
+func (c *Client) ListRepositoryCounts(
+	t *testing.T,
+	query string,
+	includeIDs ...int64,
+) *ListRepositoryCountsResponse {
+	t.Helper()
+
+	params := url.Values{}
+	if query != "" {
+		params.Set("query", query)
+	}
+	if len(includeIDs) > 0 {
+		ids := make([]string, 0, len(includeIDs))
+		for _, id := range includeIDs {
+			ids = append(ids, strconv.FormatInt(id, 10))
+		}
+		params.Set("include", strings.Join(ids, ","))
+	}
+
+	path := "/api/notifications/repositories"
+	if len(params) > 0 {
+		path += "?" + params.Encode()
+	}
+
+	resp, err := c.doRequest(t, "GET", path, nil)
+	if err != nil {
+		t.Fatalf("ListRepositoryCounts request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		t.Fatalf("ListRepositoryCounts failed with status %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result ListRepositoryCountsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatalf("Failed to decode ListRepositoryCounts response: %v", err)
+	}
+
+	return &result
+}
+
+// ListNotificationsInRepositories retrieves notifications scoped to the given repository IDs.
+func (c *Client) ListNotificationsInRepositories(
+	t *testing.T,
+	query string,
+	repositoryIDs []int64,
+	page, pageSize int,
+) *ListNotificationsResponse {
+	t.Helper()
+
+	params := url.Values{}
+	if query != "" {
+		params.Set("query", query)
+	}
+	if len(repositoryIDs) > 0 {
+		ids := make([]string, 0, len(repositoryIDs))
+		for _, id := range repositoryIDs {
+			ids = append(ids, strconv.FormatInt(id, 10))
+		}
+		params.Set("repos", strings.Join(ids, ","))
+	}
+	if page > 0 {
+		params.Set("page", strconv.Itoa(page))
+	}
+	if pageSize > 0 {
+		params.Set("pageSize", strconv.Itoa(pageSize))
+	}
+
+	resp, err := c.doRequest(t, "GET", "/api/notifications?"+params.Encode(), nil)
+	if err != nil {
+		t.Fatalf("ListNotificationsInRepositories request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		t.Fatalf("ListNotificationsInRepositories failed with status %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result ListNotificationsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatalf("Failed to decode ListNotificationsInRepositories response: %v", err)
+	}
+
+	return &result
+}
+
+// BulkArchiveInRepositories archives notifications matching a query within the given repositories.
+func (c *Client) BulkArchiveInRepositories(t *testing.T, query string, repositoryIDs []int64) *BulkResponse {
+	t.Helper()
+
+	body := map[string]interface{}{
+		"query":         query,
+		"repositoryIds": repositoryIDs,
+	}
+
+	resp, err := c.doRequest(t, "POST", "/api/notifications/bulk/archive", body)
+	if err != nil {
+		t.Fatalf("BulkArchiveInRepositories request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		t.Fatalf("BulkArchiveInRepositories failed with status %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result BulkResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatalf("Failed to decode BulkArchiveInRepositories response: %v", err)
+	}
+
+	return &result
 }
 
 // ListNotifications retrieves a list of notifications.

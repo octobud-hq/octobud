@@ -134,18 +134,18 @@ func (mr *MockNotificationReaderMockRecorder) ListNotifications(ctx, userID, opt
 }
 
 // ListNotificationsFromQueryString mocks base method.
-func (m *MockNotificationReader) ListNotificationsFromQueryString(ctx context.Context, userID, queryStr string, limit int32) ([]db.Notification, error) {
+func (m *MockNotificationReader) ListNotificationsFromQueryString(ctx context.Context, userID, queryStr string, repositoryIDs []int64, limit int32) ([]db.Notification, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListNotificationsFromQueryString", ctx, userID, queryStr, limit)
+	ret := m.ctrl.Call(m, "ListNotificationsFromQueryString", ctx, userID, queryStr, repositoryIDs, limit)
 	ret0, _ := ret[0].([]db.Notification)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ListNotificationsFromQueryString indicates an expected call of ListNotificationsFromQueryString.
-func (mr *MockNotificationReaderMockRecorder) ListNotificationsFromQueryString(ctx, userID, queryStr, limit any) *gomock.Call {
+func (mr *MockNotificationReaderMockRecorder) ListNotificationsFromQueryString(ctx, userID, queryStr, repositoryIDs, limit any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListNotificationsFromQueryString", reflect.TypeOf((*MockNotificationReader)(nil).ListNotificationsFromQueryString), ctx, userID, queryStr, limit)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListNotificationsFromQueryString", reflect.TypeOf((*MockNotificationReader)(nil).ListNotificationsFromQueryString), ctx, userID, queryStr, repositoryIDs, limit)
 }
 
 // ListPollNotifications mocks base method.
@@ -161,6 +161,21 @@ func (m *MockNotificationReader) ListPollNotifications(ctx context.Context, user
 func (mr *MockNotificationReaderMockRecorder) ListPollNotifications(ctx, userID, opts any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPollNotifications", reflect.TypeOf((*MockNotificationReader)(nil).ListPollNotifications), ctx, userID, opts)
+}
+
+// ListRepositoryCounts mocks base method.
+func (m *MockNotificationReader) ListRepositoryCounts(ctx context.Context, userID, queryStr string, includeIDs []int64) ([]models.RepositoryCount, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListRepositoryCounts", ctx, userID, queryStr, includeIDs)
+	ret0, _ := ret[0].([]models.RepositoryCount)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListRepositoryCounts indicates an expected call of ListRepositoryCounts.
+func (mr *MockNotificationReaderMockRecorder) ListRepositoryCounts(ctx, userID, queryStr, includeIDs any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListRepositoryCounts", reflect.TypeOf((*MockNotificationReader)(nil).ListRepositoryCounts), ctx, userID, queryStr, includeIDs)
 }
 
 // NewEvaluator mocks base method.
@@ -754,18 +769,18 @@ func (mr *MockNotificationServiceMockRecorder) ListNotifications(ctx, userID, op
 }
 
 // ListNotificationsFromQueryString mocks base method.
-func (m *MockNotificationService) ListNotificationsFromQueryString(ctx context.Context, userID, queryStr string, limit int32) ([]db.Notification, error) {
+func (m *MockNotificationService) ListNotificationsFromQueryString(ctx context.Context, userID, queryStr string, repositoryIDs []int64, limit int32) ([]db.Notification, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListNotificationsFromQueryString", ctx, userID, queryStr, limit)
+	ret := m.ctrl.Call(m, "ListNotificationsFromQueryString", ctx, userID, queryStr, repositoryIDs, limit)
 	ret0, _ := ret[0].([]db.Notification)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ListNotificationsFromQueryString indicates an expected call of ListNotificationsFromQueryString.
-func (mr *MockNotificationServiceMockRecorder) ListNotificationsFromQueryString(ctx, userID, queryStr, limit any) *gomock.Call {
+func (mr *MockNotificationServiceMockRecorder) ListNotificationsFromQueryString(ctx, userID, queryStr, repositoryIDs, limit any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListNotificationsFromQueryString", reflect.TypeOf((*MockNotificationService)(nil).ListNotificationsFromQueryString), ctx, userID, queryStr, limit)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListNotificationsFromQueryString", reflect.TypeOf((*MockNotificationService)(nil).ListNotificationsFromQueryString), ctx, userID, queryStr, repositoryIDs, limit)
 }
 
 // ListPollNotifications mocks base method.
@@ -781,6 +796,21 @@ func (m *MockNotificationService) ListPollNotifications(ctx context.Context, use
 func (mr *MockNotificationServiceMockRecorder) ListPollNotifications(ctx, userID, opts any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPollNotifications", reflect.TypeOf((*MockNotificationService)(nil).ListPollNotifications), ctx, userID, opts)
+}
+
+// ListRepositoryCounts mocks base method.
+func (m *MockNotificationService) ListRepositoryCounts(ctx context.Context, userID, queryStr string, includeIDs []int64) ([]models.RepositoryCount, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListRepositoryCounts", ctx, userID, queryStr, includeIDs)
+	ret0, _ := ret[0].([]models.RepositoryCount)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListRepositoryCounts indicates an expected call of ListRepositoryCounts.
+func (mr *MockNotificationServiceMockRecorder) ListRepositoryCounts(ctx, userID, queryStr, includeIDs any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListRepositoryCounts", reflect.TypeOf((*MockNotificationService)(nil).ListRepositoryCounts), ctx, userID, queryStr, includeIDs)
 }
 
 // MarkNotificationRead mocks base method.

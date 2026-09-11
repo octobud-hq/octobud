@@ -205,6 +205,13 @@ export interface NotificationPage {
 	page: number;
 }
 
+/** A repository with the number of notifications matching a query. */
+export interface RepositoryCount {
+	repository: BackendRepositoryResponse;
+	total: number;
+	unread: number;
+}
+
 export interface NotificationTarget {
 	type: NotificationTargetType;
 	title: string;

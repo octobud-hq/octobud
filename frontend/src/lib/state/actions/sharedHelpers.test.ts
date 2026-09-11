@@ -17,7 +17,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { writable, get } from "svelte/store";
 import { createSharedHelpers } from "./sharedHelpers";
 import { createDebounceManager } from "./debounceManager";
-import { fetchNotifications } from "$lib/api/notifications";
+import { fetchNotifications, fetchRepositoryCounts } from "$lib/api/notifications";
+import { createRepositoryFilterStore } from "../../stores/repositoryFilterStore";
+import { createRepositoryPinsStore } from "../../stores/repositoryPinsStore";
 import type { NotificationStore } from "../../stores/notificationStore";
 import type { PaginationStore } from "../../stores/paginationStore";
 import type { QueryStore } from "../../stores/queryStore";
@@ -26,6 +28,7 @@ import type { ControllerOptions } from "../interfaces/common";
 // Mock fetchNotifications
 vi.mock("$lib/api/notifications", () => ({
 	fetchNotifications: vi.fn(),
+	fetchRepositoryCounts: vi.fn(),
 }));
 
 describe("SharedHelpers", () => {
@@ -152,6 +155,36 @@ describe("SharedHelpers", () => {
 				page: 2,
 				filters: {
 					query: "repo:cli",
+					filters: [],
+				},
+			});
+		});
+
+		it("scopes the fetch to the repository filter when one is set", async () => {
+			const repositoryFilterStore = createRepositoryFilterStore([7, 9]);
+			const scopedHelpers = createSharedHelpers(
+				notificationStore,
+				paginationStore,
+				queryStore,
+				options,
+				createDebounceManager(),
+				repositoryFilterStore
+			);
+			queryStore.quickQuery.set("in:inbox");
+			vi.mocked(fetchNotifications).mockResolvedValue({
+				items: [],
+				total: 0,
+				page: 1,
+				pageSize: 50,
+			});
+
+			await scopedHelpers.refresh();
+
+			expect(fetchNotifications).toHaveBeenCalledWith({
+				page: 1,
+				repositoryIds: [7, 9],
+				filters: {
+					query: "in:inbox",
 					filters: [],
 				},
 			});
@@ -296,6 +329,95 @@ describe("SharedHelpers", () => {
 			options.navigateToUrl = undefined;
 			await helpers.updateUrlWithoutDetailId();
 			// Should not throw
+		});
+	});
+
+	describe("refreshRepositoryCounts", () => {
+		it("is a no-op without a repository filter store", async () => {
+			await helpers.refreshRepositoryCounts();
+			expect(fetchRepositoryCounts).not.toHaveBeenCalled();
+		});
+
+		it("fetches counts for the current query and stores them", async () => {
+			const repositoryFilterStore = createRepositoryFilterStore([1]);
+			const scopedHelpers = createSharedHelpers(
+				notificationStore,
+				paginationStore,
+				queryStore,
+				options,
+				createDebounceManager(),
+				repositoryFilterStore
+			);
+			queryStore.quickQuery.set("is:unread");
+			const counts = [{ repository: { id: 1, name: "a", fullName: "org/a" }, total: 3, unread: 1 }];
+			vi.mocked(fetchRepositoryCounts).mockResolvedValue(counts);
+
+			await scopedHelpers.refreshRepositoryCounts();
+
+			// Selected ids are always included so the server returns their identity.
+			expect(fetchRepositoryCounts).toHaveBeenCalledWith("is:unread", [1]);
+			expect(get(repositoryFilterStore.repositoryCounts)).toEqual(counts);
+			expect(get(repositoryFilterStore.countsQuery)).toBe("is:unread");
+			expect(get(repositoryFilterStore.countsLoading)).toBe(false);
+		});
+
+		it("includes pinned ids and ignores out-of-order responses", async () => {
+			const repositoryFilterStore = createRepositoryFilterStore([1]);
+			const pinsStore = createRepositoryPinsStore(null);
+			pinsStore.togglePin(7);
+			const scopedHelpers = createSharedHelpers(
+				notificationStore,
+				paginationStore,
+				queryStore,
+				options,
+				createDebounceManager(),
+				repositoryFilterStore,
+				pinsStore
+			);
+			const first = [{ repository: { id: 1, name: "a", fullName: "org/a" }, total: 1, unread: 0 }];
+			const second = [{ repository: { id: 2, name: "b", fullName: "org/b" }, total: 2, unread: 0 }];
+			let resolveFirst: (value: typeof first) => void = () => {};
+			vi.mocked(fetchRepositoryCounts)
+				.mockImplementationOnce(
+					() =>
+						new Promise((resolve) => {
+							resolveFirst = resolve;
+						})
+				)
+				.mockResolvedValueOnce(second);
+
+			queryStore.quickQuery.set("in:inbox");
+			const slow = scopedHelpers.refreshRepositoryCounts();
+			queryStore.quickQuery.set("in:archive");
+			await scopedHelpers.refreshRepositoryCounts();
+			resolveFirst(first);
+			await slow;
+
+			expect(fetchRepositoryCounts).toHaveBeenNthCalledWith(1, "in:inbox", [1, 7]);
+			expect(get(repositoryFilterStore.repositoryCounts)).toEqual(second);
+			expect(get(repositoryFilterStore.countsQuery)).toBe("in:archive");
+			expect(get(repositoryFilterStore.countsLoading)).toBe(false);
+		});
+
+		it("keeps previous counts when the fetch fails", async () => {
+			const previous = [
+				{ repository: { id: 2, name: "b", fullName: "org/b" }, total: 1, unread: 0 },
+			];
+			const repositoryFilterStore = createRepositoryFilterStore([], previous, "in:inbox");
+			const scopedHelpers = createSharedHelpers(
+				notificationStore,
+				paginationStore,
+				queryStore,
+				options,
+				createDebounceManager(),
+				repositoryFilterStore
+			);
+			vi.mocked(fetchRepositoryCounts).mockRejectedValue(new Error("boom"));
+
+			await scopedHelpers.refreshRepositoryCounts();
+
+			expect(get(repositoryFilterStore.repositoryCounts)).toEqual(previous);
+			expect(get(repositoryFilterStore.countsLoading)).toBe(false);
 		});
 	});
 });

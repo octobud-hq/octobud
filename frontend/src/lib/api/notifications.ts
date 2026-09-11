@@ -23,6 +23,7 @@ import type {
 	NotificationSubjectSummary,
 	NotificationViewFilter,
 	NotificationTimelineResponse,
+	RepositoryCount,
 	TimelineReviewComment,
 } from "./types";
 import { constructGitHubHtmlUrl } from "$lib/utils/githubUrls";
@@ -31,15 +32,33 @@ import {
 	buildApiUrl,
 	ApiUnreachableError,
 	ApiError,
+	apiErrorFromResponse,
 	isProxyConnectionError,
 } from "./fetch";
 
 const PAGE_SIZE = 30;
 
+/**
+ * Scope for query-based bulk operations: the query, optionally narrowed to a set of
+ * repository IDs (the list's repository filter). An empty query is valid (inbox semantics).
+ */
+export interface BulkQueryScope {
+	query: string;
+	repositoryIds?: number[];
+}
+
+function bulkQueryFields(scope: BulkQueryScope): BulkQueryScope {
+	return scope.repositoryIds && scope.repositoryIds.length > 0
+		? { query: scope.query, repositoryIds: scope.repositoryIds }
+		: { query: scope.query };
+}
+
 export interface FetchNotificationsParams {
 	page?: number;
 	pageSize?: number;
 	filters?: Partial<NotificationFilters>;
+	/** Restrict results to these repository IDs (the list's repository filter). */
+	repositoryIds?: number[];
 }
 
 const normalizeSubjectType = (subjectType: string): string => {
@@ -228,11 +247,14 @@ export async function fetchNotifications(
 	params: FetchNotificationsParams = {},
 	fetchImpl?: typeof fetch
 ): Promise<NotificationPage> {
-	const { page = 1, pageSize = PAGE_SIZE, filters = {} } = params;
+	const { page = 1, pageSize = PAGE_SIZE, filters = {}, repositoryIds = [] } = params;
 
 	const searchParams = new URLSearchParams();
 	searchParams.set("page", String(page));
 	searchParams.set("pageSize", String(pageSize));
+	if (repositoryIds.length > 0) {
+		searchParams.set("repos", repositoryIds.join(","));
+	}
 
 	// Use combined query string if provided (includes key-value pairs, free text, and status filtering)
 	// Always send query parameter (even if empty) to ensure new query engine is used with inbox defaults
@@ -301,6 +323,37 @@ export async function fetchNotifications(
 		pageSize: payload.pageSize ?? pageSize,
 		page: payload.page ?? page,
 	};
+}
+
+/**
+ * Fetch the repositories that have notifications matching `query`, with total and unread
+ * counts, ordered by unread, then total, then name. Backs the repository selector above
+ * the list. The query should be the base query without any repository filter, so every
+ * candidate repository is returned. `includeIds` (the selected and pinned repositories)
+ * are returned even with zero matches, so the client never has to remember identities.
+ */
+export async function fetchRepositoryCounts(
+	query: string,
+	includeIds: readonly number[] = [],
+	fetchImpl?: typeof fetch
+): Promise<RepositoryCount[]> {
+	const searchParams = new URLSearchParams();
+	searchParams.set("query", query);
+	if (includeIds.length > 0) {
+		searchParams.set("include", includeIds.join(","));
+	}
+
+	const response = await fetchWithAuth(
+		`/api/notifications/repositories?${searchParams.toString()}`,
+		{},
+		fetchImpl
+	);
+	if (!response.ok) {
+		throw await apiErrorFromResponse(response, `Failed to load repositories (${response.status})`);
+	}
+
+	const payload: { repositories?: RepositoryCount[] } = await response.json();
+	return payload.repositories ?? [];
 }
 
 export interface FetchNotificationDetailOptions {
@@ -586,12 +639,13 @@ export async function unfilterNotification(
 export async function bulkSnoozeNotifications(
 	githubIds: string[],
 	snoozedUntil: string,
-	query?: string,
+	query?: BulkQueryScope,
 	fetchImpl?: typeof fetch
 ): Promise<number> {
 	// Send either githubIds or query, but not both
 	// Note: query !== undefined includes empty string, which is valid for inbox semantics
-	const body = query !== undefined ? { query, snoozedUntil } : { githubIds, snoozedUntil };
+	const body =
+		query !== undefined ? { ...bulkQueryFields(query), snoozedUntil } : { githubIds, snoozedUntil };
 
 	const response = await fetchWithAuth(
 		"/api/notifications/bulk/snooze",
@@ -616,12 +670,12 @@ export async function bulkSnoozeNotifications(
 // Bulk unsnooze notifications
 export async function bulkUnsnoozeNotifications(
 	githubIds: string[],
-	query?: string,
+	query?: BulkQueryScope,
 	fetchImpl?: typeof fetch
 ): Promise<number> {
 	// Send either githubIds or query, but not both
 	// Note: query !== undefined includes empty string, which is valid for inbox semantics
-	const body = query !== undefined ? { query } : { githubIds };
+	const body = query !== undefined ? bulkQueryFields(query) : { githubIds };
 
 	const response = await fetchWithAuth(
 		"/api/notifications/bulk/unsnooze",
@@ -646,12 +700,12 @@ export async function bulkUnsnoozeNotifications(
 // Bulk mark as unread
 export async function bulkMarkNotificationsUnread(
 	githubIds: string[],
-	query?: string,
+	query?: BulkQueryScope,
 	fetchImpl?: typeof fetch
 ): Promise<number> {
 	// Send either githubIds or query, but not both
 	// Note: query !== undefined includes empty string, which is valid for inbox semantics
-	const body = query !== undefined ? { query } : { githubIds };
+	const body = query !== undefined ? bulkQueryFields(query) : { githubIds };
 
 	const response = await fetchWithAuth(
 		"/api/notifications/bulk/mark-unread",
@@ -676,12 +730,12 @@ export async function bulkMarkNotificationsUnread(
 // Bulk mark as read
 export async function bulkMarkNotificationsRead(
 	githubIds: string[],
-	query?: string,
+	query?: BulkQueryScope,
 	fetchImpl?: typeof fetch
 ): Promise<number> {
 	// Send either githubIds or query, but not both
 	// Note: query !== undefined includes empty string, which is valid for inbox semantics
-	const body = query !== undefined ? { query } : { githubIds };
+	const body = query !== undefined ? bulkQueryFields(query) : { githubIds };
 
 	const response = await fetchWithAuth(
 		"/api/notifications/bulk/mark-read",
@@ -706,12 +760,12 @@ export async function bulkMarkNotificationsRead(
 // Bulk archive
 export async function bulkArchiveNotifications(
 	githubIds: string[],
-	query?: string,
+	query?: BulkQueryScope,
 	fetchImpl?: typeof fetch
 ): Promise<number> {
 	// Send either githubIds or query, but not both
 	// Note: query !== undefined includes empty string, which is valid for inbox semantics
-	const body = query !== undefined ? { query } : { githubIds };
+	const body = query !== undefined ? bulkQueryFields(query) : { githubIds };
 
 	const response = await fetchWithAuth(
 		"/api/notifications/bulk/archive",
@@ -736,12 +790,12 @@ export async function bulkArchiveNotifications(
 // Bulk unarchive
 export async function bulkUnarchiveNotifications(
 	githubIds: string[],
-	query?: string,
+	query?: BulkQueryScope,
 	fetchImpl?: typeof fetch
 ): Promise<number> {
 	// Send either githubIds or query, but not both
 	// Note: query !== undefined includes empty string, which is valid for inbox semantics
-	const body = query !== undefined ? { query } : { githubIds };
+	const body = query !== undefined ? bulkQueryFields(query) : { githubIds };
 
 	const response = await fetchWithAuth(
 		"/api/notifications/bulk/unarchive",
@@ -766,12 +820,12 @@ export async function bulkUnarchiveNotifications(
 // Bulk mute
 export async function bulkMuteNotifications(
 	githubIds: string[],
-	query?: string,
+	query?: BulkQueryScope,
 	fetchImpl?: typeof fetch
 ): Promise<number> {
 	// Send either githubIds or query, but not both
 	// Note: query !== undefined includes empty string, which is valid for inbox semantics
-	const body = query !== undefined ? { query } : { githubIds };
+	const body = query !== undefined ? bulkQueryFields(query) : { githubIds };
 
 	const response = await fetchWithAuth(
 		"/api/notifications/bulk/mute",
@@ -796,12 +850,12 @@ export async function bulkMuteNotifications(
 // Bulk unmute
 export async function bulkUnmuteNotifications(
 	githubIds: string[],
-	query?: string,
+	query?: BulkQueryScope,
 	fetchImpl?: typeof fetch
 ): Promise<number> {
 	// Send either githubIds or query, but not both
 	// Note: query !== undefined includes empty string, which is valid for inbox semantics
-	const body = query !== undefined ? { query } : { githubIds };
+	const body = query !== undefined ? bulkQueryFields(query) : { githubIds };
 
 	const response = await fetchWithAuth(
 		"/api/notifications/bulk/unmute",
@@ -826,12 +880,12 @@ export async function bulkUnmuteNotifications(
 // Bulk star
 export async function bulkStarNotifications(
 	githubIds: string[],
-	query?: string,
+	query?: BulkQueryScope,
 	fetchImpl?: typeof fetch
 ): Promise<number> {
 	// Send either githubIds or query, but not both
 	// Note: query !== undefined includes empty string, which is valid for inbox semantics
-	const body = query !== undefined ? { query } : { githubIds };
+	const body = query !== undefined ? bulkQueryFields(query) : { githubIds };
 
 	const response = await fetchWithAuth(
 		"/api/notifications/bulk/star",
@@ -856,12 +910,12 @@ export async function bulkStarNotifications(
 // Bulk unstar
 export async function bulkUnstarNotifications(
 	githubIds: string[],
-	query?: string,
+	query?: BulkQueryScope,
 	fetchImpl?: typeof fetch
 ): Promise<number> {
 	// Send either githubIds or query, but not both
 	// Note: query !== undefined includes empty string, which is valid for inbox semantics
-	const body = query !== undefined ? { query } : { githubIds };
+	const body = query !== undefined ? bulkQueryFields(query) : { githubIds };
 
 	const response = await fetchWithAuth(
 		"/api/notifications/bulk/unstar",
@@ -886,12 +940,12 @@ export async function bulkUnstarNotifications(
 // Bulk unfilter notifications (move to inbox)
 export async function bulkUnfilterNotifications(
 	githubIds: string[],
-	query?: string,
+	query?: BulkQueryScope,
 	fetchImpl?: typeof fetch
 ): Promise<number> {
 	// Send either githubIds or query, but not both
 	// Note: query !== undefined includes empty string, which is valid for inbox semantics
-	const body = query !== undefined ? { query } : { githubIds };
+	const body = query !== undefined ? bulkQueryFields(query) : { githubIds };
 
 	const response = await fetchWithAuth(
 		"/api/notifications/bulk/unfilter",
@@ -917,12 +971,12 @@ export async function bulkUnfilterNotifications(
 export async function bulkAssignTag(
 	githubIds: string[],
 	tagId: string,
-	query?: string,
+	query?: BulkQueryScope,
 	fetchImpl?: typeof fetch
 ): Promise<number> {
 	// Send either githubIds or query, but not both
 	// Note: query !== undefined includes empty string, which is valid for inbox semantics
-	const body = query !== undefined ? { query, tagId: tagId } : { githubIds, tagId: tagId };
+	const body = query !== undefined ? { ...bulkQueryFields(query), tagId } : { githubIds, tagId };
 
 	const response = await fetchWithAuth(
 		"/api/notifications/bulk/assign-tag",
@@ -948,12 +1002,12 @@ export async function bulkAssignTag(
 export async function bulkRemoveTag(
 	githubIds: string[],
 	tagId: string,
-	query?: string,
+	query?: BulkQueryScope,
 	fetchImpl?: typeof fetch
 ): Promise<number> {
 	// Send either githubIds or query, but not both
 	// Note: query !== undefined includes empty string, which is valid for inbox semantics
-	const body = query !== undefined ? { query, tagId: tagId } : { githubIds, tagId: tagId };
+	const body = query !== undefined ? { ...bulkQueryFields(query), tagId } : { githubIds, tagId };
 
 	const response = await fetchWithAuth(
 		"/api/notifications/bulk/remove-tag",

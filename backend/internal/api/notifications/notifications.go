@@ -37,6 +37,7 @@ import (
 var (
 	ErrFailedToParseListOptions          = errors.New("failed to parse notification list options")
 	ErrFailedToLoadNotifications         = errors.New("failed to load notifications")
+	ErrFailedToLoadRepositoryCounts      = errors.New("failed to load repository counts")
 	ErrFailedToLoadRepositories          = errors.New("failed to load repositories")
 	ErrFailedToBuildNotificationResponse = errors.New("failed to build notification response")
 	ErrInvalidGithubIDEncoding           = errors.New("invalid githubID encoding")
@@ -139,6 +140,42 @@ func (h *Handler) handlePollNotifications(w http.ResponseWriter, r *http.Request
 		Page:          result.Page,
 		PageSize:      result.PageSize,
 	})
+}
+
+// handleListRepositoryCounts returns the repositories that have notifications matching the
+// query, with total and unread counts. It backs the repository selector in the list UI.
+func (h *Handler) handleListRepositoryCounts(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	userID, ok := helpers.RequireUserID(ctx, w, h.authSvc)
+	if !ok {
+		return
+	}
+
+	queryStr := r.URL.Query().Get("query")
+	// Repositories to return even with zero matches (the client's selected + pinned repos)
+	includeIDs := parseRepositoryIDs(r.URL.Query().Get("include"))
+
+	counts, err := h.notifications.ListRepositoryCounts(ctx, userID, queryStr, includeIDs)
+	if err != nil {
+		if errors.Is(err, notification.ErrInvalidQuery) {
+			h.logger.Warn(
+				"invalid query in repository counts request",
+				zap.String("query", queryStr),
+				zap.Error(err),
+			)
+			helpers.WriteError(w, http.StatusBadRequest, getQueryErrorMessage(err))
+			return
+		}
+
+		h.logger.Error(
+			"failed to load repository counts",
+			zap.Error(errors.Join(ErrFailedToLoadRepositoryCounts, err)),
+		)
+		helpers.WriteError(w, http.StatusInternalServerError, "failed to load repository counts")
+		return
+	}
+
+	helpers.WriteJSON(w, http.StatusOK, listRepositoryCountsResponse{Repositories: counts})
 }
 
 func (h *Handler) handleGetNotification(w http.ResponseWriter, r *http.Request) {
@@ -318,9 +355,55 @@ func parseNotificationListOptions(r *http.Request) models.ListOptions {
 		IncludeSubject: parseBoolDefault(
 			query.Get("includeSubject"),
 		), // Default: false to reduce payload size
+		RepositoryIDs: parseRepositoryIDs(query.Get("repos")),
 	}
 
 	return opts
+}
+
+// parseRepositoryIDs parses a comma-separated list of repository IDs (e.g. "12,34").
+// Invalid, non-positive, and duplicate entries are dropped; nil is returned when nothing remains.
+func parseRepositoryIDs(raw string) []int64 {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+
+	parts := strings.Split(raw, ",")
+	ids := make([]int64, 0, len(parts))
+	for _, part := range parts {
+		value, err := strconv.ParseInt(strings.TrimSpace(part), 10, 64)
+		if err != nil {
+			continue
+		}
+		ids = append(ids, value)
+	}
+	return normalizeRepositoryIDs(ids)
+}
+
+// normalizeRepositoryIDs drops non-positive and duplicate IDs, preserving order.
+// Shared by the query-string (repos=) and JSON-body (repositoryIds) inputs so every
+// endpoint applies the same validation to a repository selection.
+func normalizeRepositoryIDs(ids []int64) []int64 {
+	if len(ids) == 0 {
+		return nil
+	}
+	result := make([]int64, 0, len(ids))
+	seen := make(map[int64]struct{}, len(ids))
+	for _, id := range ids {
+		if id <= 0 {
+			continue
+		}
+		if _, dup := seen[id]; dup {
+			continue
+		}
+		seen[id] = struct{}{}
+		result = append(result, id)
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
 }
 
 func parseIntDefault(raw string) int {

@@ -41,8 +41,14 @@ type NotificationReader interface {
 	ListNotificationsFromQueryString(
 		ctx context.Context,
 		userID, queryStr string,
+		repositoryIDs []int64,
 		limit int32,
 	) ([]db.Notification, error)
+	ListRepositoryCounts(
+		ctx context.Context,
+		userID, queryStr string,
+		includeIDs []int64,
+	) ([]models.RepositoryCount, error)
 	GetTagsForNotification(
 		ctx context.Context,
 		userID string,

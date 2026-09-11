@@ -417,6 +417,21 @@ func (mr *MockStoreMockRecorder) CountEligibleForCleanup(ctx, userID, params any
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountEligibleForCleanup", reflect.TypeOf((*MockStore)(nil).CountEligibleForCleanup), ctx, userID, params)
 }
 
+// CountNotificationsByRepository mocks base method.
+func (m *MockStore) CountNotificationsByRepository(ctx context.Context, userID string, query db.NotificationQuery) ([]db.RepositoryNotificationCount, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CountNotificationsByRepository", ctx, userID, query)
+	ret0, _ := ret[0].([]db.RepositoryNotificationCount)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CountNotificationsByRepository indicates an expected call of CountNotificationsByRepository.
+func (mr *MockStoreMockRecorder) CountNotificationsByRepository(ctx, userID, query any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountNotificationsByRepository", reflect.TypeOf((*MockStore)(nil).CountNotificationsByRepository), ctx, userID, query)
+}
+
 // CreateRule mocks base method.
 func (m *MockStore) CreateRule(ctx context.Context, userID string, arg db.CreateRuleParams) (db.Rule, error) {
 	m.ctrl.T.Helper()

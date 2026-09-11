@@ -25,6 +25,8 @@ import type {
 	NotificationPage,
 	Tag,
 } from "$lib/api/types";
+import type { RepositoryCount } from "$lib/api/types";
+import type { SelectedRepository } from "../stores/repositoryFilterStore";
 import type { PageData as ViewPageData } from "../../routes/views/[slug]/$types";
 import type { NotificationPageControllerActions } from "./interfaces";
 
@@ -150,6 +152,13 @@ export interface NotificationPageControllerStores {
 	viewQuery: Writable<string>;
 	quickFilters: Writable<NotificationViewFilter[]>;
 
+	// Repository filter
+	selectedRepositoryIds: Readable<number[]>;
+	repositoryCounts: Readable<RepositoryCount[]>;
+	repositoryCountsLoading: Writable<boolean>;
+	repositoryFilterOpen: Writable<boolean>;
+	pinnedRepositoryIds: Readable<number[]>;
+
 	// Selection & multiselect
 	selectedIds: Writable<Set<string>>;
 	multiselectMode: Writable<boolean>;
@@ -199,6 +208,10 @@ export interface NotificationPageControllerDerived {
 	isQueryModified: Readable<boolean>;
 	hasActiveFilters: Readable<boolean>;
 
+	// Repository filter derived
+	hasRepositoryFilter: Readable<boolean>;
+	selectedRepositories: Readable<SelectedRepository[]>;
+
 	// Pagination-related derived
 	totalPages: Readable<number>;
 	pageRangeStart: Readable<number>;
@@ -224,6 +237,7 @@ export type { SelectionStore } from "../stores/selectionStore";
 export type { KeyboardStore } from "../stores/keyboardNavigationStore";
 export type { UIStore } from "../stores/uiStateStore";
 export type { QueryStore } from "../stores/queryStore";
+export type { RepositoryFilterStore } from "../stores/repositoryFilterStore";
 export type { ViewStore } from "../stores/viewStore";
 export type { EventBus } from "../stores/eventBus";
 

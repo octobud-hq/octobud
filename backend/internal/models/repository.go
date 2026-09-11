@@ -49,6 +49,13 @@ type Repository struct {
 	OwnerHTMLURL *string `json:"ownerHtmlUrl,omitempty"`
 }
 
+// RepositoryCount is a repository together with how many notifications matched a query.
+type RepositoryCount struct {
+	Repository Repository `json:"repository"`
+	Total      int64      `json:"total"`
+	Unread     int64      `json:"unread"`
+}
+
 // RepositoryFromDB converts a db.Repository to a Repository
 func RepositoryFromDB(repository db.Repository) Repository {
 	var raw json.RawMessage

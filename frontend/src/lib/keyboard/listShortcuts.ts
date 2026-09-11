@@ -107,6 +107,21 @@ export function registerListShortcuts(context: CommandContext): () => void {
 		}
 
 		// ============================================================================
+		// REPOSITORY FILTER DROPDOWN
+		// While open it owns the keyboard: Escape closes it here (this listener runs in the
+		// capture phase, before the dropdown's own handler) and every other key is left to
+		// the dropdown, so list/detail actions cannot fire behind it.
+		// ============================================================================
+		if (context.isFilterDropdownOpen()) {
+			if (event.key === "Escape") {
+				if (executeCommand("closeRepositoryFilter", context)) {
+					consumeEvent(event);
+				}
+			}
+			return;
+		}
+
+		// ============================================================================
 		// HISTORY DROPDOWN MODAL HANDLING
 		// When history dropdown is open, it captures most keyboard input
 		// ============================================================================
@@ -544,6 +559,21 @@ export function registerListShortcuts(context: CommandContext): () => void {
 		if (key === "p" && event.shiftKey) {
 			// Shift+P: toggle reading pane (display mode)
 			if (executeCommand("toggleSplitMode", context)) {
+				consumeEvent(event);
+			}
+			return;
+		}
+
+		// Handle F key - F opens the repository filter, Shift+F clears it.
+		// Like V, opening is not available when the detail is open in list mode (the list,
+		// and with it the selector, is not rendered). Clearing is a navigation and is fine.
+		if (key === "f") {
+			const splitViewMode = context.getSplitViewMode?.() ?? false;
+			if (!event.shiftKey && detailOpen && !splitViewMode) {
+				return;
+			}
+			const command = event.shiftKey ? "clearRepositoryFilter" : "openRepositoryFilter";
+			if (executeCommand(command, context)) {
 				consumeEvent(event);
 			}
 			return;

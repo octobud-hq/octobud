@@ -72,11 +72,8 @@ func TestObserver_CapturesExpirationHeader(t *testing.T) {
 	observe(http.StatusOK, &expected)
 
 	got := m.GetTokenExpiresAt()
-	if got == nil {
-		t.Fatal("expected expiration to be captured, got nil")
-	}
-	if !got.Equal(expected) {
-		t.Fatalf("expected %v, got %v", expected, *got)
+	if got == nil || !got.Equal(expected) {
+		t.Fatalf("expected expiration %v to be captured, got %v", expected, got)
 	}
 }
 

@@ -70,6 +70,15 @@ func (s *Store) ListNotificationsFromQuery(
 	return listNotificationsFromQuery(ctx, s, userID, query)
 }
 
+// CountNotificationsByRepository counts notifications matching a query, grouped by repository
+func (s *Store) CountNotificationsByRepository(
+	ctx context.Context,
+	userID string,
+	query db.NotificationQuery,
+) ([]db.RepositoryNotificationCount, error) {
+	return countNotificationsByRepository(ctx, s, userID, query)
+}
+
 // MarkNotificationRead marks a notification as read
 func (s *Store) MarkNotificationRead(
 	ctx context.Context,

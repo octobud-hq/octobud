@@ -44,8 +44,10 @@ import type { PaginationStore } from "../../stores/paginationStore";
 import type { SelectionStore } from "../../stores/selectionStore";
 import type { QueryStore } from "../../stores/queryStore";
 import type { UIStore } from "../../stores/uiStateStore";
+import type { RepositoryFilterStore } from "../../stores/repositoryFilterStore";
 import type { ControllerOptions } from "../interfaces/common";
 import type { SharedHelpers } from "./sharedHelpers";
+import type { BulkQueryScope } from "$lib/api/notifications";
 
 interface StoreCollection {
 	notificationStore: NotificationStore;
@@ -53,6 +55,7 @@ interface StoreCollection {
 	selectionStore: SelectionStore;
 	queryStore: QueryStore;
 	uiStore: UIStore;
+	repositoryFilterStore?: RepositoryFilterStore;
 }
 
 /**
@@ -65,6 +68,7 @@ export function createBulkActionController(
 	sharedHelpers: SharedHelpers
 ): BulkActions {
 	const { notificationStore, paginationStore, selectionStore, queryStore, uiStore } = stores;
+	const { repositoryFilterStore } = stores;
 
 	async function handleBulkAction(params: {
 		actionName:
@@ -81,7 +85,7 @@ export function createBulkActionController(
 			| "unfilter"
 			| "assignTag"
 			| "removeTag";
-		performAction: (ids: string[], query?: string) => Promise<number>;
+		performAction: (ids: string[], query?: BulkQueryScope) => Promise<number>;
 		successToast: (count: number) => string;
 		errorToast: string;
 		/** Configuration for making this action undoable (only for ID-based operations) */
@@ -164,8 +168,15 @@ export function createBulkActionController(
 				willDismiss = dismissedOn.includes(actionName);
 			}
 
-			// Perform the bulk action
-			const actualCount = await performAction(ids, useQuery ? currentQuery : undefined);
+			// Perform the bulk action. Query-based operations are scoped to the list's
+			// repository filter so "select all" never reaches beyond what the user sees.
+			const repositoryIds = repositoryFilterStore
+				? get(repositoryFilterStore.selectedRepositoryIds)
+				: [];
+			const queryScope: BulkQueryScope | undefined = useQuery
+				? { query: currentQuery, repositoryIds }
+				: undefined;
+			const actualCount = await performAction(ids, queryScope);
 
 			// Sync query to URL before refreshing to preserve it
 			await sharedHelpers.syncQueryToUrl();

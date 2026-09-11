@@ -19,6 +19,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/octobud-hq/octobud/backend/internal/db"
@@ -71,6 +72,89 @@ func notificationColumns(includeSubject bool) string {
 	return "SELECT " + strings.Join(columns, ", ") + " FROM notifications n"
 }
 
+// buildQueryClauses assembles the JOIN and WHERE fragments (with args) shared by the
+// dynamic notification queries. The user_id condition is always included first.
+func buildQueryClauses(
+	userID string,
+	query db.NotificationQuery,
+) (joins, where string, args []interface{}) {
+	if len(query.Joins) > 0 {
+		joins = " " + strings.Join(query.Joins, " ")
+	}
+
+	whereConditions := []string{"n.user_id = ?"}
+	args = append([]interface{}{userID}, query.Args...)
+	if len(query.Where) > 0 {
+		whereConditions = append(whereConditions, query.Where...)
+	}
+	where = " WHERE " + strings.Join(whereConditions, " AND ")
+
+	return joins, where, args
+}
+
+// repositoryJoin is the exact join the query compiler emits for repo:/org:/free-text
+// terms, so the counts query can reuse it without producing a duplicate alias.
+const repositoryJoin = "LEFT JOIN repositories r ON r.id = n.repository_id"
+
+// countNotificationsByRepository counts the notifications matching a query, grouped by
+// repository, joined with the repository's identity and ordered by unread, then total,
+// then name. Only repositories with at least one match are returned.
+func countNotificationsByRepository(
+	ctx context.Context,
+	s *Store,
+	userID string,
+	query db.NotificationQuery,
+) ([]db.RepositoryNotificationCount, error) {
+	if !slices.Contains(query.Joins, repositoryJoin) {
+		query.Joins = append(slices.Clone(query.Joins), repositoryJoin)
+	}
+	joins, where, args := buildQueryClauses(userID, query)
+
+	//nolint:gosec // G202: joins/where are compiler-controlled fragments; values are bound params
+	countQuery := "SELECT n.repository_id, r.name, r.full_name, r.owner_login, " +
+		"r.owner_avatar_url, r.html_url, COUNT(*) AS total, " +
+		"SUM(CASE WHEN n.is_read = 0 THEN 1 ELSE 0 END) AS unread " +
+		"FROM notifications n" + joins + where +
+		" GROUP BY n.repository_id" +
+		" ORDER BY unread DESC, total DESC, lower(r.full_name) ASC"
+
+	var rows *sql.Rows
+	err := db.RetryVoidOnBusy(ctx, func() error {
+		var queryErr error
+		rows, queryErr = s.dbConn.QueryContext(ctx, countQuery, args...)
+		return queryErr
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to count notifications by repository: %w", err)
+	}
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil {
+			// Nothing useful to do with a close error here; the scan result is what matters
+			_ = closeErr
+		}
+	}()
+
+	counts := make([]db.RepositoryNotificationCount, 0)
+	for rows.Next() {
+		var c db.RepositoryNotificationCount
+		var name, fullName sql.NullString
+		if scanErr := rows.Scan(
+			&c.RepositoryID, &name, &fullName, &c.OwnerLogin,
+			&c.OwnerAvatarURL, &c.HTMLURL, &c.Total, &c.Unread,
+		); scanErr != nil {
+			return nil, fmt.Errorf("failed to scan repository count: %w", scanErr)
+		}
+		c.Name = name.String
+		c.FullName = fullName.String
+		counts = append(counts, c)
+	}
+	if rowsErr := rows.Err(); rowsErr != nil {
+		return nil, fmt.Errorf("error iterating repository counts: %w", rowsErr)
+	}
+
+	return counts, nil
+}
+
 // listNotificationsFromQuery executes a dynamic notification query for SQLite.
 func listNotificationsFromQuery(
 	ctx context.Context,
@@ -81,20 +165,7 @@ func listNotificationsFromQuery(
 	// Build the SELECT query - conditionally exclude subject_raw to reduce data transfer
 	baseSelect := notificationColumns(query.IncludeSubject)
 
-	// Add JOINs
-	joins := ""
-	if len(query.Joins) > 0 {
-		joins = " " + strings.Join(query.Joins, " ")
-	}
-
-	// Build WHERE clause - always include user_id
-	whereConditions := []string{"n.user_id = ?"}
-	args := []interface{}{userID}
-	args = append(args, query.Args...)
-	if len(query.Where) > 0 {
-		whereConditions = append(whereConditions, query.Where...)
-	}
-	where := " WHERE " + strings.Join(whereConditions, " AND ")
+	joins, where, args := buildQueryClauses(userID, query)
 
 	// Add ORDER BY
 	orderBy := " ORDER BY n.effective_sort_date DESC, n.imported_at DESC"
@@ -207,19 +278,7 @@ func bulkUpdateByQuery(
 	setClause string,
 	query db.NotificationQuery,
 ) (int64, error) {
-	// Build WHERE clause - always include user_id
-	whereConditions := []string{"n.user_id = ?"}
-	args := []interface{}{userID}
-	args = append(args, query.Args...)
-	if len(query.Where) > 0 {
-		whereConditions = append(whereConditions, query.Where...)
-	}
-	where := " WHERE " + strings.Join(whereConditions, " AND ")
-
-	joins := ""
-	if len(query.Joins) > 0 {
-		joins = " " + strings.Join(query.Joins, " ")
-	}
+	joins, where, args := buildQueryClauses(userID, query)
 
 	// Use subquery to handle the alias properly
 	//nolint:gosec // G201: SQL string formatting is safe - setClause, joins, and where are controlled
@@ -246,23 +305,14 @@ func bulkSnoozeByQuery(
 	userID string,
 	arg db.BulkSnoozeNotificationsByQueryParams,
 ) (int64, error) {
-	// Build WHERE clause - always include user_id
-	whereConditions := []string{"n.user_id = ?"}
-	if len(arg.Query.Where) > 0 {
-		whereConditions = append(whereConditions, arg.Query.Where...)
-	}
-	where := " WHERE " + strings.Join(whereConditions, " AND ")
+	joins, where, whereArgs := buildQueryClauses(userID, arg.Query)
 
-	joins := ""
-	if len(arg.Query.Joins) > 0 {
-		joins = " " + strings.Join(arg.Query.Joins, " ")
-	}
-
-	// Prepend snoozed_until (used twice: for snoozed_until and effective_sort_date), then userID, then query args
+	// Prepend snoozed_until (used twice: for snoozed_until and effective_sort_date) to the
+	// WHERE args, which already start with userID.
 	snoozedUntil := formatNullTime(arg.SnoozedUntil)
-	args := make([]interface{}, 0, len(arg.Query.Args)+3)
-	args = append(args, snoozedUntil, snoozedUntil, userID)
-	args = append(args, arg.Query.Args...)
+	args := make([]interface{}, 0, len(whereArgs)+2)
+	args = append(args, snoozedUntil, snoozedUntil)
+	args = append(args, whereArgs...)
 
 	// Use subquery to handle the alias properly
 	//nolint:gosec // G201: SQL string formatting is safe - joins and where are controlled

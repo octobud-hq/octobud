@@ -26,6 +26,8 @@ type ListOptions struct {
 	Page           int
 	PageSize       int
 	IncludeSubject bool // Whether to include subjectRaw in the response (default: false to reduce payload size)
+	// RepositoryIDs, when non-empty, restricts results to these repositories on top of Query.
+	RepositoryIDs []int64
 }
 
 // ListResult is the normalized output of a filtered list request.

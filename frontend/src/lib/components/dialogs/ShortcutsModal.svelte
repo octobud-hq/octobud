@@ -47,6 +47,8 @@
 				{ keys: ["⇧G"], description: "Jump to last notification" },
 				{ keys: ["[", "]"], description: "Navigate pages" },
 				{ keys: ["⇧J", "⇧K"], description: "Navigate views" },
+				{ keys: ["F"], description: "Filter by repository" },
+				{ keys: ["⇧F"], description: "Clear repository filter" },
 				{
 					keys: ["/"],
 					description: "Focus query input",

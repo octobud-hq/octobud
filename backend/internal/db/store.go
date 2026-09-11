@@ -34,6 +34,11 @@ type Store interface {
 		userID string,
 		query NotificationQuery,
 	) (ListNotificationsFromQueryResult, error)
+	CountNotificationsByRepository(
+		ctx context.Context,
+		userID string,
+		query NotificationQuery,
+	) ([]RepositoryNotificationCount, error)
 	MarkNotificationRead(ctx context.Context, userID, githubID string) (Notification, error)
 	MarkNotificationUnread(ctx context.Context, userID, githubID string) (Notification, error)
 	ArchiveNotification(ctx context.Context, userID, githubID string) (Notification, error)

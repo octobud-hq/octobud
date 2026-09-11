@@ -127,6 +127,11 @@ type listNotificationsResponse struct {
 	PageSize      int                    `json:"pageSize"`
 }
 
+// listRepositoryCountsResponse lists the repositories matching a query with their counts
+type listRepositoryCountsResponse struct {
+	Repositories []models.RepositoryCount `json:"repositories"`
+}
+
 type notificationDetailResponse struct {
 	Notification NotificationResponse `json:"notification"`
 }

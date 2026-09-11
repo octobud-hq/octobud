@@ -15,6 +15,9 @@
 	// along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 	import NotificationRow from "./NotificationRow.svelte";
+	import RepositoryFilterBar from "./RepositoryFilterBar.svelte";
+	import { getContext } from "svelte";
+	import type { NotificationPageController } from "$lib/state/types";
 	import type { Notification } from "$lib/api/types";
 
 	import { onMount } from "svelte";
@@ -33,6 +36,9 @@
 	export let initialScrollPosition: number = 0; // Scroll position to restore on mount
 	export let apiError: string | null = null; // Inline error message (for query validation errors)
 	export let apiErrorCode: string | null = null; // Machine-readable backend error code, when present
+
+	const pageController = getContext<NotificationPageController>("notificationPageController");
+	const { hasRepositoryFilter } = pageController.derived;
 
 	// Scroll position management
 	let scrollContainer: HTMLDivElement | null = null;
@@ -74,6 +80,20 @@
 		? 'border-t border-gray-200 dark:border-gray-800 pt-4'
 		: ''}"
 >
+	{#if !apiError || $hasRepositoryFilter}
+		<!-- Repository selector + page range. Lives outside the scroll container so it (and its
+		     dropdown) stay put while the list scrolls. Stays visible under an inline query error
+		     while a repository filter is active, so the scope is never invisible. -->
+		<div class="flex-shrink-0 pl-2 pr-3">
+			<RepositoryFilterBar
+				{totalCount}
+				{pageRangeStart}
+				{pageRangeEnd}
+				hasQueryFilter={hasActiveFilters}
+			/>
+		</div>
+	{/if}
+
 	<div
 		bind:this={scrollContainer}
 		class="flex-1 overflow-y-auto pr-3"
@@ -121,17 +141,6 @@
 		{#if items.length === 0 && !apiError}
 			<!-- Empty state with vertical centering -->
 			<div class="flex flex-col h-full">
-				<!-- Page range indicator -->
-				<div class="mb-2 pl-4 flex items-center justify-between flex-shrink-0">
-					<span class="text-xs text-gray-600 dark:text-gray-500">
-						{totalCount}
-						{totalCount === 1 ? "notification" : "notifications"}
-						{#if hasActiveFilters}
-							(filtered)
-						{/if}
-					</span>
-					<span class="text-xs text-gray-600 dark:text-gray-500"> 0 of 0 </span>
-				</div>
 				<!-- Centered empty state message -->
 				<div class="flex flex-1 items-center justify-center">
 					<div class="flex flex-col items-center justify-center gap-2 text-center">
@@ -143,26 +152,6 @@
 				</div>
 			</div>
 		{:else if !apiError}
-			<!-- Page range indicator (scrolls with content) -->
-			<div class="mb-2.5 pl-3 flex items-center justify-between">
-				<span class="text-xs text-gray-500">
-					{totalCount}
-					{totalCount === 1 ? "notification" : "notifications"}
-					{#if hasActiveFilters}
-						(filtered)
-					{/if}
-				</span>
-				<span class="text-xs text-gray-500">
-					{#if totalCount === 0}
-						0 of 0
-					{:else if pageRangeStart === 0}
-						0 of {totalCount}
-					{:else}
-						{pageRangeStart}-{pageRangeEnd} of {totalCount}
-					{/if}
-				</span>
-			</div>
-
 			<div class="space-y-2.5 pb-4">
 				{#each items as notification (notification.id)}
 					{@const notificationKey = notification.githubId || notification.id}

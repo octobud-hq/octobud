@@ -15,7 +15,12 @@
 
 import { redirect } from "@sveltejs/kit";
 import type { PageLoad } from "./$types";
-import { fetchNotifications } from "$lib/api/notifications";
+import { fetchNotifications, fetchRepositoryCounts } from "$lib/api/notifications";
+import type { RepositoryCount } from "$lib/api/types";
+import { normalizeRepositoryIds } from "$lib/stores/repositoryFilterStore";
+import { getRepositoryPinsStore } from "$lib/stores/repositoryPinsStore";
+import { browser } from "$app/environment";
+import { get } from "svelte/store";
 import { fetchTags } from "$lib/api/tags";
 import { ApiUnreachableError, ApiError, isNetworkError } from "$lib/api/fetch";
 import type { NotificationViewFilter, ViewFilterOperator } from "$lib/api/types";
@@ -81,6 +86,17 @@ const parseFilters = (raw: string | null): NotificationViewFilter[] => {
 	} catch {
 		return [];
 	}
+};
+
+/** Parse the `?repos=1,2,3` repository filter parameter. */
+const parseRepositoryIds = (raw: string | null): number[] => {
+	if (!raw) return [];
+	return normalizeRepositoryIds(
+		raw
+			.split(",")
+			.map((part) => Number.parseInt(part.trim(), 10))
+			.filter((value) => Number.isFinite(value))
+	);
 };
 
 const parsePageNumber = (raw: string | null): number => {
@@ -164,6 +180,7 @@ export const load: PageLoad = async ({ fetch, params, url, parent }) => {
 
 	const quickFilters = parseFilters(url.searchParams.get("filters"));
 	const page = parsePageNumber(url.searchParams.get("page"));
+	const repositoryIds = parseRepositoryIds(url.searchParams.get("repos"));
 
 	// Build the query string from the view's query
 	let viewQuery = "";
@@ -197,18 +214,35 @@ export const load: PageLoad = async ({ fetch, params, url, parent }) => {
 	const combinedQuery = [currentQuery, searchTerm].filter(Boolean).join(" ");
 
 	try {
-		const notificationsPage = await fetchNotifications(
-			{
-				page,
-				filters: {
-					// Use combined query - no more viewSlug, searchTerm, or triageStatuses
-					// Always pass query (even if empty) to use new query engine with inbox defaults
-					query: combinedQuery,
-					filters: quickFilters,
+		// Repository counts back the selector above the list. They are fetched for the
+		// query *without* the repository filter so every candidate repository is listed;
+		// selected and pinned repositories are always included (even at zero matches) so
+		// the selector can label them. A failure must never block the page.
+		const includeRepositoryIds = [
+			...repositoryIds,
+			...(browser ? get(getRepositoryPinsStore().pinnedRepositoryIds) : []),
+		];
+		const [notificationsPage, repositoryCounts] = await Promise.all([
+			fetchNotifications(
+				{
+					page,
+					repositoryIds,
+					filters: {
+						// Use combined query - no more viewSlug, searchTerm, or triageStatuses
+						// Always pass query (even if empty) to use new query engine with inbox defaults
+						query: combinedQuery,
+						filters: quickFilters,
+					},
 				},
-			},
-			fetch
-		);
+				fetch
+			),
+			fetchRepositoryCounts(combinedQuery, includeRepositoryIds, fetch).catch(
+				(error: unknown): RepositoryCount[] => {
+					console.error("Failed to fetch repository counts:", error);
+					return [];
+				}
+			),
+		]);
 
 		return {
 			views,
@@ -222,6 +256,8 @@ export const load: PageLoad = async ({ fetch, params, url, parent }) => {
 			initialPageNumber: page,
 			initialQuery: currentQuery,
 			viewQuery: viewQuery,
+			initialRepositoryIds: repositoryIds,
+			initialRepositoryCounts: repositoryCounts,
 			apiError: null,
 			tag, // Pass tag if this is a tag view
 		};
@@ -242,6 +278,8 @@ export const load: PageLoad = async ({ fetch, params, url, parent }) => {
 				initialPageNumber: page,
 				initialQuery: currentQuery,
 				viewQuery: viewQuery,
+				initialRepositoryIds: repositoryIds,
+				initialRepositoryCounts: [] as RepositoryCount[],
 				apiError: "Unable to reach the API server",
 				apiErrorIsInline: false, // Show full-screen error for network issues
 				tag,
@@ -265,6 +303,8 @@ export const load: PageLoad = async ({ fetch, params, url, parent }) => {
 			initialPageNumber: page,
 			initialQuery: currentQuery,
 			viewQuery: viewQuery,
+			initialRepositoryIds: repositoryIds,
+			initialRepositoryCounts: [] as RepositoryCount[],
 			apiError: errorMessage,
 			apiErrorCode: errorCode,
 			apiErrorIsInline: true, // Show inline error for query validation errors

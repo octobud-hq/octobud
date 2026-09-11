@@ -32,6 +32,7 @@
 	export let onClear: () => void = () => {};
 	export let onUpdateView: () => void = () => {};
 	export let onSaveAsNewView: () => void = () => {};
+	export let saveNote: string | null = null;
 
 	// Pagination props
 	export let page: number;
@@ -137,6 +138,7 @@
 				{canUpdateView}
 				onSaveAsNew={onSaveAsNewView}
 				{onUpdateView}
+				{saveNote}
 			/>
 		</div>
 	{/if}
