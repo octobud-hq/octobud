@@ -158,6 +158,7 @@ export interface NotificationPageControllerStores {
 	repositoryCountsLoading: Writable<boolean>;
 	repositoryFilterOpen: Writable<boolean>;
 	pinnedRepositoryIds: Readable<number[]>;
+	viewDefaultRepositoryIds: Readable<number[]>;
 
 	// Selection & multiselect
 	selectedIds: Writable<Set<string>>;
@@ -211,6 +212,10 @@ export interface NotificationPageControllerDerived {
 	// Repository filter derived
 	hasRepositoryFilter: Readable<boolean>;
 	selectedRepositories: Readable<SelectedRepository[]>;
+	hasViewDefault: Readable<boolean>;
+	isViewDefaultSelection: Readable<boolean>;
+	unreadOutsideSelection: Readable<number>;
+	totalUnreadInCounts: Readable<number>;
 
 	// Pagination-related derived
 	totalPages: Readable<number>;

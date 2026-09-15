@@ -14,6 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import type { RepositoryCount } from "$lib/api/types";
+import { normalizeRepositoryIds } from "$lib/stores/repositoryFilterStore";
 
 /** One row in the repository selector dropdown. */
 export interface RepositoryOption {
@@ -79,6 +80,43 @@ export function buildRepositoryOptions(
 	}
 
 	return { pinned: all.slice(0, pinnedCount), others: all.slice(pinnedCount), all };
+}
+
+/** URL value meaning "explicitly all repositories" on a view that has a default selection. */
+export const ALL_REPOSITORIES_PARAM = "all";
+
+/**
+ * Resolve the effective repository selection from the `?repos=` URL value and the
+ * view's stored default. No URL value means "use the view default"; `all` means the
+ * user explicitly cleared it; anything else is an explicit id list.
+ */
+export function resolveRepositorySelection(
+	raw: string | null,
+	viewDefaultIds: readonly number[]
+): number[] {
+	const value = raw?.trim() ?? "";
+	if (value === "") {
+		return [...viewDefaultIds];
+	}
+	if (value.toLowerCase() === ALL_REPOSITORIES_PARAM) {
+		return [];
+	}
+	return normalizeRepositoryIds(value.split(",").map((part) => Number.parseInt(part.trim(), 10)));
+}
+
+/** Total unread across the counted repositories. */
+export function totalUnread(counts: readonly RepositoryCount[]): number {
+	return counts.reduce((sum, count) => sum + count.unread, 0);
+}
+
+/** Unread notifications in repositories that are not part of the current selection. */
+export function unreadOutsideSelection(
+	counts: readonly RepositoryCount[],
+	selectedIds: readonly number[]
+): number {
+	if (selectedIds.length === 0) return 0;
+	const selected = new Set(selectedIds);
+	return totalUnread(counts.filter((count) => !selected.has(count.repository.id)));
 }
 
 export interface RepositorySelectionLabel {

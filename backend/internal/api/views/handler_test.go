@@ -159,7 +159,7 @@ func TestHandler_handleCreateView(t *testing.T) {
 			},
 			setupMock: func(mockSvc *viewmocks.MockViewService) {
 				mockSvc.EXPECT().
-					CreateView(gomock.Any(), "test-user-id", "Test View", stringPtr("Test description"), stringPtr("test-icon"), gomock.Any(), "is:unread").
+					CreateView(gomock.Any(), "test-user-id", "Test View", stringPtr("Test description"), stringPtr("test-icon"), gomock.Any(), "is:unread", gomock.Any()).
 					Return(models.View{
 						ID:           "1",
 						Name:         "Test View",
@@ -201,7 +201,7 @@ func TestHandler_handleCreateView(t *testing.T) {
 			},
 			setupMock: func(mockSvc *viewmocks.MockViewService) {
 				mockSvc.EXPECT().
-					CreateView(gomock.Any(), "test-user-id", "", gomock.Any(), gomock.Any(), gomock.Any(), "is:unread").
+					CreateView(gomock.Any(), "test-user-id", "", gomock.Any(), gomock.Any(), gomock.Any(), "is:unread", gomock.Any()).
 					Return(models.View{}, viewcore.ErrNameRequired)
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -220,7 +220,7 @@ func TestHandler_handleCreateView(t *testing.T) {
 			},
 			setupMock: func(mockSvc *viewmocks.MockViewService) {
 				mockSvc.EXPECT().
-					CreateView(gomock.Any(), "test-user-id", "Test View", gomock.Any(), gomock.Any(), gomock.Any(), "is:unread").
+					CreateView(gomock.Any(), "test-user-id", "Test View", gomock.Any(), gomock.Any(), gomock.Any(), "is:unread", gomock.Any()).
 					Return(models.View{}, viewcore.ErrViewNameAlreadyExists)
 			},
 			expectedStatus: http.StatusConflict,
@@ -241,7 +241,7 @@ func TestHandler_handleCreateView(t *testing.T) {
 				// Return a unique constraint error
 				uniqueErr := errors.New("UNIQUE constraint failed: views.slug")
 				mockSvc.EXPECT().
-					CreateView(gomock.Any(), "test-user-id", "Test View", gomock.Any(), gomock.Any(), gomock.Any(), "is:unread").
+					CreateView(gomock.Any(), "test-user-id", "Test View", gomock.Any(), gomock.Any(), gomock.Any(), "is:unread", gomock.Any()).
 					Return(models.View{}, uniqueErr)
 			},
 			expectedStatus: http.StatusConflict,
@@ -260,7 +260,7 @@ func TestHandler_handleCreateView(t *testing.T) {
 			},
 			setupMock: func(mockSvc *viewmocks.MockViewService) {
 				mockSvc.EXPECT().
-					CreateView(gomock.Any(), "test-user-id", "Test View", gomock.Any(), gomock.Any(), gomock.Any(), "invalid:query:format").
+					CreateView(gomock.Any(), "test-user-id", "Test View", gomock.Any(), gomock.Any(), gomock.Any(), "invalid:query:format", gomock.Any()).
 					Return(models.View{}, viewcore.ErrInvalidQuery)
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -279,7 +279,7 @@ func TestHandler_handleCreateView(t *testing.T) {
 			},
 			setupMock: func(mockSvc *viewmocks.MockViewService) {
 				mockSvc.EXPECT().
-					CreateView(gomock.Any(), "test-user-id", "Test View", gomock.Any(), gomock.Any(), gomock.Any(), "is:unread").
+					CreateView(gomock.Any(), "test-user-id", "Test View", gomock.Any(), gomock.Any(), gomock.Any(), "is:unread", gomock.Any()).
 					Return(models.View{}, errors.New("database error"))
 			},
 			expectedStatus: http.StatusInternalServerError,
@@ -337,7 +337,7 @@ func TestHandler_handleUpdateView(t *testing.T) {
 			},
 			setupMock: func(mockSvc *viewmocks.MockViewService, _ string) {
 				mockSvc.EXPECT().
-					UpdateView(gomock.Any(), "test-user-id", "1", stringPtr("Updated View"), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+					UpdateView(gomock.Any(), "test-user-id", "1", stringPtr("Updated View"), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 					Return(models.View{
 						ID:           "1",
 						Name:         "Updated View",
@@ -363,7 +363,7 @@ func TestHandler_handleUpdateView(t *testing.T) {
 			requestBody: updateViewRequest{},
 			setupMock: func(mockSvc *viewmocks.MockViewService, _ string) {
 				mockSvc.EXPECT().
-					UpdateView(gomock.Any(), "test-user-id", "invalid", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+					UpdateView(gomock.Any(), "test-user-id", "invalid", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 					Return(models.View{}, viewcore.ErrViewNotFound)
 			},
 			expectedStatus: http.StatusNotFound,
@@ -389,7 +389,7 @@ func TestHandler_handleUpdateView(t *testing.T) {
 			},
 			setupMock: func(mockSvc *viewmocks.MockViewService, _ string) {
 				mockSvc.EXPECT().
-					UpdateView(gomock.Any(), "test-user-id", "999", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+					UpdateView(gomock.Any(), "test-user-id", "999", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 					Return(models.View{}, viewcore.ErrViewNotFound)
 			},
 			expectedStatus: http.StatusNotFound,
@@ -402,7 +402,7 @@ func TestHandler_handleUpdateView(t *testing.T) {
 			},
 			setupMock: func(mockSvc *viewmocks.MockViewService, _ string) {
 				mockSvc.EXPECT().
-					UpdateView(gomock.Any(), "test-user-id", "1", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+					UpdateView(gomock.Any(), "test-user-id", "1", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 					Return(models.View{}, viewcore.ErrViewNameAlreadyExists)
 			},
 			expectedStatus: http.StatusConflict,
@@ -423,7 +423,7 @@ func TestHandler_handleUpdateView(t *testing.T) {
 				// Return a unique constraint error
 				uniqueErr := errors.New("UNIQUE constraint failed: views.slug")
 				mockSvc.EXPECT().
-					UpdateView(gomock.Any(), "test-user-id", "1", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+					UpdateView(gomock.Any(), "test-user-id", "1", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 					Return(models.View{}, uniqueErr)
 			},
 			expectedStatus: http.StatusConflict,
@@ -442,7 +442,7 @@ func TestHandler_handleUpdateView(t *testing.T) {
 			},
 			setupMock: func(mockSvc *viewmocks.MockViewService, _ string) {
 				mockSvc.EXPECT().
-					UpdateView(gomock.Any(), "test-user-id", "1", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), stringPtr("invalid:query:format")).
+					UpdateView(gomock.Any(), "test-user-id", "1", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), stringPtr("invalid:query:format"), gomock.Any()).
 					Return(models.View{}, viewcore.ErrInvalidQuery)
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -455,7 +455,7 @@ func TestHandler_handleUpdateView(t *testing.T) {
 			},
 			setupMock: func(mockSvc *viewmocks.MockViewService, _ string) {
 				mockSvc.EXPECT().
-					UpdateView(gomock.Any(), "test-user-id", "1", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+					UpdateView(gomock.Any(), "test-user-id", "1", gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 					Return(models.View{}, errors.New("database error"))
 			},
 			expectedStatus: http.StatusInternalServerError,
@@ -832,4 +832,90 @@ func stringPtr(s string) *string {
 
 type errorResponse struct {
 	Error string `json:"error"`
+}
+
+func TestHandler_handleSetViewRepositoryDefault(t *testing.T) {
+	const testUserID = "test-user-id"
+
+	tests := []struct {
+		name           string
+		viewKey        string
+		body           interface{}
+		setupMock      func(*viewmocks.MockViewService)
+		expectedStatus int
+		expectedIDs    []int64
+	}{
+		{
+			name:    "stores the selection",
+			viewKey: "inbox",
+			body:    setViewRepositoryDefaultRequest{RepositoryIDs: []int64{3, 4}},
+			setupMock: func(m *viewmocks.MockViewService) {
+				m.EXPECT().
+					SetViewRepositoryDefault(gomock.Any(), testUserID, "inbox", []int64{3, 4}).
+					Return([]int64{3, 4}, nil)
+			},
+			expectedStatus: http.StatusOK,
+			expectedIDs:    []int64{3, 4},
+		},
+		{
+			name:    "invalid key returns 400",
+			viewKey: "bad%20key",
+			body:    setViewRepositoryDefaultRequest{RepositoryIDs: []int64{3}},
+			setupMock: func(m *viewmocks.MockViewService) {
+				m.EXPECT().
+					SetViewRepositoryDefault(gomock.Any(), testUserID, "bad key", []int64{3}).
+					Return(nil, viewcore.ErrInvalidViewKey)
+			},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:           "invalid body returns 400",
+			viewKey:        "inbox",
+			body:           "nope",
+			setupMock:      func(*viewmocks.MockViewService) {},
+			expectedStatus: http.StatusBadRequest,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			handler, mockSvc, mockAuthSvc := setupTestHandler(ctrl)
+			mockAuthSvc.EXPECT().
+				GetUser(gomock.Any()).
+				Return(&models.User{GithubUserID: testUserID}, nil).
+				AnyTimes()
+			tt.setupMock(mockSvc)
+
+			router := chi.NewRouter()
+			router.Route("/api", handler.Register)
+
+			var reqBody []byte
+			if s, ok := tt.body.(string); ok {
+				reqBody = []byte(s)
+			} else {
+				reqBody, _ = json.Marshal(tt.body)
+			}
+			req := httptest.NewRequest(
+				http.MethodPut,
+				"/api/views/"+tt.viewKey+"/repository-defaults",
+				bytes.NewReader(reqBody),
+			)
+			req.Header.Set("Content-Type", "application/json")
+			req = req.WithContext(helpers.ContextWithUserID(req.Context(), testUserID))
+
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			require.Equal(t, tt.expectedStatus, w.Code)
+			if tt.expectedIDs != nil {
+				var response viewRepositoryDefaultResponse
+				require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+				require.Equal(t, tt.viewKey, response.ViewKey)
+				require.Equal(t, tt.expectedIDs, response.RepositoryIDs)
+			}
+		})
+	}
 }

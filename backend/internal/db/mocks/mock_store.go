@@ -789,6 +789,21 @@ func (mr *MockStoreMockRecorder) GetView(ctx, userID, id any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetView", reflect.TypeOf((*MockStore)(nil).GetView), ctx, userID, id)
 }
 
+// GetViewRepositoryDefault mocks base method.
+func (m *MockStore) GetViewRepositoryDefault(ctx context.Context, userID, viewKey string) ([]int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetViewRepositoryDefault", ctx, userID, viewKey)
+	ret0, _ := ret[0].([]int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetViewRepositoryDefault indicates an expected call of GetViewRepositoryDefault.
+func (mr *MockStoreMockRecorder) GetViewRepositoryDefault(ctx, userID, viewKey any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetViewRepositoryDefault", reflect.TypeOf((*MockStore)(nil).GetViewRepositoryDefault), ctx, userID, viewKey)
+}
+
 // ListAllTags mocks base method.
 func (m *MockStore) ListAllTags(ctx context.Context, userID string) ([]db.Tag, error) {
 	m.ctrl.T.Helper()
@@ -892,6 +907,21 @@ func (m *MockStore) ListTagsForEntity(ctx context.Context, userID string, arg db
 func (mr *MockStoreMockRecorder) ListTagsForEntity(ctx, userID, arg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListTagsForEntity", reflect.TypeOf((*MockStore)(nil).ListTagsForEntity), ctx, userID, arg)
+}
+
+// ListViewRepositoryDefaults mocks base method.
+func (m *MockStore) ListViewRepositoryDefaults(ctx context.Context, userID string) (map[string][]int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListViewRepositoryDefaults", ctx, userID)
+	ret0, _ := ret[0].(map[string][]int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListViewRepositoryDefaults indicates an expected call of ListViewRepositoryDefaults.
+func (mr *MockStoreMockRecorder) ListViewRepositoryDefaults(ctx, userID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListViewRepositoryDefaults", reflect.TypeOf((*MockStore)(nil).ListViewRepositoryDefaults), ctx, userID)
 }
 
 // ListViews mocks base method.
@@ -1010,6 +1040,20 @@ func (m *MockStore) ReplaceNotificationMetadata(ctx context.Context, notificatio
 func (mr *MockStoreMockRecorder) ReplaceNotificationMetadata(ctx, notificationID, metadata any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReplaceNotificationMetadata", reflect.TypeOf((*MockStore)(nil).ReplaceNotificationMetadata), ctx, notificationID, metadata)
+}
+
+// SetViewRepositoryDefault mocks base method.
+func (m *MockStore) SetViewRepositoryDefault(ctx context.Context, userID, viewKey string, repositoryIDs []int64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetViewRepositoryDefault", ctx, userID, viewKey, repositoryIDs)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetViewRepositoryDefault indicates an expected call of SetViewRepositoryDefault.
+func (mr *MockStoreMockRecorder) SetViewRepositoryDefault(ctx, userID, viewKey, repositoryIDs any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetViewRepositoryDefault", reflect.TypeOf((*MockStore)(nil).SetViewRepositoryDefault), ctx, userID, viewKey, repositoryIDs)
 }
 
 // SnoozeNotification mocks base method.

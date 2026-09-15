@@ -28,7 +28,8 @@
 
 	const pageController = getContext<NotificationPageController>("notificationPageController");
 	const { repositoryFilterOpen } = pageController.stores;
-	const { selectedRepositories, hasRepositoryFilter } = pageController.derived;
+	const { selectedRepositories, hasRepositoryFilter, unreadOutsideSelection } =
+		pageController.derived;
 
 	// The toggle button is the dropdown's click-outside anchor: clicks on it must not be
 	// treated as "outside" (they'd close and immediately reopen), but the rest of the bar,
@@ -93,6 +94,17 @@
 				class="flex-shrink-0 rounded-full bg-indigo-500 px-1.5 py-px text-[10px] font-semibold leading-4 text-white"
 			>
 				+{label.overflow}
+			</span>
+		{/if}
+
+		{#if $hasRepositoryFilter && $unreadOutsideSelection > 0}
+			<!-- Unread in repositories hidden by the selection: the hint that there's more out there -->
+			<span
+				class="flex-shrink-0 rounded-full bg-gray-200 px-1.5 py-px text-[10px] font-semibold leading-4 text-gray-600 dark:bg-gray-700 dark:text-gray-300"
+				title={`${$unreadOutsideSelection} unread in repositories hidden by this selection`}
+				aria-label={`${$unreadOutsideSelection} unread in repositories hidden by this selection`}
+			>
+				+{$unreadOutsideSelection} hidden
 			</span>
 		{/if}
 

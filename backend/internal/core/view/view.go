@@ -20,6 +20,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/octobud-hq/octobud/backend/internal/db"
@@ -40,6 +41,8 @@ var (
 	ErrFailedToCreateView               = errors.New("failed to create view")
 	ErrFailedToUpdateView               = errors.New("failed to update view")
 	ErrFailedToDeleteView               = errors.New("failed to delete view")
+	ErrInvalidViewKey                   = errors.New("invalid view key")
+	ErrFailedToSaveRepositoryDefault    = errors.New("failed to save view repository default")
 	ErrFailedToReorderViews             = errors.New("failed to reorder views")
 	ErrViewNotFound                     = errors.New("view not found")
 	ErrInvalidQuery                     = errors.New("invalid query")
@@ -75,6 +78,12 @@ func (s *Service) ListViewsWithCounts(ctx context.Context, userID string) ([]mod
 		return nil, errors.Join(ErrFailedToLoadViews, err)
 	}
 
+	// Per-view default repository selections, keyed by custom view id or system view slug.
+	repositoryDefaults, err := s.queries.ListViewRepositoryDefaults(ctx, userID)
+	if err != nil {
+		return nil, errors.Join(ErrFailedToLoadViews, err)
+	}
+
 	// Build response for custom views with counts
 	response := make([]models.View, 0, len(views)+6)
 	for _, view := range views {
@@ -86,6 +95,7 @@ func (s *Service) ListViewsWithCounts(ctx context.Context, userID string) ([]mod
 
 		viewResp := models.ViewFromDB(view)
 		viewResp.UnreadCount = unreadCount
+		viewResp.RepositoryIDs = repositoryDefaults[view.ID]
 		response = append(response, viewResp)
 	}
 
@@ -165,7 +175,71 @@ func (s *Service) ListViewsWithCounts(ctx context.Context, userID string) ([]mod
 		UnreadCount: starredCount,
 	})
 
+	for i := range response {
+		if response[i].SystemView {
+			response[i].RepositoryIDs = repositoryDefaults[response[i].Slug]
+		}
+	}
+
 	return response, nil
+}
+
+// viewKeyPattern bounds what a view key may look like: a custom view id (UUID), a system
+// view slug, or "tag-<tag id>".
+var viewKeyPattern = regexp.MustCompile(`^[A-Za-z0-9._-]{1,128}$`)
+
+// systemViewSlugs are the views synthesized in ListViewsWithCounts; they have no row of
+// their own, so their defaults are keyed by slug.
+var systemViewSlugs = map[string]struct{}{
+	"inbox": {}, "everything": {}, "archive": {}, "snoozed": {}, "starred": {},
+}
+
+// resolveViewKey checks that a view key names something that exists for this user: a
+// system view slug, a tag ("tag-<id>"), or a custom view id. Otherwise defaults would be
+// stored under keys nothing ever reads.
+func (s *Service) resolveViewKey(ctx context.Context, userID, viewKey string) error {
+	if !viewKeyPattern.MatchString(viewKey) {
+		return ErrInvalidViewKey
+	}
+	if _, ok := systemViewSlugs[viewKey]; ok {
+		return nil
+	}
+	if tagID, isTag := strings.CutPrefix(viewKey, "tag-"); isTag {
+		if _, err := s.queries.GetTag(ctx, userID, tagID); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return ErrViewNotFound
+			}
+			return errors.Join(ErrFailedToSaveRepositoryDefault, err)
+		}
+		return nil
+	}
+	if _, err := s.queries.GetView(ctx, userID, viewKey); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrViewNotFound
+		}
+		return errors.Join(ErrFailedToSaveRepositoryDefault, err)
+	}
+	return nil
+}
+
+// SetViewRepositoryDefault stores the default repository selection for a view key. An
+// empty selection clears it. Returns the normalized selection that was stored.
+func (s *Service) SetViewRepositoryDefault(
+	ctx context.Context,
+	userID, viewKey string,
+	repositoryIDs []int64,
+) ([]int64, error) {
+	if err := s.resolveViewKey(ctx, userID, viewKey); err != nil {
+		return nil, err
+	}
+	normalized := models.NormalizeRepositoryIDs(repositoryIDs)
+	if err := s.queries.SetViewRepositoryDefault(ctx, userID, viewKey, normalized); err != nil {
+		return nil, errors.Join(ErrFailedToSaveRepositoryDefault, err)
+	}
+	if normalized == nil {
+		return []int64{}, nil
+	}
+	return normalized, nil
 }
 
 // CreateView creates a new view
@@ -175,6 +249,7 @@ func (s *Service) CreateView(
 	description, icon *string,
 	isDefault *bool,
 	queryStr string,
+	repositoryIDs []int64,
 ) (models.View, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
@@ -231,6 +306,12 @@ func (s *Service) CreateView(
 
 	resp := models.ViewFromDB(view)
 	resp.UnreadCount = unreadCount
+	if ids := models.NormalizeRepositoryIDs(repositoryIDs); ids != nil {
+		if err := s.queries.SetViewRepositoryDefault(ctx, userID, view.ID, ids); err != nil {
+			return models.View{}, errors.Join(ErrFailedToSaveRepositoryDefault, err)
+		}
+		resp.RepositoryIDs = ids
+	}
 	return resp, nil
 }
 
@@ -242,6 +323,7 @@ func (s *Service) UpdateView(
 	name, description, icon *string,
 	isDefault *bool,
 	queryStr *string,
+	repositoryIDs []int64,
 ) (models.View, error) {
 	params := db.UpdateViewParams{
 		ID: viewID,
@@ -313,6 +395,16 @@ func (s *Service) UpdateView(
 
 	resp := models.ViewFromDB(view)
 	resp.UnreadCount = unreadCount
+	// nil leaves the stored default untouched; an empty (non-nil) slice clears it.
+	if repositoryIDs != nil {
+		ids := models.NormalizeRepositoryIDs(repositoryIDs)
+		if err := s.queries.SetViewRepositoryDefault(ctx, userID, view.ID, ids); err != nil {
+			return models.View{}, errors.Join(ErrFailedToSaveRepositoryDefault, err)
+		}
+		resp.RepositoryIDs = ids
+	} else if ids, err := s.queries.GetViewRepositoryDefault(ctx, userID, view.ID); err == nil {
+		resp.RepositoryIDs = ids
+	}
 	return resp, nil
 }
 
@@ -347,6 +439,11 @@ func (s *Service) DeleteView(
 		}
 		return 0, errors.Join(ErrFailedToDeleteView, err)
 	}
+
+	// Best effort: drop the view's repository default along with it. A failure here only
+	// leaves an orphaned row behind, which is harmless, so it does not fail the delete.
+	//nolint:errcheck // best-effort cleanup; an orphaned default row is harmless
+	_ = s.queries.SetViewRepositoryDefault(ctx, userID, viewID, nil)
 
 	return linkedRuleCount, nil
 }

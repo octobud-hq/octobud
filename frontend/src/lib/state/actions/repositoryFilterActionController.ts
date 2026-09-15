@@ -16,6 +16,9 @@
 import { get } from "svelte/store";
 import type { RepositoryFilterStore } from "../../stores/repositoryFilterStore";
 import { sameRepositoryIds } from "../../stores/repositoryFilterStore";
+import { updateViewRepositoryDefault } from "$lib/api/views";
+import { toastStore } from "$lib/stores/toastStore";
+import { ALL_REPOSITORIES_PARAM } from "$lib/utils/repositorySelection";
 import type { RepositoryPinsStore } from "../../stores/repositoryPinsStore";
 import type { QueryStore } from "../../stores/queryStore";
 import type { PaginationStore } from "../../stores/paginationStore";
@@ -30,6 +33,10 @@ import type { SharedHelpers } from "./sharedHelpers";
  * route loader refetches the page and counts, and `syncFromData` mirrors the result back
  * into the store. Page resets to 1 on every change; the detail `?id=` is preserved so an
  * open reading pane stays open.
+ *
+ * Views can store a default selection. No `?repos=` means "use the view default", so a
+ * selection equal to the default drops the param, and clearing a view that has a default
+ * writes `?repos=all` so the loader does not snap back to the default.
  */
 export function createRepositoryFilterActionController(
 	repositoryFilterStore: RepositoryFilterStore,
@@ -64,21 +71,27 @@ export function createRepositoryFilterActionController(
 			url.searchParams.delete("query");
 		}
 
-		if (repositoryIds.length > 0) {
+		const viewDefault = get(repositoryFilterStore.viewDefaultRepositoryIds);
+		if (sameRepositoryIds(repositoryIds, viewDefault)) {
+			url.searchParams.delete("repos");
+		} else if (repositoryIds.length > 0) {
 			url.searchParams.set("repos", repositoryIds.join(","));
 		} else {
-			url.searchParams.delete("repos");
+			url.searchParams.set("repos", ALL_REPOSITORIES_PARAM);
 		}
 		url.searchParams.delete("page");
 
 		try {
 			await options.navigateToUrl(url.pathname + url.search, { replace: false });
 		} catch (error) {
-			// Navigation rejected or was cancelled: put the store back so the label and
-			// URL agree, and so re-applying the same selection is not short-circuited.
-			repositoryFilterStore.setSelectedRepositoryIds(previousIds);
-			paginationStore.setPage(previousPage);
-			throw error;
+			// Navigation rejected or was cancelled. Only roll back if nothing newer has been
+			// requested since (a superseding selection navigation aborts this one and must
+			// keep its own optimistic state). Callers fire-and-forget, so don't rethrow.
+			if (sameRepositoryIds(get(repositoryFilterStore.selectedRepositoryIds), repositoryIds)) {
+				repositoryFilterStore.setSelectedRepositoryIds(previousIds);
+				paginationStore.setPage(previousPage);
+				console.warn("Repository selection navigation failed; selection restored", error);
+			}
 		}
 	}
 
@@ -126,6 +139,39 @@ export function createRepositoryFilterActionController(
 		repositoryFilterStore.closeDropdown();
 	}
 
+	async function setViewRepositoryDefault(): Promise<void> {
+		const viewKey = get(repositoryFilterStore.viewKey);
+		if (!viewKey) return;
+		const selection = get(repositoryFilterStore.selectedRepositoryIds);
+
+		let stored: number[];
+		try {
+			stored = await updateViewRepositoryDefault(viewKey, selection);
+		} catch (error) {
+			console.error("Failed to save view repository default", error);
+			toastStore.error("Failed to save the view's default repositories");
+			return;
+		}
+
+		toastStore.success(
+			stored.length === 0
+				? "Cleared this view's default repositories"
+				: `Saved ${stored.length} ${stored.length === 1 ? "repository" : "repositories"} as this view's default`
+		);
+
+		// The user may have switched views while the request was in flight; the saved
+		// default belongs to the original view and must not be applied to the current one.
+		if (get(repositoryFilterStore.viewKey) !== viewKey) return;
+		repositoryFilterStore.setViewDefault(viewKey, stored);
+		// The selection now equals the default, so the URL no longer needs ?repos=. The
+		// navigation also reloads views so the stored default reaches the sidebar data.
+		await navigateWithSelection(stored);
+	}
+
+	async function resetToViewDefault(): Promise<void> {
+		await navigateWithSelection(get(repositoryFilterStore.viewDefaultRepositoryIds));
+	}
+
 	function toggleRepositoryPin(repositoryId: number): void {
 		pinsStore.togglePin(repositoryId);
 		// A newly pinned repository with zero matches is not in the counts yet; refetch so
@@ -147,5 +193,7 @@ export function createRepositoryFilterActionController(
 		openRepositoryFilter,
 		closeRepositoryFilter,
 		toggleRepositoryPin,
+		setViewRepositoryDefault,
+		resetToViewDefault,
 	};
 }

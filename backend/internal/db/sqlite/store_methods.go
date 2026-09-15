@@ -18,6 +18,8 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -782,6 +784,86 @@ func (s *Store) GetView(ctx context.Context, userID, id string) (db.View, error)
 		return db.View{}, err
 	}
 	return toDBView(v), nil
+}
+
+// ListViewRepositoryDefaults returns every view's default repository selection, keyed by
+// view key. Rows whose JSON cannot be decoded are skipped rather than failing the list.
+func (s *Store) ListViewRepositoryDefaults(
+	ctx context.Context,
+	userID string,
+) (map[string][]int64, error) {
+	rows, err := db.RetryOnBusy(ctx, func() ([]ViewRepositoryDefault, error) {
+		return s.q.ListViewRepositoryDefaults(ctx, userID)
+	})
+	if err != nil {
+		return nil, err
+	}
+	result := make(map[string][]int64, len(rows))
+	for _, row := range rows {
+		var ids []int64
+		if jsonErr := json.Unmarshal([]byte(row.RepositoryIds), &ids); jsonErr != nil ||
+			len(ids) == 0 {
+			continue
+		}
+		result[row.ViewKey] = ids
+	}
+	return result, nil
+}
+
+// SetViewRepositoryDefault stores a view's default repository selection; an empty
+// selection removes the row.
+func (s *Store) SetViewRepositoryDefault(
+	ctx context.Context,
+	userID, viewKey string,
+	repositoryIDs []int64,
+) error {
+	if len(repositoryIDs) == 0 {
+		return db.RetryVoidOnBusy(ctx, func() error {
+			return s.q.DeleteViewRepositoryDefault(ctx, DeleteViewRepositoryDefaultParams{
+				UserID:  userID,
+				ViewKey: viewKey,
+			})
+		})
+	}
+	encoded, err := json.Marshal(repositoryIDs)
+	if err != nil {
+		return err
+	}
+	return db.RetryVoidOnBusy(ctx, func() error {
+		return s.q.UpsertViewRepositoryDefault(ctx, UpsertViewRepositoryDefaultParams{
+			UserID:        userID,
+			ViewKey:       viewKey,
+			RepositoryIds: string(encoded),
+		})
+	})
+}
+
+// GetViewRepositoryDefault returns a single view's default repository selection, or nil
+// when none is stored.
+func (s *Store) GetViewRepositoryDefault(
+	ctx context.Context,
+	userID, viewKey string,
+) ([]int64, error) {
+	row, err := db.RetryOnBusy(ctx, func() (ViewRepositoryDefault, error) {
+		return s.q.GetViewRepositoryDefault(ctx, GetViewRepositoryDefaultParams{
+			UserID:  userID,
+			ViewKey: viewKey,
+		})
+	})
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var ids []int64
+	if jsonErr := json.Unmarshal([]byte(row.RepositoryIds), &ids); jsonErr != nil {
+		return nil, jsonErr
+	}
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	return ids, nil
 }
 
 // ListViews lists all views

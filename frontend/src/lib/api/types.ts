@@ -174,6 +174,8 @@ export interface NotificationView {
 	query: string; // New: query string instead of filters array
 	unreadCount: number;
 	displayOrder?: number;
+	/** Default repository selection applied when the view opens (absent/empty = all). */
+	repositoryIds?: number[];
 }
 
 export interface NotificationViewInput {
@@ -181,6 +183,8 @@ export interface NotificationViewInput {
 	description?: string;
 	icon?: string;
 	query: string; // New: query string instead of filters array
+	/** Default repository selection: omit to leave unchanged, [] to clear. */
+	repositoryIds?: number[];
 }
 
 export interface NotificationViewDraft {
@@ -189,6 +193,8 @@ export interface NotificationViewDraft {
 	description: string;
 	icon?: string;
 	query: string; // New: query string instead of filters array
+	/** Repository selection captured from the list when saving from the Save menu. */
+	repositoryIds?: number[];
 }
 
 export interface NotificationFilters {

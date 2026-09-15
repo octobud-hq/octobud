@@ -33,4 +33,8 @@ export interface RepositoryFilterActions {
 	openRepositoryFilter: () => boolean;
 	closeRepositoryFilter: () => void;
 	toggleRepositoryPin: (repositoryId: number) => void;
+	/** Persist the current selection as the view's default (empty selection clears it). */
+	setViewRepositoryDefault: () => Promise<void>;
+	/** Navigate back to the view's default selection. */
+	resetToViewDefault: () => Promise<void>;
 }

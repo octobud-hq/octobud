@@ -33,8 +33,6 @@
 	export let canUpdateView: boolean = false; // If true, shows dropdown; if false, direct save
 	export let onSaveAsNew: () => void = () => {};
 	export let onUpdateView: () => void = () => {};
-	/** Optional caveat shown under the save options (e.g. state that isn't part of the query). */
-	export let saveNote: string | null = null;
 
 	let inputElement: HTMLInputElement | null = null;
 	let containerElement: HTMLDivElement | null = null;
@@ -502,14 +500,6 @@
 									</div>
 								</div>
 							</button>
-
-							{#if saveNote}
-								<div
-									class="mx-1 mt-1 border-t border-gray-200 dark:border-gray-800 px-3 pt-2 pb-1 text-xs text-gray-500 dark:text-gray-500"
-								>
-									{saveNote}
-								</div>
-							{/if}
 						</div>
 					</div>
 				{/if}

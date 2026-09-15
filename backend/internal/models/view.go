@@ -31,6 +31,8 @@ type View struct {
 	Query        string  `json:"query"`
 	UnreadCount  int64   `json:"unreadCount"`
 	DisplayOrder int     `json:"displayOrder"`
+	// RepositoryIDs is the view's default repository selection (empty = all repositories).
+	RepositoryIDs []int64 `json:"repositoryIds,omitempty"`
 }
 
 // SystemView represents a system view (inbox, everything, etc.)
@@ -60,4 +62,10 @@ func ViewFromDB(view db.View) View {
 		Query:        query,
 		DisplayOrder: int(view.DisplayOrder),
 	}
+}
+
+// TagViewKey is the view_repository_defaults key for a tag's view. It uses the immutable
+// tag id rather than the slug so renaming a tag keeps its default.
+func TagViewKey(tagID string) string {
+	return "tag-" + tagID
 }

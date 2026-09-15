@@ -48,6 +48,10 @@ func TestService_ListTagsWithUnreadCounts(t *testing.T) {
 					ListAllTags(gomock.Any(), "test-user-id").
 					Return(tags, nil)
 				m.EXPECT().
+					ListViewRepositoryDefaults(gomock.Any(), "test-user-id").
+					Return(map[string][]int64{}, nil).
+					AnyTimes()
+				m.EXPECT().
 					ListNotificationsFromQuery(gomock.Any(), "test-user-id", gomock.Any()).
 					Return(db.ListNotificationsFromQueryResult{Total: 5}, nil).
 					Times(2)
@@ -363,6 +367,10 @@ func TestService_DeleteTag(t *testing.T) {
 				m.EXPECT().
 					DeleteTag(gomock.Any(), "test-user-id", id).
 					Return(nil)
+				m.EXPECT().
+					SetViewRepositoryDefault(gomock.Any(), "test-user-id", gomock.Any(), gomock.Nil()).
+					Return(nil).
+					AnyTimes()
 			},
 			expectErr: false,
 		},
@@ -374,6 +382,10 @@ func TestService_DeleteTag(t *testing.T) {
 				m.EXPECT().
 					DeleteTag(gomock.Any(), "test-user-id", id).
 					Return(dbError)
+				m.EXPECT().
+					SetViewRepositoryDefault(gomock.Any(), "test-user-id", gomock.Any(), gomock.Nil()).
+					Return(nil).
+					AnyTimes()
 			},
 			expectErr: true,
 			checkErr: func(t *testing.T, err error) {

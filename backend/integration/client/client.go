@@ -525,3 +525,90 @@ func (c *Client) doRequest(t *testing.T, method, path string, body interface{}) 
 
 	return c.HTTPClient.Do(req)
 }
+
+// ViewResponse is the subset of a view used by integration tests.
+type ViewResponse struct {
+	ID            string  `json:"id"`
+	Slug          string  `json:"slug"`
+	RepositoryIDs []int64 `json:"repositoryIds"`
+}
+
+// ListViews retrieves all views (custom and system).
+func (c *Client) ListViews(t *testing.T) []ViewResponse {
+	t.Helper()
+
+	resp, err := c.doRequest(t, "GET", "/api/views", nil)
+	if err != nil {
+		t.Fatalf("ListViews request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		t.Fatalf("ListViews failed with status %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result struct {
+		Views []ViewResponse `json:"views"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatalf("Failed to decode ListViews response: %v", err)
+	}
+	return result.Views
+}
+
+// SetViewRepositoryDefault stores the default repository selection for a view key.
+func (c *Client) SetViewRepositoryDefault(t *testing.T, viewKey string, repositoryIDs []int64) []int64 {
+	t.Helper()
+
+	resp, err := c.doRequest(t, "PUT", "/api/views/"+viewKey+"/repository-defaults",
+		map[string]interface{}{"repositoryIds": repositoryIDs})
+	if err != nil {
+		t.Fatalf("SetViewRepositoryDefault request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		t.Fatalf("SetViewRepositoryDefault failed with status %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result struct {
+		RepositoryIDs []int64 `json:"repositoryIds"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatalf("Failed to decode SetViewRepositoryDefault response: %v", err)
+	}
+	return result.RepositoryIDs
+}
+
+// TagResponse is the subset of a tag used by integration tests.
+type TagResponse struct {
+	ID            string  `json:"id"`
+	Slug          string  `json:"slug"`
+	RepositoryIDs []int64 `json:"repositoryIds"`
+}
+
+// ListTags retrieves all tags.
+func (c *Client) ListTags(t *testing.T) []TagResponse {
+	t.Helper()
+
+	resp, err := c.doRequest(t, "GET", "/api/tags", nil)
+	if err != nil {
+		t.Fatalf("ListTags request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		t.Fatalf("ListTags failed with status %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	var result struct {
+		Tags []TagResponse `json:"tags"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatalf("Failed to decode ListTags response: %v", err)
+	}
+	return result.Tags
+}

@@ -15,6 +15,7 @@
 
 import { writable, derived, get, type Writable, type Readable } from "svelte/store";
 import type { RepositoryCount } from "$lib/api/types";
+import { totalUnread as sumUnread, unreadOutsideSelection } from "$lib/utils/repositorySelection";
 
 /** Minimal repository identity used for selector labels. */
 export interface SelectedRepository {
@@ -61,7 +62,21 @@ export function createRepositoryFilterStore(
 	const countsLoading = writable<boolean>(false);
 	const dropdownOpen = writable<boolean>(false);
 
+	// The current view's stored default selection and the key it is stored under.
+	const viewDefaultRepositoryIds = writable<number[]>([]);
+	const viewKey = writable<string | null>(null);
+
 	const hasRepositoryFilter = derived(selectedRepositoryIds, ($ids) => $ids.length > 0);
+	const hasViewDefault = derived(viewDefaultRepositoryIds, ($ids) => $ids.length > 0);
+	const isViewDefaultSelection = derived(
+		[selectedRepositoryIds, viewDefaultRepositoryIds],
+		([$ids, $defaults]) => sameRepositoryIds($ids, $defaults)
+	);
+	// Unread in repositories hidden by the current selection: the "there's more out there" hint.
+	const unreadOutside = derived([repositoryCounts, selectedRepositoryIds], ([$counts, $ids]) =>
+		unreadOutsideSelection($counts, $ids)
+	);
+	const totalUnread = derived(repositoryCounts, ($counts) => sumUnread($counts));
 
 	const selectedRepositories = derived(
 		[selectedRepositoryIds, repositoryCounts],
@@ -86,17 +101,29 @@ export function createRepositoryFilterStore(
 		countsQuery.set(query);
 	}
 
+	function setViewDefault(key: string | null, ids: readonly number[]): void {
+		viewKey.set(key);
+		viewDefaultRepositoryIds.set(normalizeRepositoryIds(ids));
+	}
+
 	return {
 		selectedRepositoryIds: selectedRepositoryIds as Readable<number[]>,
 		repositoryCounts: repositoryCounts as Readable<RepositoryCount[]>,
 		countsQuery: countsQuery as Readable<string | null>,
 		countsLoading: countsLoading as Writable<boolean>,
 		dropdownOpen: dropdownOpen as Writable<boolean>,
+		viewDefaultRepositoryIds: viewDefaultRepositoryIds as Readable<number[]>,
+		viewKey: viewKey as Readable<string | null>,
 		hasRepositoryFilter,
+		hasViewDefault,
+		isViewDefaultSelection,
+		unreadOutside,
+		totalUnread,
 		selectedRepositories,
 
 		setSelectedRepositoryIds,
 		setRepositoryCounts,
+		setViewDefault,
 		openDropdown: () => dropdownOpen.set(true),
 		closeDropdown: () => dropdownOpen.set(false),
 	};

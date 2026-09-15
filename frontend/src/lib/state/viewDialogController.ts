@@ -53,9 +53,9 @@ interface ViewDialogControllerStores {
 
 interface ViewDialogControllerActions {
 	openNewDialog: () => void;
-	openNewDialogWithQuery: (query: string) => void; // New: open with pre-filled query
+	openNewDialogWithQuery: (query: string, repositoryIds?: number[]) => void; // Open with pre-filled query (and repo selection)
 	startEditing: (view: NotificationView) => void;
-	startEditingWithQuery: (view: NotificationView, query: string) => void; // New: edit with custom query
+	startEditingWithQuery: (view: NotificationView, query: string, repositoryIds?: number[]) => void; // Edit with custom query (and repo selection)
 	closeDialog: () => void;
 	handleSave: (payload: {
 		name: string;
@@ -137,11 +137,12 @@ export function createViewDialogController(
 		open.set(true);
 	}
 
-	function openNewDialogWithQuery(query: string) {
+	function openNewDialogWithQuery(query: string, repositoryIds?: number[]) {
 		resetState();
 		draft.set({
 			...createEmptyDraft(),
 			query: query,
+			repositoryIds,
 		});
 		open.set(true);
 	}
@@ -159,7 +160,7 @@ export function createViewDialogController(
 		open.set(true);
 	}
 
-	function startEditingWithQuery(view: NotificationView, query: string) {
+	function startEditingWithQuery(view: NotificationView, query: string, repositoryIds?: number[]) {
 		editing.set(view);
 		draft.set({
 			id: view.id,
@@ -167,6 +168,8 @@ export function createViewDialogController(
 			description: view.description ?? "",
 			icon: normalizeViewIcon(view.icon),
 			query: query, // Use the provided query instead of view's original query
+			// The list's current repository selection becomes the view's default on save.
+			repositoryIds,
 		});
 		confirmDeleteOpen.set(false);
 		open.set(true);
@@ -199,11 +202,15 @@ export function createViewDialogController(
 		saving.set(true);
 		error.set(null); // Clear any previous errors
 		try {
+			// Repository selection is only set when the dialog was opened from the Save menu
+			// (it is undefined for the sidebar's Add/Edit flows, which leaves it unchanged).
+			const repositoryIds = get(draft).repositoryIds;
 			const request = {
 				name: payload.name,
 				description: payload.description,
 				icon: cleanIconInput(payload.icon) ?? DEFAULT_VIEW_ICON,
 				query: payload.query, // New: send query string
+				...(repositoryIds !== undefined ? { repositoryIds } : {}),
 			};
 
 			const currentEditing = get(editing);

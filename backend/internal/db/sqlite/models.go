@@ -205,3 +205,10 @@ type View struct {
 	Query        sql.NullString
 	DisplayOrder int64
 }
+
+type ViewRepositoryDefault struct {
+	UserID        string
+	ViewKey       string
+	RepositoryIds string
+	UpdatedAt     string
+}
