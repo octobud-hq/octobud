@@ -27,6 +27,8 @@ type Tag struct {
 	Color       *string `json:"color,omitempty"`
 	Description *string `json:"description,omitempty"`
 	UnreadCount *int64  `json:"unreadCount,omitempty"`
+	// RepositoryIDs is the tag view's default repository selection (empty = all repositories).
+	RepositoryIDs []int64 `json:"repositoryIds,omitempty"`
 }
 
 // TagFromDB converts a db.Tag to a models.Tag

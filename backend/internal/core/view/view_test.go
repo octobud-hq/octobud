@@ -130,6 +130,10 @@ func TestService_CreateView(t *testing.T) {
 				m.EXPECT().
 					CreateView(gomock.Any(), "test-user-id", gomock.Any()).
 					Return(expectedView, nil)
+				m.EXPECT().
+					GetViewRepositoryDefault(gomock.Any(), "test-user-id", gomock.Any()).
+					Return(nil, nil).
+					AnyTimes()
 				// calculateViewUnreadCount may be called
 				m.EXPECT().
 					ListNotificationsFromQuery(gomock.Any(), "test-user-id", gomock.Any()).
@@ -218,6 +222,10 @@ func TestService_CreateView(t *testing.T) {
 				m.EXPECT().
 					CreateView(gomock.Any(), "test-user-id", gomock.Any()).
 					Return(db.View{}, dbError)
+				m.EXPECT().
+					GetViewRepositoryDefault(gomock.Any(), "test-user-id", gomock.Any()).
+					Return(nil, nil).
+					AnyTimes()
 			},
 			expectErr: true,
 			checkErr: func(t *testing.T, err error) {
@@ -248,6 +256,7 @@ func TestService_CreateView(t *testing.T) {
 				tt.icon,
 				tt.isDefault,
 				tt.queryStr,
+				nil,
 			)
 
 			if tt.expectErr {
@@ -296,6 +305,10 @@ func TestService_UpdateView(t *testing.T) {
 				m.EXPECT().
 					UpdateView(gomock.Any(), "test-user-id", gomock.Any()).
 					Return(expectedView, nil)
+				m.EXPECT().
+					GetViewRepositoryDefault(gomock.Any(), "test-user-id", gomock.Any()).
+					Return(nil, nil).
+					AnyTimes()
 				// calculateViewUnreadCount may be called
 				m.EXPECT().
 					ListNotificationsFromQuery(gomock.Any(), "test-user-id", gomock.Any()).
@@ -351,6 +364,10 @@ func TestService_UpdateView(t *testing.T) {
 				m.EXPECT().
 					UpdateView(gomock.Any(), "test-user-id", gomock.Any()).
 					Return(db.View{}, sql.ErrNoRows)
+				m.EXPECT().
+					GetViewRepositoryDefault(gomock.Any(), "test-user-id", gomock.Any()).
+					Return(nil, nil).
+					AnyTimes()
 			},
 			expectErr: true,
 			checkErr: func(t *testing.T, err error) {
@@ -370,6 +387,10 @@ func TestService_UpdateView(t *testing.T) {
 				m.EXPECT().
 					UpdateView(gomock.Any(), "test-user-id", gomock.Any()).
 					Return(db.View{}, dbError)
+				m.EXPECT().
+					GetViewRepositoryDefault(gomock.Any(), "test-user-id", gomock.Any()).
+					Return(nil, nil).
+					AnyTimes()
 			},
 			expectErr: true,
 			checkErr: func(t *testing.T, err error) {
@@ -397,6 +418,7 @@ func TestService_UpdateView(t *testing.T) {
 				tt.icon,
 				tt.isDefault,
 				tt.queryStr,
+				nil,
 			)
 
 			if tt.expectErr {
@@ -435,6 +457,10 @@ func TestService_DeleteView(t *testing.T) {
 				m.EXPECT().
 					DeleteView(gomock.Any(), "test-user-id", id).
 					Return(int64(0), nil)
+				m.EXPECT().
+					SetViewRepositoryDefault(gomock.Any(), "test-user-id", gomock.Any(), gomock.Nil()).
+					Return(nil).
+					AnyTimes()
 			},
 			expectErr:               false,
 			expectedLinkedRuleCount: 0,
@@ -470,6 +496,10 @@ func TestService_DeleteView(t *testing.T) {
 				m.EXPECT().
 					DeleteView(gomock.Any(), "test-user-id", id).
 					Return(int64(0), nil)
+				m.EXPECT().
+					SetViewRepositoryDefault(gomock.Any(), "test-user-id", gomock.Any(), gomock.Nil()).
+					Return(nil).
+					AnyTimes()
 			},
 			expectErr:               false,
 			expectedLinkedRuleCount: 2,
@@ -485,6 +515,10 @@ func TestService_DeleteView(t *testing.T) {
 				m.EXPECT().
 					DeleteView(gomock.Any(), "test-user-id", id).
 					Return(int64(0), sql.ErrNoRows)
+				m.EXPECT().
+					SetViewRepositoryDefault(gomock.Any(), "test-user-id", gomock.Any(), gomock.Nil()).
+					Return(nil).
+					AnyTimes()
 			},
 			expectErr: true,
 			checkErr: func(t *testing.T, err error) {
@@ -518,6 +552,10 @@ func TestService_DeleteView(t *testing.T) {
 				m.EXPECT().
 					DeleteView(gomock.Any(), "test-user-id", id).
 					Return(int64(0), dbError)
+				m.EXPECT().
+					SetViewRepositoryDefault(gomock.Any(), "test-user-id", gomock.Any(), gomock.Nil()).
+					Return(nil).
+					AnyTimes()
 			},
 			expectErr: true,
 			checkErr: func(t *testing.T, err error) {
@@ -587,6 +625,10 @@ func TestService_ReorderViews(t *testing.T) {
 				m.EXPECT().
 					ListViews(gomock.Any(), "test-user-id").
 					Return(expectedViews, nil)
+				m.EXPECT().
+					GetViewRepositoryDefault(gomock.Any(), "test-user-id", gomock.Any()).
+					Return(nil, nil).
+					AnyTimes()
 			},
 			expectErr: false,
 			checkResult: func(t *testing.T, views []models.View) {
@@ -658,4 +700,151 @@ func stringPtr(s string) *string {
 
 func boolPtr(b bool) *bool {
 	return &b
+}
+
+func TestService_SetViewRepositoryDefault(t *testing.T) {
+	const testUserID = "test-user-id"
+
+	t.Run("normalizes and stores the selection", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		m := mocks.NewMockStore(ctrl)
+		m.EXPECT().
+			SetViewRepositoryDefault(gomock.Any(), testUserID, "inbox", []int64{4, 9}).
+			Return(nil)
+
+		service := NewService(m)
+		stored, err := service.SetViewRepositoryDefault(
+			context.Background(), testUserID, "inbox", []int64{4, 0, 9, 4},
+		)
+		require.NoError(t, err)
+		require.Equal(t, []int64{4, 9}, stored)
+	})
+
+	t.Run("empty selection clears and returns an empty slice", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		m := mocks.NewMockStore(ctrl)
+		m.EXPECT().
+			GetTag(gomock.Any(), testUserID, "tag-uuid").
+			Return(db.Tag{ID: "tag-uuid"}, nil)
+		m.EXPECT().
+			SetViewRepositoryDefault(gomock.Any(), testUserID, "tag-tag-uuid", gomock.Nil()).
+			Return(nil)
+
+		service := NewService(m)
+		stored, err := service.SetViewRepositoryDefault(
+			context.Background(), testUserID, "tag-tag-uuid", []int64{0, -1},
+		)
+		require.NoError(t, err)
+		require.NotNil(t, stored)
+		require.Empty(t, stored)
+	})
+
+	t.Run("rejects malformed view keys", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		service := NewService(mocks.NewMockStore(ctrl))
+		_, err := service.SetViewRepositoryDefault(
+			context.Background(), testUserID, "not a key/with slash", []int64{1},
+		)
+		require.ErrorIs(t, err, ErrInvalidViewKey)
+	})
+
+	t.Run(
+		"custom view keys must name an existing view; unknown tags and views are not found",
+		func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			m := mocks.NewMockStore(ctrl)
+			m.EXPECT().
+				GetView(gomock.Any(), testUserID, "view-uuid").
+				Return(db.View{ID: "view-uuid"}, nil)
+			m.EXPECT().
+				SetViewRepositoryDefault(gomock.Any(), testUserID, "view-uuid", []int64{2}).
+				Return(nil)
+			m.EXPECT().GetView(gomock.Any(), testUserID, "reviews").Return(db.View{}, sql.ErrNoRows)
+			m.EXPECT().GetTag(gomock.Any(), testUserID, "missing").Return(db.Tag{}, sql.ErrNoRows)
+
+			service := NewService(m)
+			stored, err := service.SetViewRepositoryDefault(
+				context.Background(),
+				testUserID,
+				"view-uuid",
+				[]int64{2},
+			)
+			require.NoError(t, err)
+			require.Equal(t, []int64{2}, stored)
+
+			// A custom view's slug is not a key: defaults are keyed by id.
+			_, err = service.SetViewRepositoryDefault(
+				context.Background(),
+				testUserID,
+				"reviews",
+				[]int64{2},
+			)
+			require.ErrorIs(t, err, ErrViewNotFound)
+
+			_, err = service.SetViewRepositoryDefault(
+				context.Background(),
+				testUserID,
+				"tag-missing",
+				[]int64{2},
+			)
+			require.ErrorIs(t, err, ErrViewNotFound)
+		},
+	)
+
+	t.Run("wraps store errors", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		m := mocks.NewMockStore(ctrl)
+		m.EXPECT().
+			SetViewRepositoryDefault(gomock.Any(), testUserID, "inbox", []int64{1}).
+			Return(errors.New("boom"))
+
+		service := NewService(m)
+		_, err := service.SetViewRepositoryDefault(
+			context.Background(),
+			testUserID,
+			"inbox",
+			[]int64{1},
+		)
+		require.ErrorIs(t, err, ErrFailedToSaveRepositoryDefault)
+	})
+}
+
+func TestService_ListViewsWithCounts_AttachesRepositoryDefaults(t *testing.T) {
+	const testUserID = "test-user-id"
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	m := mocks.NewMockStore(ctrl)
+	m.EXPECT().
+		ListViews(gomock.Any(), testUserID).
+		Return([]db.View{{ID: "view-1", Name: "Reviews", Slug: "reviews"}}, nil)
+	m.EXPECT().
+		ListViewRepositoryDefaults(gomock.Any(), testUserID).
+		Return(map[string][]int64{"view-1": {7}, "inbox": {1, 2}}, nil)
+	m.EXPECT().
+		ListNotificationsFromQuery(gomock.Any(), testUserID, gomock.Any()).
+		Return(db.ListNotificationsFromQueryResult{}, nil).
+		AnyTimes()
+
+	service := NewService(m)
+	views, err := service.ListViewsWithCounts(context.Background(), testUserID)
+	require.NoError(t, err)
+
+	bySlug := make(map[string]models.View, len(views))
+	for _, v := range views {
+		bySlug[v.Slug] = v
+	}
+	require.Equal(t, []int64{7}, bySlug["reviews"].RepositoryIDs)
+	require.Equal(t, []int64{1, 2}, bySlug["inbox"].RepositoryIDs)
+	require.Nil(t, bySlug["archive"].RepositoryIDs)
 }

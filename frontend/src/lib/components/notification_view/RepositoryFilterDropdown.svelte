@@ -18,6 +18,7 @@
 	import type { NotificationPageController } from "$lib/state/types";
 	import { buildRepositoryOptions } from "$lib/utils/repositorySelection";
 	import RepositoryFilterOption from "./RepositoryFilterOption.svelte";
+	import RepositoryUnreadBadge from "./RepositoryUnreadBadge.svelte";
 
 	/** The toggle button; clicks on it are not "outside" so it can close the dropdown itself. */
 	export let anchor: HTMLElement | null = null;
@@ -25,6 +26,7 @@
 	const pageController = getContext<NotificationPageController>("notificationPageController");
 	const { repositoryCounts, repositoryCountsLoading, selectedRepositoryIds, pinnedRepositoryIds } =
 		pageController.stores;
+	const { hasViewDefault, isViewDefaultSelection, totalUnreadInCounts } = pageController.derived;
 
 	let filterText = "";
 	let inputElement: HTMLInputElement | null = null;
@@ -186,8 +188,8 @@
 		<button
 			type="button"
 			data-repo-row="0"
-			role="option"
-			aria-selected={allSelected}
+			role="radio"
+			aria-checked={allSelected}
 			class={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left transition cursor-pointer ${
 				highlightIndex === 0
 					? "bg-gray-200 dark:bg-gray-700"
@@ -207,6 +209,11 @@
 				{/if}
 			</span>
 			<span class="flex-1 font-medium">All repositories</span>
+			<RepositoryUnreadBadge
+				count={$totalUnreadInCounts}
+				highlighted={highlightIndex === 0}
+				label={`${$totalUnreadInCounts} unread across all repositories`}
+			/>
 		</button>
 
 		{#each rows as option, index (option.id)}
@@ -267,5 +274,40 @@
 		<span class="hidden sm:inline whitespace-nowrap"
 			>↑↓ move · space toggle · ⏎ only this · esc</span
 		>
+	</div>
+
+	<!-- View default: persist the current selection, or go back to the stored one -->
+	<div
+		class="flex items-center justify-between gap-3 border-t border-gray-200 dark:border-gray-800 px-3 py-1.5 text-[11px] text-gray-500"
+	>
+		{#if $isViewDefaultSelection}
+			<span>
+				{#if $hasViewDefault}
+					Showing this view's default repositories
+				{:else}
+					This view has no default repositories
+				{/if}
+			</span>
+		{:else}
+			<button
+				type="button"
+				class="font-medium text-blue-500 hover:text-blue-400 cursor-pointer"
+				title={selectedCount > 0
+					? "Open this view with the current repositories selected"
+					: "Open this view with all repositories"}
+				on:click={() => void pageController.actions.setViewRepositoryDefault()}
+			>
+				{selectedCount > 0 ? "Set as default for this view" : "Make all repositories the default"}
+			</button>
+			{#if $hasViewDefault}
+				<button
+					type="button"
+					class="font-medium text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 cursor-pointer"
+					on:click={() => void pageController.actions.resetToViewDefault()}
+				>
+					Reset to default
+				</button>
+			{/if}
+		{/if}
 	</div>
 </div>

@@ -292,6 +292,7 @@ export function createNotificationPageController(
 			repositoryCountsLoading: repositoryFilterStore.countsLoading,
 			repositoryFilterOpen: repositoryFilterStore.dropdownOpen,
 			pinnedRepositoryIds: repositoryPinsStore.pinnedRepositoryIds,
+			viewDefaultRepositoryIds: repositoryFilterStore.viewDefaultRepositoryIds,
 
 			// Selection & multiselect
 			selectedIds: selectionStore.selectedIds,
@@ -344,6 +345,10 @@ export function createNotificationPageController(
 			// Repository filter derived
 			hasRepositoryFilter: repositoryFilterStore.hasRepositoryFilter,
 			selectedRepositories: repositoryFilterStore.selectedRepositories,
+			hasViewDefault: repositoryFilterStore.hasViewDefault,
+			isViewDefaultSelection: repositoryFilterStore.isViewDefaultSelection,
+			unreadOutsideSelection: repositoryFilterStore.unreadOutside,
+			totalUnreadInCounts: repositoryFilterStore.totalUnread,
 
 			// Pagination-related derived
 			totalPages: paginationStore.totalPages,

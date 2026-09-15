@@ -19,6 +19,8 @@ package integration
 
 import (
 	"context"
+	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -120,4 +122,80 @@ func TestRepositoryFilter_ScopesListAndBulk(t *testing.T) {
 		counts := c.ListRepositoryCounts(t, "in:inbox")
 		require.Len(t, counts.Repositories, 2)
 	})
+}
+
+func TestViewRepositoryDefaults_RoundTrip(t *testing.T) {
+	RunWithBackends(t, func(t *testing.T, ts *testserver.TestServer, c *client.Client) {
+		ctx := context.Background()
+		userID := ts.UserID
+
+		repoA := fixtures.NewRepository().WithFullName("org/alpha").Build(t, ctx, ts.Store, userID)
+		repoB := fixtures.NewRepository().WithFullName("org/beta").Build(t, ctx, ts.Store, userID)
+
+		// Nothing stored yet: system views carry no repositoryIds.
+		for _, v := range c.ListViews(t) {
+			require.Empty(t, v.RepositoryIDs, v.Slug)
+		}
+
+		// Store a default for the inbox (a system view keyed by slug); duplicates and junk drop out.
+		stored := c.SetViewRepositoryDefault(t, "inbox", []int64{repoB.ID, 0, repoA.ID, repoB.ID})
+		require.Equal(t, []int64{repoB.ID, repoA.ID}, stored)
+
+		var inbox *client.ViewResponse
+		for _, v := range c.ListViews(t) {
+			if v.Slug == "inbox" {
+				view := v
+				inbox = &view
+			}
+		}
+		require.NotNil(t, inbox)
+		require.Equal(t, []int64{repoB.ID, repoA.ID}, inbox.RepositoryIDs)
+
+		// Clearing removes the row and the field disappears from the listing.
+		require.Empty(t, c.SetViewRepositoryDefault(t, "inbox", nil))
+		for _, v := range c.ListViews(t) {
+			if v.Slug == "inbox" {
+				require.Empty(t, v.RepositoryIDs)
+			}
+		}
+	})
+}
+
+func TestViewRepositoryDefaults_TagViews(t *testing.T) {
+	RunWithBackends(t, func(t *testing.T, ts *testserver.TestServer, c *client.Client) {
+		ctx := context.Background()
+		userID := ts.UserID
+
+		repo := fixtures.NewRepository().WithFullName("org/alpha").Build(t, ctx, ts.Store, userID)
+		tag := fixtures.NewTag().WithName("Bug Reports").Build(t, ctx, ts.Store, userID)
+
+		// Tag defaults are keyed by the tag id, so the key survives a rename.
+		stored := c.SetViewRepositoryDefault(t, "tag-"+tag.ID, []int64{repo.ID})
+		require.Equal(t, []int64{repo.ID}, stored)
+
+		var listed *client.TagResponse
+		for _, tg := range c.ListTags(t) {
+			if tg.ID == tag.ID {
+				item := tg
+				listed = &item
+			}
+		}
+		require.NotNil(t, listed)
+		require.Equal(t, []int64{repo.ID}, listed.RepositoryIDs)
+
+		// Keys naming a missing tag or a custom view's slug are rejected rather than stored.
+		resp, err := c.HTTPClient.Do(mustRequest(t, "PUT", c.BaseURL+"/api/views/tag-nope/repository-defaults",
+			`{"repositoryIds":[1]}`))
+		require.NoError(t, err)
+		require.Equal(t, 404, resp.StatusCode)
+		resp.Body.Close()
+	})
+}
+
+func mustRequest(t *testing.T, method, url, body string) *http.Request {
+	t.Helper()
+	req, err := http.NewRequest(method, url, strings.NewReader(body))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+	return req
 }

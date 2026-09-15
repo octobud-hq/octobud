@@ -82,4 +82,26 @@ describe("repositoryFilterStore", () => {
 		store.closeDropdown();
 		expect(get(store.dropdownOpen)).toBe(false);
 	});
+
+	it("tracks the view default and derives default/outside-unread indicators", () => {
+		const store = createRepositoryFilterStore(
+			[1],
+			[count(1, "org/a", 5, 2), count(2, "org/b", 4, 3), count(3, "org/c", 1, 1)],
+			"in:inbox"
+		);
+		expect(get(store.hasViewDefault)).toBe(false);
+		expect(get(store.isViewDefaultSelection)).toBe(false);
+		expect(get(store.unreadOutside)).toBe(4);
+		expect(get(store.totalUnread)).toBe(6);
+
+		store.setViewDefault("inbox", [1, 1, 0]);
+		expect(get(store.viewKey)).toBe("inbox");
+		expect(get(store.viewDefaultRepositoryIds)).toEqual([1]);
+		expect(get(store.hasViewDefault)).toBe(true);
+		expect(get(store.isViewDefaultSelection)).toBe(true);
+
+		store.setSelectedRepositoryIds([]);
+		expect(get(store.isViewDefaultSelection)).toBe(false);
+		expect(get(store.unreadOutside)).toBe(0);
+	});
 });

@@ -43,18 +43,18 @@ func (m *MockViewService) EXPECT() *MockViewServiceMockRecorder {
 }
 
 // CreateView mocks base method.
-func (m *MockViewService) CreateView(ctx context.Context, userID, name string, description, icon *string, isDefault *bool, queryStr string) (models.View, error) {
+func (m *MockViewService) CreateView(ctx context.Context, userID, name string, description, icon *string, isDefault *bool, queryStr string, repositoryIDs []int64) (models.View, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateView", ctx, userID, name, description, icon, isDefault, queryStr)
+	ret := m.ctrl.Call(m, "CreateView", ctx, userID, name, description, icon, isDefault, queryStr, repositoryIDs)
 	ret0, _ := ret[0].(models.View)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // CreateView indicates an expected call of CreateView.
-func (mr *MockViewServiceMockRecorder) CreateView(ctx, userID, name, description, icon, isDefault, queryStr any) *gomock.Call {
+func (mr *MockViewServiceMockRecorder) CreateView(ctx, userID, name, description, icon, isDefault, queryStr, repositoryIDs any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateView", reflect.TypeOf((*MockViewService)(nil).CreateView), ctx, userID, name, description, icon, isDefault, queryStr)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateView", reflect.TypeOf((*MockViewService)(nil).CreateView), ctx, userID, name, description, icon, isDefault, queryStr, repositoryIDs)
 }
 
 // DeleteView mocks base method.
@@ -117,17 +117,32 @@ func (mr *MockViewServiceMockRecorder) ReorderViews(ctx, userID, viewIDs any) *g
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReorderViews", reflect.TypeOf((*MockViewService)(nil).ReorderViews), ctx, userID, viewIDs)
 }
 
-// UpdateView mocks base method.
-func (m *MockViewService) UpdateView(ctx context.Context, userID, viewID string, name, description, icon *string, isDefault *bool, queryStr *string) (models.View, error) {
+// SetViewRepositoryDefault mocks base method.
+func (m *MockViewService) SetViewRepositoryDefault(ctx context.Context, userID, viewKey string, repositoryIDs []int64) ([]int64, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateView", ctx, userID, viewID, name, description, icon, isDefault, queryStr)
+	ret := m.ctrl.Call(m, "SetViewRepositoryDefault", ctx, userID, viewKey, repositoryIDs)
+	ret0, _ := ret[0].([]int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SetViewRepositoryDefault indicates an expected call of SetViewRepositoryDefault.
+func (mr *MockViewServiceMockRecorder) SetViewRepositoryDefault(ctx, userID, viewKey, repositoryIDs any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetViewRepositoryDefault", reflect.TypeOf((*MockViewService)(nil).SetViewRepositoryDefault), ctx, userID, viewKey, repositoryIDs)
+}
+
+// UpdateView mocks base method.
+func (m *MockViewService) UpdateView(ctx context.Context, userID, viewID string, name, description, icon *string, isDefault *bool, queryStr *string, repositoryIDs []int64) (models.View, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateView", ctx, userID, viewID, name, description, icon, isDefault, queryStr, repositoryIDs)
 	ret0, _ := ret[0].(models.View)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // UpdateView indicates an expected call of UpdateView.
-func (mr *MockViewServiceMockRecorder) UpdateView(ctx, userID, viewID, name, description, icon, isDefault, queryStr any) *gomock.Call {
+func (mr *MockViewServiceMockRecorder) UpdateView(ctx, userID, viewID, name, description, icon, isDefault, queryStr, repositoryIDs any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateView", reflect.TypeOf((*MockViewService)(nil).UpdateView), ctx, userID, viewID, name, description, icon, isDefault, queryStr)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateView", reflect.TypeOf((*MockViewService)(nil).UpdateView), ctx, userID, viewID, name, description, icon, isDefault, queryStr, repositoryIDs)
 }

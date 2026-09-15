@@ -126,6 +126,7 @@
 		individualSelectionDisabled,
 		selectionEnabled,
 		hasRepositoryFilter,
+		isViewDefaultSelection,
 	} = pageController.derived;
 
 	// ============================================================================
@@ -711,18 +712,21 @@
 		}
 
 		const currentQuery = get(quickQuery);
+		// The current repository selection is saved as the view's default alongside the query.
+		const repositoryIds = get(pageController.stores.selectedRepositoryIds);
 		// Use view dialog controller from context (retrieved during initialization)
 		if (viewDialogActions?.startEditingWithQuery) {
-			viewDialogActions.startEditingWithQuery(currentView, currentQuery);
+			viewDialogActions.startEditingWithQuery(currentView, currentQuery, repositoryIds);
 		}
 	}
 
 	// Handle saving modified query as new view
 	async function handleSaveAsNewView() {
 		const currentQuery = get(quickQuery);
+		const repositoryIds = get(pageController.stores.selectedRepositoryIds);
 		// Use view dialog controller from context (retrieved during initialization)
 		if (viewDialogActions?.openNewDialogWithQuery) {
-			viewDialogActions.openNewDialogWithQuery(currentQuery);
+			viewDialogActions.openNewDialogWithQuery(currentQuery, repositoryIds);
 		}
 	}
 
@@ -1261,10 +1265,7 @@
 	onToggleMultiselect={pageController.actions.toggleMultiselectMode}
 	splitModeEnabled={$splitModeEnabled}
 	onToggleSplitMode={toggleSplitMode}
-	hasActiveFilters={$hasActiveFilters || $hasRepositoryFilter}
-	saveNote={$hasRepositoryFilter
-		? "The repository selection is not saved with the view; only the query is."
-		: null}
+	hasActiveFilters={$hasActiveFilters || !$isViewDefaultSelection}
 	pageRangeStart={$pageRangeStart}
 	pageRangeEnd={$pageRangeEnd}
 	items={$pageData.items}

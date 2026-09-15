@@ -5,6 +5,13 @@ All notable changes to Octobud will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Per-view default repositories**: Views can remember a repository selection. Set one from the repository selector ("Set as default for this view"), or save the current selection along with the query via the search bar's Save menu. Opening the view applies the default; `?repos=` links still override it, and "Reset to default" brings it back. The selector shows how many unread notifications sit in repositories outside the current selection, and the "All repositories" row shows the view's total unread, so a narrowed view never hides that there is more out there. Sidebar badges keep counting the whole view.
+- API: `PUT /api/views/{key}/repository-defaults` stores a default selection for a custom view id, a system view slug, or `tag-<tag id>`; views and tags include `repositoryIds`; view create/update accept `repositoryIds`.
+
 ## [0.3.4]
 
 ### Added

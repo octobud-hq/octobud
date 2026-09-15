@@ -167,6 +167,17 @@ type Store interface {
 	) (TagAssignment, error)
 	RemoveTagAssignment(ctx context.Context, userID string, arg RemoveTagAssignmentParams) error
 
+	// View repository defaults (per-view default repository selection).
+	// Keys are a custom view id, a system view slug, or "tag-<tag id>".
+	ListViewRepositoryDefaults(ctx context.Context, userID string) (map[string][]int64, error)
+	// GetViewRepositoryDefault returns nil (no error) when the view has no default.
+	GetViewRepositoryDefault(ctx context.Context, userID, viewKey string) ([]int64, error)
+	SetViewRepositoryDefault(
+		ctx context.Context,
+		userID, viewKey string,
+		repositoryIDs []int64,
+	) error
+
 	// View methods (IDs are now UUIDs/strings)
 	GetView(ctx context.Context, userID, id string) (View, error)
 	ListViews(ctx context.Context, userID string) ([]View, error)

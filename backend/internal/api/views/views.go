@@ -35,6 +35,8 @@ type createViewRequest struct {
 	Icon        *string `json:"icon"`
 	IsDefault   *bool   `json:"isDefault"`
 	Query       string  `json:"query"`
+	// RepositoryIDs optionally sets the view's default repository selection.
+	RepositoryIDs []int64 `json:"repositoryIds"`
 }
 
 type updateViewRequest struct {
@@ -43,6 +45,17 @@ type updateViewRequest struct {
 	Icon        *string `json:"icon"`
 	IsDefault   *bool   `json:"isDefault"`
 	Query       *string `json:"query"`
+	// RepositoryIDs: absent leaves the default selection unchanged; [] clears it.
+	RepositoryIDs []int64 `json:"repositoryIds"`
+}
+
+type setViewRepositoryDefaultRequest struct {
+	RepositoryIDs []int64 `json:"repositoryIds"`
+}
+
+type viewRepositoryDefaultResponse struct {
+	ViewKey       string  `json:"viewKey"`
+	RepositoryIDs []int64 `json:"repositoryIds"`
 }
 
 type reorderViewsRequest struct {
@@ -94,6 +107,7 @@ func (h *Handler) handleCreateView(w http.ResponseWriter, r *http.Request) {
 		req.Icon,
 		req.IsDefault,
 		queryStr,
+		req.RepositoryIDs,
 	)
 	if err != nil {
 		// Check for unique violation first (both wrapped and unwrapped)
@@ -179,6 +193,7 @@ func (h *Handler) handleUpdateView(w http.ResponseWriter, r *http.Request) {
 		icon,
 		req.IsDefault,
 		queryStr,
+		req.RepositoryIDs,
 	)
 	if err != nil {
 		if errors.Is(err, viewcore.ErrViewNotFound) {
@@ -223,6 +238,53 @@ func (h *Handler) handleUpdateView(w http.ResponseWriter, r *http.Request) {
 	}
 
 	helpers.WriteJSON(w, http.StatusOK, viewEnvelope{View: view})
+}
+
+// handleSetViewRepositoryDefault stores the default repository selection for any view key
+// (custom view id, system view slug, or "tag-<tag id>"). An empty selection clears it.
+func (h *Handler) handleSetViewRepositoryDefault(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	userID, ok := helpers.RequireUserID(ctx, w, h.authSvc)
+	if !ok {
+		return
+	}
+
+	viewKey := chi.URLParam(r, "key")
+	if viewKey == "" {
+		helpers.WriteError(w, http.StatusBadRequest, "view key is required")
+		return
+	}
+
+	var req setViewRepositoryDefaultRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		helpers.WriteError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	stored, err := h.viewSvc.SetViewRepositoryDefault(ctx, userID, viewKey, req.RepositoryIDs)
+	if err != nil {
+		if errors.Is(err, viewcore.ErrInvalidViewKey) {
+			helpers.WriteError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		if errors.Is(err, viewcore.ErrViewNotFound) {
+			helpers.WriteError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		h.logger.Error(
+			"failed to save view repository default",
+			zap.String("view_key", viewKey),
+			zap.Error(err),
+		)
+		helpers.WriteError(w, http.StatusInternalServerError, "failed to save repository default")
+		return
+	}
+
+	helpers.WriteJSON(w, http.StatusOK, viewRepositoryDefaultResponse{
+		ViewKey:       viewKey,
+		RepositoryIDs: stored,
+	})
 }
 
 func (h *Handler) handleDeleteView(w http.ResponseWriter, r *http.Request) {

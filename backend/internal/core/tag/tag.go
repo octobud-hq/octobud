@@ -53,9 +53,21 @@ func (s *Service) ListTagsWithUnreadCounts(
 		return nil, errors.Join(ErrFailedToListTags, err)
 	}
 
+	if len(tags) == 0 {
+		return []models.Tag{}, nil
+	}
+
+	// Tag views can carry a default repository selection like any view, keyed by the
+	// immutable tag id ("tag-<id>") so renames do not lose it.
+	repositoryDefaults, err := s.queries.ListViewRepositoryDefaults(ctx, userID)
+	if err != nil {
+		return nil, errors.Join(ErrFailedToListTags, err)
+	}
+
 	response := make([]models.Tag, 0, len(tags))
 	for _, tag := range tags {
 		tagResp := models.TagFromDB(tag)
+		tagResp.RepositoryIDs = repositoryDefaults[models.TagViewKey(tag.ID)]
 
 		// Calculate unread count for this tag
 		unreadCount, err := s.calculateTagUnreadCount(ctx, userID, tag.Slug)
@@ -145,6 +157,10 @@ func (s *Service) DeleteTag(ctx context.Context, userID, tagID string) error {
 	if err != nil {
 		return errors.Join(ErrFailedToDeleteTag, err)
 	}
+	// Best effort: drop the tag view's repository default along with it. An orphaned
+	// default row is harmless, so a cleanup failure does not fail the delete.
+	//nolint:errcheck // best-effort cleanup
+	_ = s.queries.SetViewRepositoryDefault(ctx, userID, models.TagViewKey(tagID), nil)
 	return nil
 }
 

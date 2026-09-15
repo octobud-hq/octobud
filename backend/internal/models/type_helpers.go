@@ -155,3 +155,28 @@ func SQLNullTimeFromISO(value *string) sql.NullTime {
 	}
 	return sql.NullTime{Time: t.UTC(), Valid: true}
 }
+
+// NormalizeRepositoryIDs drops non-positive and duplicate repository ids, preserving order.
+// Returns nil when nothing remains. Shared by every input that carries a repository
+// selection (list/bulk query params and bodies, view defaults) so they validate alike.
+func NormalizeRepositoryIDs(ids []int64) []int64 {
+	if len(ids) == 0 {
+		return nil
+	}
+	result := make([]int64, 0, len(ids))
+	seen := make(map[int64]struct{}, len(ids))
+	for _, id := range ids {
+		if id <= 0 {
+			continue
+		}
+		if _, dup := seen[id]; dup {
+			continue
+		}
+		seen[id] = struct{}{}
+		result = append(result, id)
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
+}

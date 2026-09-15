@@ -14,7 +14,12 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { describe, it, expect } from "vitest";
-import { buildRepositoryOptions, formatRepositorySelection } from "./repositorySelection";
+import {
+	buildRepositoryOptions,
+	formatRepositorySelection,
+	resolveRepositorySelection,
+	unreadOutsideSelection,
+} from "./repositorySelection";
 import type { RepositoryCount } from "$lib/api/types";
 
 const count = (
@@ -80,5 +85,36 @@ describe("formatRepositorySelection", () => {
 			names: ["a/a", "b/b", "c/c"],
 			overflow: 0,
 		});
+	});
+});
+
+describe("resolveRepositorySelection", () => {
+	it("uses the view default when the URL has no repos param", () => {
+		expect(resolveRepositorySelection(null, [3, 4])).toEqual([3, 4]);
+		expect(resolveRepositorySelection("", [3])).toEqual([3]);
+		expect(resolveRepositorySelection(null, [])).toEqual([]);
+	});
+
+	it("treats 'all' as an explicit empty selection", () => {
+		expect(resolveRepositorySelection("all", [3, 4])).toEqual([]);
+		expect(resolveRepositorySelection(" ALL ", [3])).toEqual([]);
+	});
+
+	it("parses explicit ids, dropping junk and duplicates", () => {
+		expect(resolveRepositorySelection("7, 9,x,0,7", [3])).toEqual([7, 9]);
+	});
+});
+
+describe("unreadOutsideSelection", () => {
+	const counts = [count(1, "a/a", 5, 2), count(2, "b/b", 7, 3), count(3, "c/c", 1, 0)];
+
+	it("is zero with no selection", () => {
+		expect(unreadOutsideSelection(counts, [])).toBe(0);
+	});
+
+	it("sums unread of repositories outside the selection", () => {
+		expect(unreadOutsideSelection(counts, [1])).toBe(3);
+		expect(unreadOutsideSelection(counts, [1, 2])).toBe(0);
+		expect(unreadOutsideSelection(counts, [99])).toBe(5);
 	});
 });

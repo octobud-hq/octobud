@@ -44,6 +44,7 @@ type ViewService interface {
 		description, icon *string,
 		isDefault *bool,
 		queryStr string,
+		repositoryIDs []int64,
 	) (models.View, error)
 	UpdateView(
 		ctx context.Context,
@@ -52,7 +53,13 @@ type ViewService interface {
 		name, description, icon *string,
 		isDefault *bool,
 		queryStr *string,
+		repositoryIDs []int64,
 	) (models.View, error)
+	SetViewRepositoryDefault(
+		ctx context.Context,
+		userID, viewKey string,
+		repositoryIDs []int64,
+	) ([]int64, error)
 	DeleteView(
 		ctx context.Context,
 		userID string,

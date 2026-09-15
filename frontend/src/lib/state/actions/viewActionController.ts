@@ -181,6 +181,10 @@ export function createViewActionController(
 		if (repositoryFilterStore) {
 			// The layout seeds the controller with partial data before any route loads, so
 			// these can be absent even though the route loader always returns them.
+			repositoryFilterStore.setViewDefault(
+				data.viewRepositoryDefaultKey ?? null,
+				data.viewRepositoryDefaultIds ?? []
+			);
 			repositoryFilterStore.setSelectedRepositoryIds(data.initialRepositoryIds ?? []);
 			if (data.initialRepositoryCounts) {
 				repositoryFilterStore.setRepositoryCounts(
@@ -285,8 +289,9 @@ export function createViewActionController(
 			hasEmptyPageData || (currentPage === 1 && ((!isSplitMode && !isDetailOpen) || isSplitMode));
 
 		// Always refresh views/tags for up-to-date unread counts. The repository selector's
-		// counts only matter when the list itself refreshes or the dropdown is open, so
-		// refresh them then, concurrently rather than serialised behind the view counts.
+		// counts (and the bar's hidden-unread badge) refresh when the list itself refreshes
+		// or the dropdown is open; on other pages the badge may lag until the next list
+		// refresh, which is cheaper than a grouped count on every sync for every defaulted view.
 		const repositoryDropdownOpen = repositoryFilterStore
 			? get(repositoryFilterStore.dropdownOpen)
 			: false;

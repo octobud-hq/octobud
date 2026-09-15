@@ -22,6 +22,14 @@ import { createPaginationStore } from "../../stores/paginationStore";
 import { createQueryStore } from "../../stores/queryStore";
 import type { ControllerOptions, NavigateOptions } from "../interfaces/common";
 import type { SharedHelpers } from "./sharedHelpers";
+import { updateViewRepositoryDefault } from "$lib/api/views";
+
+vi.mock("$lib/api/views", () => ({
+	updateViewRepositoryDefault: vi.fn(),
+}));
+vi.mock("$lib/stores/toastStore", () => ({
+	toastStore: { success: vi.fn(), error: vi.fn() },
+}));
 
 describe("RepositoryFilterActionController", () => {
 	let navigateToUrl: Mock<(url: string, options?: NavigateOptions) => Promise<void>>;
@@ -58,6 +66,7 @@ describe("RepositoryFilterActionController", () => {
 		global.window = {
 			location: { href: "http://localhost:3000/views/inbox?page=3&id=abc" },
 		} as any;
+		vi.mocked(updateViewRepositoryDefault).mockReset();
 		navigateToUrl = vi.fn<(url: string, options?: NavigateOptions) => Promise<void>>();
 		navigateToUrl.mockResolvedValue(undefined);
 		options = { navigateToUrl };
@@ -168,11 +177,11 @@ describe("RepositoryFilterActionController", () => {
 		expect(sharedHelpers.refreshRepositoryCounts).toHaveBeenCalledTimes(1);
 	});
 
-	it("rolls the optimistic selection back when navigation fails", async () => {
+	it("rolls the optimistic selection back when navigation fails, without throwing", async () => {
 		navigateToUrl.mockRejectedValueOnce(new Error("cancelled"));
 		const { controller, repositoryFilterStore, paginationStore } = build([1]);
 
-		await expect(controller.setRepositoryFilter([2])).rejects.toThrow("cancelled");
+		await controller.setRepositoryFilter([2]);
 
 		expect(get(repositoryFilterStore.selectedRepositoryIds)).toEqual([1]);
 		expect(get(paginationStore.page)).toBe(3);
@@ -181,6 +190,44 @@ describe("RepositoryFilterActionController", () => {
 		await controller.setRepositoryFilter([2]);
 		expect(navigateToUrl).toHaveBeenCalledTimes(2);
 		expect(get(repositoryFilterStore.selectedRepositoryIds)).toEqual([2]);
+	});
+
+	it("does not roll back a superseded navigation over a newer selection", async () => {
+		let rejectFirst: (error: Error) => void = () => {};
+		navigateToUrl.mockImplementationOnce(
+			() =>
+				new Promise<void>((_, reject) => {
+					rejectFirst = reject;
+				})
+		);
+		const { controller, repositoryFilterStore } = build([]);
+
+		const first = controller.toggleRepositoryInFilter(1);
+		const second = controller.toggleRepositoryInFilter(2); // aborts the first navigation
+		rejectFirst(new Error("navigation aborted"));
+		await Promise.all([first, second]);
+
+		expect(get(repositoryFilterStore.selectedRepositoryIds)).toEqual([1, 2]);
+	});
+
+	it("setViewRepositoryDefault ignores the response if the view changed meanwhile", async () => {
+		let resolveSave: (ids: number[]) => void = () => {};
+		vi.mocked(updateViewRepositoryDefault).mockImplementationOnce(
+			() =>
+				new Promise<number[]>((resolve) => {
+					resolveSave = resolve;
+				})
+		);
+		const { controller, repositoryFilterStore } = build([3]);
+		repositoryFilterStore.setViewDefault("view-a", []);
+
+		const saving = controller.setViewRepositoryDefault();
+		repositoryFilterStore.setViewDefault("view-b", [9]); // user switched views
+		resolveSave([3]);
+		await saving;
+
+		expect(get(repositoryFilterStore.viewDefaultRepositoryIds)).toEqual([9]);
+		expect(navigateToUrl).not.toHaveBeenCalled();
 	});
 
 	it("falls back to an in-place refresh without a router", async () => {
@@ -192,5 +239,56 @@ describe("RepositoryFilterActionController", () => {
 		expect(get(repositoryFilterStore.selectedRepositoryIds)).toEqual([7]);
 		expect(get(paginationStore.page)).toBe(1);
 		expect(sharedHelpers.refresh).toHaveBeenCalledTimes(1);
+	});
+
+	describe("view defaults", () => {
+		it("drops ?repos= when the selection equals the view default and writes 'all' when clearing it", async () => {
+			const { controller, repositoryFilterStore } = build([9]);
+			repositoryFilterStore.setViewDefault("inbox", [1, 2]);
+
+			await controller.setRepositoryFilter([2, 1]);
+			let parsed = new URL(navigateToUrl.mock.calls[0][0], "http://localhost:3000");
+			expect(parsed.searchParams.has("repos")).toBe(false);
+
+			await controller.clearRepositoryFilter();
+			parsed = new URL(navigateToUrl.mock.calls[1][0], "http://localhost:3000");
+			expect(parsed.searchParams.get("repos")).toBe("all");
+
+			await controller.setRepositoryFilter([5]);
+			parsed = new URL(navigateToUrl.mock.calls[2][0], "http://localhost:3000");
+			expect(parsed.searchParams.get("repos")).toBe("5");
+		});
+
+		it("resetToViewDefault navigates to the stored default", async () => {
+			const { controller, repositoryFilterStore } = build([9]);
+			repositoryFilterStore.setViewDefault("inbox", [4]);
+
+			await controller.resetToViewDefault();
+
+			expect(get(repositoryFilterStore.selectedRepositoryIds)).toEqual([4]);
+			const parsed = new URL(navigateToUrl.mock.calls[0][0], "http://localhost:3000");
+			expect(parsed.searchParams.has("repos")).toBe(false);
+		});
+
+		it("setViewRepositoryDefault saves the selection under the view key and updates the store", async () => {
+			vi.mocked(updateViewRepositoryDefault).mockResolvedValue([3, 4]);
+			const { controller, repositoryFilterStore } = build([3, 4]);
+			repositoryFilterStore.setViewDefault("reviews-id", []);
+
+			await controller.setViewRepositoryDefault();
+
+			expect(updateViewRepositoryDefault).toHaveBeenCalledWith("reviews-id", [3, 4]);
+			expect(get(repositoryFilterStore.viewDefaultRepositoryIds)).toEqual([3, 4]);
+			expect(get(repositoryFilterStore.isViewDefaultSelection)).toBe(true);
+			// Selection now equals the default: the URL drops the param.
+			const parsed = new URL(navigateToUrl.mock.calls[0][0], "http://localhost:3000");
+			expect(parsed.searchParams.has("repos")).toBe(false);
+		});
+
+		it("setViewRepositoryDefault is a no-op without a view key", async () => {
+			const { controller } = build([3]);
+			await controller.setViewRepositoryDefault();
+			expect(updateViewRepositoryDefault).not.toHaveBeenCalled();
+		});
 	});
 });

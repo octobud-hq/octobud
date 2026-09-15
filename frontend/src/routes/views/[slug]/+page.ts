@@ -17,7 +17,7 @@ import { redirect } from "@sveltejs/kit";
 import type { PageLoad } from "./$types";
 import { fetchNotifications, fetchRepositoryCounts } from "$lib/api/notifications";
 import type { RepositoryCount } from "$lib/api/types";
-import { normalizeRepositoryIds } from "$lib/stores/repositoryFilterStore";
+import { resolveRepositorySelection } from "$lib/utils/repositorySelection";
 import { getRepositoryPinsStore } from "$lib/stores/repositoryPinsStore";
 import { browser } from "$app/environment";
 import { get } from "svelte/store";
@@ -86,17 +86,6 @@ const parseFilters = (raw: string | null): NotificationViewFilter[] => {
 	} catch {
 		return [];
 	}
-};
-
-/** Parse the `?repos=1,2,3` repository filter parameter. */
-const parseRepositoryIds = (raw: string | null): number[] => {
-	if (!raw) return [];
-	return normalizeRepositoryIds(
-		raw
-			.split(",")
-			.map((part) => Number.parseInt(part.trim(), 10))
-			.filter((value) => Number.isFinite(value))
-	);
 };
 
 const parsePageNumber = (raw: string | null): number => {
@@ -180,7 +169,20 @@ export const load: PageLoad = async ({ fetch, params, url, parent }) => {
 
 	const quickFilters = parseFilters(url.searchParams.get("filters"));
 	const page = parsePageNumber(url.searchParams.get("page"));
-	const repositoryIds = parseRepositoryIds(url.searchParams.get("repos"));
+
+	// The view's stored default repository selection and the key it is stored under
+	// (custom view id, system view slug, or "tag-<slug>").
+	const viewRepositoryDefaultIds =
+		selectedView?.repositoryIds ?? systemView?.repositoryIds ?? tag?.repositoryIds ?? [];
+	// Custom views are keyed by id, tag views by "tag-<tag id>" (immutable across renames),
+	// system views by slug.
+	const viewRepositoryDefaultKey = selectedView?.id ?? (tag ? `tag-${tag.id}` : slug);
+
+	// `?repos=` overrides the view default; `?repos=all` explicitly clears it.
+	const repositoryIds = resolveRepositorySelection(
+		url.searchParams.get("repos"),
+		viewRepositoryDefaultIds
+	);
 
 	// Build the query string from the view's query
 	let viewQuery = "";
@@ -258,6 +260,8 @@ export const load: PageLoad = async ({ fetch, params, url, parent }) => {
 			viewQuery: viewQuery,
 			initialRepositoryIds: repositoryIds,
 			initialRepositoryCounts: repositoryCounts,
+			viewRepositoryDefaultIds,
+			viewRepositoryDefaultKey,
 			apiError: null,
 			tag, // Pass tag if this is a tag view
 		};
@@ -280,6 +284,8 @@ export const load: PageLoad = async ({ fetch, params, url, parent }) => {
 				viewQuery: viewQuery,
 				initialRepositoryIds: repositoryIds,
 				initialRepositoryCounts: [] as RepositoryCount[],
+				viewRepositoryDefaultIds,
+				viewRepositoryDefaultKey,
 				apiError: "Unable to reach the API server",
 				apiErrorIsInline: false, // Show full-screen error for network issues
 				tag,
@@ -305,6 +311,8 @@ export const load: PageLoad = async ({ fetch, params, url, parent }) => {
 			viewQuery: viewQuery,
 			initialRepositoryIds: repositoryIds,
 			initialRepositoryCounts: [] as RepositoryCount[],
+			viewRepositoryDefaultIds,
+			viewRepositoryDefaultKey,
 			apiError: errorMessage,
 			apiErrorCode: errorCode,
 			apiErrorIsInline: true, // Show inline error for query validation errors

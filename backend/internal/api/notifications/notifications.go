@@ -381,29 +381,9 @@ func parseRepositoryIDs(raw string) []int64 {
 	return normalizeRepositoryIDs(ids)
 }
 
-// normalizeRepositoryIDs drops non-positive and duplicate IDs, preserving order.
-// Shared by the query-string (repos=) and JSON-body (repositoryIds) inputs so every
-// endpoint applies the same validation to a repository selection.
+// normalizeRepositoryIDs applies the shared repository-selection validation.
 func normalizeRepositoryIDs(ids []int64) []int64 {
-	if len(ids) == 0 {
-		return nil
-	}
-	result := make([]int64, 0, len(ids))
-	seen := make(map[int64]struct{}, len(ids))
-	for _, id := range ids {
-		if id <= 0 {
-			continue
-		}
-		if _, dup := seen[id]; dup {
-			continue
-		}
-		seen[id] = struct{}{}
-		result = append(result, id)
-	}
-	if len(result) == 0 {
-		return nil
-	}
-	return result
+	return models.NormalizeRepositoryIDs(ids)
 }
 
 func parseIntDefault(raw string) int {

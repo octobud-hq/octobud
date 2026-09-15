@@ -197,3 +197,35 @@ export async function reorderViews(
 	const data = (payload?.views ?? []).map(cloneView);
 	return data.map(cloneView);
 }
+
+/**
+ * Store the default repository selection for a view key (custom view id, system view
+ * slug, or "tag-<slug>"). An empty list clears it. Returns the normalized stored ids.
+ */
+export async function updateViewRepositoryDefault(
+	viewKey: string,
+	repositoryIds: readonly number[],
+	fetchImpl?: typeof fetch
+): Promise<number[]> {
+	const response = await fetchWithAuth(
+		`/api/views/${encodeURIComponent(viewKey)}/repository-defaults`,
+		{
+			method: "PUT",
+			headers: {
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({ repositoryIds }),
+		},
+		fetchImpl
+	);
+
+	if (!response.ok) {
+		throw await apiErrorFromResponse(
+			response,
+			`Failed to save repository default (${response.status})`
+		);
+	}
+
+	const payload: { repositoryIds?: number[] } = await response.json();
+	return payload.repositoryIds ?? [];
+}

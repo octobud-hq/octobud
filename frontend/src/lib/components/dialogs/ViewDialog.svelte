@@ -56,6 +56,8 @@
 		description?: string;
 		icon?: string;
 		query?: string;
+		/** Present when saving from the list's Save menu: the selection stored as the view's default. */
+		repositoryIds?: number[];
 	} | null = null;
 
 	let name = "";
@@ -288,6 +290,21 @@
 					> to show both inbox and filtered notifications (includes notifications that skipped the inbox
 					due to rule automation).
 				</p>
+
+				{#if initialValue?.repositoryIds !== undefined}
+					<!-- Saving from the list's Save menu also stores the current repository selection -->
+					<p class="text-xs text-gray-600 dark:text-gray-400 mt-2 pl-1">
+						Default repositories:
+						<span class="font-medium text-gray-800 dark:text-gray-200">
+							{#if initialValue.repositoryIds.length === 0}
+								all repositories
+							{:else}
+								{initialValue.repositoryIds.length} selected
+							{/if}
+						</span>
+						(the list's current selection is saved with the view)
+					</p>
+				{/if}
 			</div>
 
 			<!-- Auto-rule creation section - only for new views -->

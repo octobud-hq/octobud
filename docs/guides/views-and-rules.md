@@ -86,6 +86,12 @@ type:pullrequest reason:author
 org:my-company -is:archived
 ```
 
+### Default Repositories
+
+A view can remember a set of repositories to show by default. Open the repository selector above the list (or press `f`), pick the repositories, and choose **Set as default for this view**. Saving a view from the search bar's **Save** menu also stores the current repository selection.
+
+When you open the view it starts scoped to those repositories. The selector still lists every repository with unread counts, and the bar shows how many unread notifications are in repositories outside the selection, so nothing is hidden for good. Pick other repositories at any time, or use **Reset to default** in the selector to go back. Sidebar badges always count the whole view, not just the default repositories.
+
 ### Managing Views
 
 - **Reorder** - Drag and drop views in the sidebar

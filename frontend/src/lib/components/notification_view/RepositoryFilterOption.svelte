@@ -16,6 +16,7 @@
 
 	import type { RepositoryOption } from "$lib/utils/repositorySelection";
 	import RepositoryAvatar from "./RepositoryAvatar.svelte";
+	import RepositoryUnreadBadge from "./RepositoryUnreadBadge.svelte";
 
 	/** One checkbox row in the repository filter dropdown. */
 	export let option: RepositoryOption;
@@ -32,16 +33,34 @@
 </script>
 
 <div class="group relative">
-	<button
-		type="button"
+	<!-- The row is a div rather than a button so the inline "Only" button is valid markup
+	     and stays exposed to assistive tech. Rows follow the dropdown's highlight, not
+	     focus, so they are not tab stops; the dropdown container owns keyboard handling. -->
+	<div
 		data-repo-row={row}
-		role="option"
-		aria-selected={option.selected}
+		role="checkbox"
+		tabindex="-1"
+		aria-checked={option.selected}
+		aria-label={option.fullName}
 		class={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 pr-9 text-left transition cursor-pointer ${
 			highlighted ? "bg-gray-200 dark:bg-gray-700" : "hover:bg-gray-100 dark:hover:bg-gray-800"
 		} ${option.total === 0 ? "opacity-60" : ""}`}
 		on:click={onToggle}
 		on:dblclick={onChooseOnly}
+		on:keydown={(event) => {
+			// Rows are normally not focused (the dropdown's input is), but a mouse click can
+			// focus one; handle keys here and stop them reaching the dropdown's handler so a
+			// key never acts twice.
+			if (event.key === "Enter") {
+				event.preventDefault();
+				event.stopPropagation();
+				onChooseOnly();
+			} else if (event.key === " ") {
+				event.preventDefault();
+				event.stopPropagation();
+				onToggle();
+			}
+		}}
 		on:mousemove={onHover}
 	>
 		<span
@@ -64,19 +83,22 @@
 		</span>
 		<RepositoryAvatar fullName={option.fullName} url={option.ownerAvatarUrl} />
 		<span class="min-w-0 flex-1 truncate">{option.fullName}</span>
-		{#if option.unread > 0}
-			<span
-				class={`flex h-6 flex-shrink-0 items-center justify-center rounded-full px-2 text-[11px] font-semibold ${
-					highlighted
-						? "bg-white/80 text-gray-700 dark:bg-gray-900 dark:text-gray-100"
-						: "bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-100"
-				}`}
-				aria-label={unreadLabel}
-			>
-				{option.unread}
-			</span>
-		{/if}
-	</button>
+		<!-- "Only": select just this repository. Visible on hover/highlight but keeps its
+		     space so the unread badge does not shift. -->
+		<button
+			type="button"
+			class={`flex-shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-gray-500 transition hover:bg-gray-300 hover:text-gray-800 dark:hover:bg-gray-600 dark:hover:text-gray-100 cursor-pointer ${
+				highlighted ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+			}`}
+			title="Show only this repository"
+			aria-label={`Show only ${option.fullName}`}
+			on:click|stopPropagation={onChooseOnly}
+			on:dblclick|stopPropagation
+		>
+			Only
+		</button>
+		<RepositoryUnreadBadge count={option.unread} {highlighted} label={unreadLabel} />
+	</div>
 	<button
 		type="button"
 		class={`absolute right-1.5 top-1/2 -translate-y-1/2 rounded-md p-1 transition cursor-pointer ${
@@ -89,6 +111,7 @@
 		title={option.pinned ? "Unpin repository" : "Pin repository"}
 		aria-label={`${option.pinned ? "Unpin" : "Pin"} ${option.fullName}`}
 		on:click|stopPropagation={onTogglePin}
+		on:dblclick|stopPropagation
 	>
 		{#if option.pinned}
 			<svg class="h-3.5 w-3.5" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">

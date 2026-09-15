@@ -48,5 +48,6 @@ func (h *Handler) Register(r chi.Router) {
 		r.Post("/reorder", h.handleReorderViews)
 		r.Put("/{id}", h.handleUpdateView)
 		r.Delete("/{id}", h.handleDeleteView)
+		r.Put("/{key}/repository-defaults", h.handleSetViewRepositoryDefault)
 	})
 }
