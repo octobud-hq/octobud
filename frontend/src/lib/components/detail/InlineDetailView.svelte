@@ -262,6 +262,19 @@
 		return type === "repositorydependabotalertsthread";
 	}
 
+	// Helper to check if a type is a security advisory thread (advisory or credit request).
+	// These have no thread content of their own; everything happens on GitHub's advisories page.
+	function checkIsSecurityAdvisory(subjectType: string | undefined | null): boolean {
+		if (!subjectType) return false;
+		const type = subjectType.toLowerCase().replace(/[-_\s]/g, "");
+		return type === "repositoryadvisory" || type === "advisorycredit";
+	}
+
+	function checkIsAdvisoryCredit(subjectType: string | undefined | null): boolean {
+		if (!subjectType) return false;
+		return subjectType.toLowerCase().replace(/[-_\s]/g, "") === "advisorycredit";
+	}
+
 	// Compute GitHub URLs
 	// Prefer the live subject's html_url when available (it's what GitHub actually links to);
 	// otherwise delegate to the shared resolver which handles CI / Dependabot / Invitation fallbacks.
@@ -404,6 +417,13 @@
 	// Check if this is a CI activity notification (CheckRun/CheckSuite)
 	$: isCIActivity = checkIsCIActivity(detail?.notification.subjectType || notification.subjectType);
 
+	// Security advisory / advisory credit notifications
+	$: isSecurityAdvisory = checkIsSecurityAdvisory(
+		detail?.notification.subjectType || notification.subjectType
+	);
+	$: isAdvisoryCredit = checkIsAdvisoryCredit(
+		detail?.notification.subjectType || notification.subjectType
+	);
 	// Check if this is a Dependabot alert notification
 	$: isDependabotAlert = checkIsDependabotAlert(
 		detail?.notification.subjectType || notification.subjectType
@@ -534,7 +554,9 @@
 						</div>
 
 						<!-- Second Row: Title -->
-						<h3 class="text-3xl font-normal leading-snug text-gray-900 dark:text-gray-100 pt-1">
+						<h3
+							class="wrap-anywhere text-3xl font-normal leading-snug text-gray-900 dark:text-gray-100 pt-1"
+						>
 							{notification.subjectTitle}
 						</h3>
 
@@ -966,6 +988,39 @@
 										/>
 									</svg>
 								</a>
+							{:else if isSecurityAdvisory}
+								<!-- Security advisory / credit: Open the repository's advisories page -->
+								<a
+									class="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 px-2.5 py-1.5 text-sm font-light text-gray-700 dark:text-gray-200 transition hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-800 dark:hover:text-gray-200"
+									href={githubUrl}
+									target="_blank"
+									rel="noreferrer"
+								>
+									<svg
+										class="h-4 w-4"
+										viewBox="0 0 16 16"
+										fill="currentColor"
+										xmlns="http://www.w3.org/2000/svg"
+									>
+										<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+										{@html getIconPath("shield")}
+									</svg>
+									<span>Open security advisories</span>
+									<svg
+										class="h-4 w-4"
+										viewBox="0 0 24 24"
+										fill="none"
+										xmlns="http://www.w3.org/2000/svg"
+									>
+										<path
+											d="M10.0002 5H8.2002C7.08009 5 6.51962 5 6.0918 5.21799C5.71547 5.40973 5.40973 5.71547 5.21799 6.0918C5 6.51962 5 7.08009 5 8.2002V15.8002C5 16.9203 5 17.4801 5.21799 17.9079C5.40973 18.2842 5.71547 18.5905 6.0918 18.7822C6.5192 19 7.07899 19 8.19691 19H15.8031C16.921 19 17.48 19 17.9074 18.7822C18.2837 18.5905 18.5905 18.2839 18.7822 17.9076C19 17.4802 19 16.921 19 15.8031V14M20 9V4M20 4H15M20 4L13 11"
+											stroke="currentColor"
+											stroke-width="2"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+										/>
+									</svg>
+								</a>
 							{:else if isCIActivity}
 								<!-- CI Activity: Open in Actions button -->
 								<a
@@ -1128,6 +1183,25 @@
 							</svg>
 							<p class="text-sm text-gray-600 dark:text-gray-400">
 								This is a Dependabot security alert. View the full details on GitHub.
+							</p>
+						</div>
+					{:else if isSecurityAdvisory}
+						<div
+							class="flex items-center gap-3 px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/30"
+						>
+							<svg
+								class="w-5 h-5 flex-shrink-0 text-gray-500 dark:text-gray-400"
+								viewBox="0 0 16 16"
+								fill="currentColor"
+								aria-hidden="true"
+							>
+								<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+								{@html getIconPath("shield")}
+							</svg>
+							<p class="text-sm text-gray-600 dark:text-gray-400">
+								{isAdvisoryCredit
+									? "You were credited on a security advisory. Accept or decline the credit on GitHub."
+									: "This is a repository security advisory. View the full details on GitHub."}
 							</p>
 						</div>
 					{:else if isCIActivity}

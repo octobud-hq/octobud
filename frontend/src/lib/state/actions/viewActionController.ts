@@ -232,7 +232,10 @@ export function createViewActionController(
 			const url = new URL(window.location.href);
 			url.pathname = `/views/${encodeURIComponent(targetSlug)}`;
 			url.search = "";
-			await options.navigateToUrl(url.pathname + url.search, { replace: false });
+			await options.navigateToUrl(url.pathname + url.search, {
+				replace: false,
+				invalidateViews: shouldInvalidate === true,
+			});
 		}
 	}
 

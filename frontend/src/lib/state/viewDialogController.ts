@@ -248,27 +248,18 @@ export function createViewDialogController(
 				}
 			}
 
-			let refreshedViews: NotificationView[] | null = null;
-			try {
-				const updatedViews = await fetchViews();
-				const ensuredViews = updatedViews.some((view) => view.id === savedView.id)
-					? updatedViews
-					: [...updatedViews, savedView];
-				refreshedViews = ensuredViews;
-				setViews(ensuredViews);
-				await invalidateViews();
-			} catch (error) {
-				if (currentEditing) {
-					views.update((existing) =>
-						existing.map((item) => (item.id === savedView.id ? savedView : item))
-					);
-				} else {
-					views.update((existing) => [...existing, savedView]);
-				}
-				await invalidateViews();
+			// Reflect the saved view in the store immediately; the navigation below re-runs the
+			// loaders that own view data (so the page loader can resolve a new or renamed slug)
+			// in the same load, avoiding a redirect through the inbox for a renamed current view.
+			if (currentEditing) {
+				views.update((existing) =>
+					existing.map((item) => (item.id === savedView.id ? savedView : item))
+				);
+			} else {
+				views.update((existing) => [...existing, savedView]);
 			}
 
-			const targetView = refreshedViews?.find((view) => view.id === savedView.id) ?? savedView;
+			const targetView = savedView;
 
 			// Reset draft on success (before closing dialog)
 			resetDraft();
@@ -335,21 +326,17 @@ export function createViewDialogController(
 		const deletedViewId = currentEditing.id;
 		try {
 			await deleteView(deletedViewId);
-			try {
-				const updatedViews = await fetchViews();
-				setViews(updatedViews.filter((view) => view.id !== deletedViewId));
-				await invalidateViews();
-			} catch (error) {
-				views.update((existing) => existing.filter((view) => view.id !== deletedViewId));
-				await invalidateViews();
-			}
+			views.update((existing) => existing.filter((view) => view.id !== deletedViewId));
 
 			open.set(false);
 			confirmDeleteOpen.set(false);
 
 			const currentSelected = get(selectedViewId);
 			if (currentSelected === normalizeViewId(deletedViewId)) {
-				await navigateToSlug(BUILT_IN_VIEWS.inbox.slug);
+				// Leave the deleted view and refresh loader-owned view data in one navigation.
+				await navigateToSlug(BUILT_IN_VIEWS.inbox.slug, true);
+			} else {
+				await invalidateViews();
 			}
 
 			// Show success toast after navigation
@@ -389,14 +376,7 @@ export function createViewDialogController(
 			// User confirmed - try again with force=true
 			// The backend will cascade delete due to FK constraint
 			await deleteView(deletedViewId, true);
-			try {
-				const updatedViews = await fetchViews();
-				setViews(updatedViews.filter((view) => view.id !== deletedViewId));
-				await invalidateViews();
-			} catch (fetchError) {
-				views.update((existing) => existing.filter((view) => view.id !== deletedViewId));
-				await invalidateViews();
-			}
+			views.update((existing) => existing.filter((view) => view.id !== deletedViewId));
 
 			open.set(false);
 			confirmDeleteOpen.set(false);
@@ -404,7 +384,9 @@ export function createViewDialogController(
 
 			const currentSelected = get(selectedViewId);
 			if (currentSelected === normalizeViewId(deletedViewId)) {
-				await navigateToSlug(BUILT_IN_VIEWS.inbox.slug);
+				await navigateToSlug(BUILT_IN_VIEWS.inbox.slug, true);
+			} else {
+				await invalidateViews();
 			}
 
 			setTimeout(() => {

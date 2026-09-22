@@ -251,6 +251,15 @@ export function getNotificationIcon(
 		};
 	}
 
+	// Security advisories (repository advisory threads and credit requests)
+	if (normalizedType === "repositoryadvisory" || normalizedType === "advisorycredit") {
+		return {
+			path: getIconPath("shield"),
+			colorClass: "text-gray-500 dark:text-gray-400",
+			label: formatSubjectTypeLabel(subjectType),
+		};
+	}
+
 	// Default fallback
 	return {
 		path: getIconPath("issue-opened"),

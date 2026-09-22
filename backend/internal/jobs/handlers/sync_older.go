@@ -95,8 +95,18 @@ func (h *SyncOlderHandler) Handle(ctx context.Context, args SyncOlderArgs) error
 	// Track the oldest notification for updating sync state
 	var oldestNotification time.Time
 
-	// Enqueue individual processing jobs for each notification
+	// Enqueue individual processing jobs for each notification. A re-sync window overlaps
+	// history we already hold, so skip threads that have not changed since they were
+	// stored and whose subject was fetched; they would only cost GitHub requests.
+	skipped := 0
 	for _, thread := range threads {
+		if !h.syncService.ThreadNeedsProcessing(ctx, args.UserID, thread.ID, thread.UpdatedAt) {
+			skipped++
+			if oldestNotification.IsZero() || thread.UpdatedAt.Before(oldestNotification) {
+				oldestNotification = thread.UpdatedAt
+			}
+			continue
+		}
 		threadData, err := json.Marshal(thread)
 		if err != nil {
 			h.logger.Warn("failed to marshal notification thread",
@@ -116,6 +126,10 @@ func (h *SyncOlderHandler) Handle(ctx context.Context, args SyncOlderArgs) error
 		if oldestNotification.IsZero() || thread.UpdatedAt.Before(oldestNotification) {
 			oldestNotification = thread.UpdatedAt
 		}
+	}
+
+	if skipped > 0 {
+		h.logger.Info("skipped unchanged notifications during re-sync", zap.Int("skipped", skipped))
 	}
 
 	// Update oldest_notification_synced_at if we found older notifications

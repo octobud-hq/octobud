@@ -37,12 +37,20 @@ export interface NavigateOptions {
 	 * that should refresh data (e.g. pagination, view switching).
 	 */
 	shallow?: boolean;
+	/**
+	 * Re-run the loaders that own view/tag data as part of this navigation (one load,
+	 * no separate invalidate round trip). Use when the navigation targets a view that
+	 * was just created, renamed, or otherwise changed on the server.
+	 */
+	invalidateViews?: boolean;
 }
 
 export interface ControllerOptions {
 	onRefresh?: () => Promise<void>;
 	onAfterRefresh?: () => Promise<void>;
 	onRefreshViewCounts?: () => Promise<void>;
+	/** Re-run the loaders that own view/tag data after a view or tag mutation. */
+	invalidateViews?: () => Promise<void>;
 	navigateToUrl?: (url: string, options?: NavigateOptions) => Promise<void>;
 	/** Request confirmation for bulk action. isQueryBased indicates the action cannot be undone. */
 	requestBulkConfirmation?: (

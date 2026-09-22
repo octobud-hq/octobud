@@ -33,6 +33,7 @@ vi.mock("$lib/stores/toastStore", () => ({
 
 describe("RepositoryFilterActionController", () => {
 	let navigateToUrl: Mock<(url: string, options?: NavigateOptions) => Promise<void>>;
+	let invalidateViews: Mock<() => Promise<void>>;
 	let options: ControllerOptions;
 	let sharedHelpers: SharedHelpers;
 
@@ -69,7 +70,8 @@ describe("RepositoryFilterActionController", () => {
 		vi.mocked(updateViewRepositoryDefault).mockReset();
 		navigateToUrl = vi.fn<(url: string, options?: NavigateOptions) => Promise<void>>();
 		navigateToUrl.mockResolvedValue(undefined);
-		options = { navigateToUrl };
+		invalidateViews = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
+		options = { navigateToUrl, invalidateViews };
 		sharedHelpers = {
 			refresh: vi.fn().mockResolvedValue(undefined),
 			refreshRepositoryCounts: vi.fn().mockResolvedValue(undefined),
@@ -95,7 +97,7 @@ describe("RepositoryFilterActionController", () => {
 		expect(parsed.searchParams.get("page")).toBeNull();
 		expect(parsed.searchParams.get("id")).toBe("abc");
 		expect(parsed.searchParams.get("query")).toBeNull();
-		expect(navOptions).toEqual({ replace: false });
+		expect(navOptions).toEqual({ replace: false, invalidateViews: false });
 	});
 
 	it("preserves a modified quick query in the URL", async () => {
@@ -279,6 +281,11 @@ describe("RepositoryFilterActionController", () => {
 
 			expect(updateViewRepositoryDefault).toHaveBeenCalledWith("reviews-id", [3, 4]);
 			expect(get(repositoryFilterStore.viewDefaultRepositoryIds)).toEqual([3, 4]);
+			// Loader-owned view data is refreshed as part of the navigation itself.
+			expect(navigateToUrl).toHaveBeenCalledWith(expect.any(String), {
+				replace: false,
+				invalidateViews: true,
+			});
 			expect(get(repositoryFilterStore.isViewDefaultSelection)).toBe(true);
 			// Selection now equals the default: the URL drops the param.
 			const parsed = new URL(navigateToUrl.mock.calls[0][0], "http://localhost:3000");

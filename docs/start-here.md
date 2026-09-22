@@ -40,9 +40,9 @@ After connecting GitHub, you'll be prompted to configure how far back Octobud sh
 - **Maximum Notifications** - Cap how many to sync. Useful with "All time" or long periods.
 - **Unread Only** - Only sync notifications marked unread on GitHub. Reduces volume but may miss notifications you've seen but not addressed.
 
-### Syncing More Later
+### Re-syncing Later
 
-From **Settings → Data → Sync additional history**, you can sync older notifications beyond your initial import. This syncs notifications *before* your oldest synced notification, so you won't re-sync what you already have.
+From **Settings → Data → Re-sync notification data**, you can fetch notifications from GitHub again for a chosen number of days, looking back from today. This is the fix when the first sync ran before your token had the right permissions or SSO authorization: re-sync the last 30 days and the missing notifications appear, while anything you have already read, archived, starred, or snoozed keeps that state. Under **Advanced options** you can end the window at an earlier date instead, which is how you pull in older history beyond your initial import.
 
 ## Core Workflow
 

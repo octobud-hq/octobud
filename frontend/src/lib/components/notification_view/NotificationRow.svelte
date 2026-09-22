@@ -24,6 +24,7 @@
 		mailClosedIcon,
 	} from "$lib/utils/notificationHelpers";
 	import { getArchiveIcon } from "$lib/utils/archiveIcons";
+	import { inboxIconPath, inboxSlashPath } from "$lib/utils/inboxIcons";
 	import { getMuteIcon } from "$lib/utils/muteIcons";
 	import { resolveNotificationHtmlUrl } from "$lib/utils/githubUrls";
 	import SnoozeDropdown from "$lib/components/shared/SnoozeDropdown.svelte";
@@ -406,7 +407,7 @@
 	<div
 		bind:this={rootElement}
 		data-notification-key={notification.githubId ?? notification.id}
-		class={`group relative flex flex-1 cursor-pointer gap-2.5 rounded-lg border px-2.5 py-2 transition ${baseBackground} ${hoverBackground} focus-visible:outline-none ${hasKeyboardFocus || isDetailOpen ? `border-blue-600` : borderClass}`}
+		class={`group relative flex min-w-0 flex-1 cursor-pointer gap-2.5 rounded-lg border px-2.5 py-2 transition ${baseBackground} ${hoverBackground} focus-visible:outline-none ${hasKeyboardFocus || isDetailOpen ? `border-blue-600` : borderClass}`}
 		role="button"
 		tabindex="0"
 		aria-label={`Open details for ${notification.subjectTitle}`}
@@ -414,7 +415,7 @@
 		on:click={openDetails}
 		on:keydown={handleCardKeyDown}
 	>
-		<div class="flex-1 text-left space-y-1.5">
+		<div class="min-w-0 flex-1 text-left space-y-1.5">
 			<!-- Top Row: Icon + Title -->
 			<div class="flex items-start gap-2">
 				<div class="flex-shrink-0 mt-0.5">
@@ -428,29 +429,50 @@
 						{@html iconConfig.path}
 					</svg>
 				</div>
-				<div class="flex items-center gap-1.5 flex-1 flex-wrap">
-					<!-- Status badges (muted takes priority over archived, filtered has lowest precedence) -->
-					{#if isMuted}
-						<span
-							class="rounded-md bg-violet-500/10 dark:bg-violet-500/20 px-1.5 py-0.5 text-[10px] font-medium text-violet-600 dark:text-violet-300"
-						>
-							Muted
-						</span>
-					{:else if isArchived}
-						<span
-							class="rounded-md bg-blue-500/10 dark:bg-blue-500/20 px-1.5 py-0.5 text-[10px] font-medium text-blue-600 dark:text-blue-300"
-						>
-							Archived
-						</span>
-					{:else if notification.filtered}
-						<span
-							class="rounded-md bg-gray-500/10 dark:bg-gray-500/20 px-1.5 py-0.5 text-[10px] font-medium text-gray-700 dark:text-gray-300"
-						>
-							Skipped Inbox
-						</span>
-					{/if}
-					<span class={`text-sm ${titleFontWeight} leading-snug ${titleColor} transition`}>
-						{notification.subjectTitle}
+				<div class="min-w-0 flex-1">
+					<!-- Status badges live inside the title's inline flow so the title always starts right
+					     after the badge and wrapped lines use the full width. Long unbroken strings (UUIDs,
+					     URLs) wrap instead of widening the row; titles clamp at three lines. -->
+					<span
+						class={`block min-w-0 wrap-anywhere line-clamp-3 text-sm ${titleFontWeight} leading-snug ${titleColor} transition`}
+						title={notification.subjectTitle}
+					>
+						<!-- Muted takes priority over archived, filtered has lowest precedence -->
+						{#if isMuted}
+							<span
+								class="mr-1.5 inline-block align-middle rounded-md bg-violet-500/10 dark:bg-violet-500/20 px-1.5 py-0.5 text-[10px] font-medium leading-normal text-violet-600 dark:text-violet-300"
+							>
+								Muted
+							</span>
+						{:else if isArchived}
+							<span
+								class="mr-1.5 inline-block align-middle rounded-md bg-blue-500/10 dark:bg-blue-500/20 px-1.5 py-0.5 text-[10px] font-medium leading-normal text-blue-600 dark:text-blue-300"
+							>
+								Archived
+							</span>
+						{:else if notification.filtered}
+							<!-- Compact icon badge (inbox with a slash) instead of a "Skipped Inbox" text pill -->
+							<span
+								class="relative -top-px mr-1.5 inline-flex h-[19px] w-[19px] align-middle items-center justify-center rounded-md bg-gray-500/10 dark:bg-gray-500/20 text-gray-400 dark:text-gray-400"
+								role="img"
+								aria-label="Skipped inbox"
+								title="Skipped inbox"
+							>
+								<svg
+									class="h-3.5 w-3.5"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2.2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									aria-hidden="true"
+								>
+									<path d={inboxIconPath} />
+									<path d={inboxSlashPath} />
+								</svg>
+							</span>
+						{/if}{notification.subjectTitle}
 					</span>
 				</div>
 			</div>
@@ -662,9 +684,7 @@
 							stroke-linejoin="round"
 							aria-hidden="true"
 						>
-							<path
-								d="M3 12V15.8C3 16.9201 3 17.4802 3.21799 17.908C3.40973 18.2843 3.71569 18.5903 4.09202 18.782C4.51984 19 5.0799 19 6.2 19H17.8C18.9201 19 19.4802 19 19.908 18.782C20.2843 18.5903 20.5903 18.2843 20.782 17.908C21 17.4802 21 16.9201 21 15.8V12M3 12H6.67452C7.16369 12 7.40829 12 7.63846 12.0553C7.84254 12.1043 8.03763 12.1851 8.21657 12.2947C8.4184 12.4184 8.59136 12.5914 8.93726 12.9373L9.06274 13.0627C9.40865 13.4086 9.5816 13.5816 9.78343 13.7053C9.96237 13.8149 10.1575 13.8957 10.3615 13.9447C10.5917 14 10.8363 14 11.3255 14H12.6745C13.1637 14 13.4083 14 13.6385 13.9447C13.8425 13.8957 14.0376 13.8149 14.2166 13.7053C14.4184 13.5816 14.5914 13.4086 14.9373 13.0627L15.0627 12.9373C15.4086 12.5914 15.5816 12.4184 15.7834 12.2947C15.9624 12.1851 16.1575 12.1043 16.3615 12.0553C16.5917 12 16.8363 12 17.3255 12H21M3 12L5.32639 6.83025C5.78752 5.8055 6.0181 5.29312 6.38026 4.91755C6.70041 4.58556 7.09278 4.33186 7.52691 4.17615C8.01802 4 8.57988 4 9.70361 4H14.2964C15.4201 4 15.982 4 16.4731 4.17615C16.9072 4.33186 17.2996 4.58556 17.6197 4.91755C17.9819 5.29312 18.2125 5.8055 18.6736 6.83025L21 12"
-							/>
+							<path d={inboxIconPath} />
 						</svg>
 					</button>
 				{/if}

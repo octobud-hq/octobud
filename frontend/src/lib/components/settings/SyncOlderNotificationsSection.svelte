@@ -23,7 +23,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>. -->
 	type DaySelection = number | "custom";
 
 	let syncState: SyncState | null = null;
-	let isLoading = true;
 	let isSubmitting = false;
 	let error = "";
 	let showConfirmDialog = false;
@@ -34,9 +33,12 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>. -->
 	let maxNotifications: number | null = null;
 	let syncUnreadOnly = false;
 
-	// Before date override state
+	// The window looks back `days` from `windowEnd`. By default that is now (a true
+	// re-sync, e.g. after fixing token permissions or SSO); advanced options can move
+	// the end earlier to fetch older history only.
 	let useBeforeDateOverride = false;
 	let beforeDateOverride: string = "";
+	let nowIso = new Date().toISOString();
 
 	// Predefined day options
 	const dayOptions = [30, 60, 90];
@@ -119,16 +121,15 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>. -->
 	}
 
 	onMount(async () => {
-		// Initialize beforeDateOverride with the current date
-		beforeDateOverride = toLocalDatetime(new Date(Date.now()).toISOString());
+		// Initialize the optional earlier end date with the current date
+		nowIso = new Date().toISOString();
+		beforeDateOverride = toLocalDatetime(nowIso);
 
+		// The oldest-synced caption is informational; the form works without it.
 		try {
 			syncState = await getSyncState();
 		} catch (err) {
 			console.error("Failed to fetch sync state:", err);
-			error = "Failed to load sync state";
-		} finally {
-			isLoading = false;
 		}
 	});
 
@@ -165,9 +166,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>. -->
 			}
 		}
 
-		// Validate before date override if enabled
+		// Validate the earlier end date if enabled
 		if (useBeforeDateOverride && !beforeDateOverride) {
-			error = "Please select a starting date or disable the override";
+			error = "Please select an end date or turn the option off";
 			return;
 		}
 
@@ -182,14 +183,20 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>. -->
 		try {
 			const days = getEffectiveDays();
 
+			// Always anchor the window explicitly: now by default, or the chosen earlier date.
+			nowIso = new Date().toISOString();
 			await syncOlderNotifications({
 				days,
 				maxCount: maxNotifications,
 				unreadOnly: syncUnreadOnly,
-				beforeDate: useBeforeDateOverride ? toRFC3339(beforeDateOverride) : null,
+				beforeDate: useBeforeDateOverride ? toRFC3339(beforeDateOverride) : nowIso,
 			});
 
-			toastStore.success(`Syncing ${days} more days of notifications...`);
+			toastStore.success(
+				useBeforeDateOverride
+					? `Re-syncing ${days} days of notifications ending ${formatShortDate(toRFC3339(beforeDateOverride))}...`
+					: `Re-syncing the last ${days} days of notifications...`
+			);
 
 			// Refresh sync state to show updated oldest timestamp
 			syncState = await getSyncState();
@@ -206,30 +213,30 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>. -->
 		showConfirmDialog = false;
 	}
 
-	// Allow sync if we have an oldest notification OR if using a before date override
-	$: canSync = syncState?.oldestNotificationSyncedAt != null || useBeforeDateOverride;
+	// A re-sync never depends on prior sync state; only the optional end date needs a value.
+	$: canSync = !useBeforeDateOverride || beforeDateOverride !== "";
 
 	// Compute effective days reactively (must reference variables directly for Svelte reactivity)
 	$: effectiveDays = selectedDays === "custom" ? customDays || 30 : selectedDays;
 
+	// The window's end (RFC3339) and its human labels
+	$: windowEndIso =
+		useBeforeDateOverride && beforeDateOverride ? toRFC3339(beforeDateOverride) : nowIso;
+	$: windowEndLabel = useBeforeDateOverride
+		? beforeDateOverride
+			? formatShortDate(windowEndIso)
+			: "the selected date"
+		: "now";
+	$: windowStartLabel =
+		useBeforeDateOverride && !beforeDateOverride
+			? `${effectiveDays} days before`
+			: formatShortDate(calculateStartDate(windowEndIso, effectiveDays));
+
 	// Build confirm dialog body
 	$: confirmDialogBody = (() => {
-		const endDate = useBeforeDateOverride
-			? formatShortDate(toRFC3339(beforeDateOverride))
-			: syncState?.oldestNotificationSyncedAt
-				? formatShortDate(syncState.oldestNotificationSyncedAt)
-				: "your oldest synced notification";
-
-		const startDate = useBeforeDateOverride
-			? formatShortDate(calculateStartDate(toRFC3339(beforeDateOverride), effectiveDays))
-			: syncState?.oldestNotificationSyncedAt
-				? formatShortDate(calculateStartDate(syncState.oldestNotificationSyncedAt, effectiveDays))
-				: `${effectiveDays} days before`;
-
 		const notificationType = syncUnreadOnly ? "unread" : "all";
 		const limitClause = maxNotifications ? ` (up to ${maxNotifications.toLocaleString()})` : "";
-
-		return `This will sync ${notificationType} notifications from ${startDate} to ${endDate}${limitClause}. This may take a while depending on how many notifications exist.`;
+		return `This will fetch ${notificationType} notifications from ${windowStartLabel} to ${windowEndLabel}${limitClause} from GitHub again. Notifications you already have keep their read, archived, starred, and snoozed state. This may take a while depending on how many notifications exist.`;
 	})();
 </script>
 
@@ -239,18 +246,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>. -->
 		<p class="mt-1 text-xs text-gray-600 dark:text-gray-400">Manage sync with GitHub</p>
 	</div>
 
-	{#if isLoading}
-		<div class="flex items-center justify-center py-8 text-sm text-gray-500 dark:text-gray-400">
-			Loading...
-		</div>
-	{:else if !canSync && !useBeforeDateOverride}
-		<div
-			class="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600 dark:border-gray-700 dark:bg-gray-900/50 dark:text-gray-400"
-		>
-			Complete initial setup first. Once notifications have been synced, you can fetch older ones
-			here.
-		</div>
-	{:else}
+	{#if true}
 		<!-- Form card -->
 		<div
 			class="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-900/60"
@@ -269,16 +265,17 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>. -->
 				<div>
 					<div class="mb-3">
 						<p class="text-sm font-medium text-gray-700 dark:text-gray-300">
-							Sync additional history
+							Re-sync notification data
 						</p>
 						<p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+							Fetch notifications from GitHub again for the selected period, looking back from now.
+							Useful after fixing your token's permissions or SSO authorization; anything you have
+							already read, archived, starred, or snoozed keeps that state.
 							{#if syncState?.oldestNotificationSyncedAt}
-								Add more notifications before your oldest synced (<span
-									class="font-medium text-gray-600 dark:text-gray-300"
+								Your oldest synced notification is from
+								<span class="font-medium text-gray-600 dark:text-gray-300"
 									>{formatShortDate(syncState.oldestNotificationSyncedAt)}</span
-								>).
-							{:else}
-								Fetch older notifications from GitHub.
+								>.
 							{/if}
 						</p>
 					</div>
@@ -293,7 +290,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>. -->
 									? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:border-indigo-400 dark:bg-indigo-500/10 dark:text-indigo-400'
 									: 'border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-gray-600 dark:hover:bg-gray-700'}"
 							>
-								+{days} days
+								Last {days} days
 							</button>
 						{/each}
 						<button
@@ -426,10 +423,11 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>. -->
 									<span
 										id="override-date-label"
 										class="text-sm font-medium text-gray-700 dark:text-gray-300"
-										>Custom starting date</span
+										>End the window at an earlier date</span
 									>
 									<p class="text-xs text-gray-500 dark:text-gray-400">
-										Sync from a specific date instead of oldest notification.
+										Look back from a date in the past instead of from now, for example to fetch
+										older history beyond your first sync.
 									</p>
 								</div>
 								<button
@@ -471,45 +469,16 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>. -->
 					class="flex items-center justify-between gap-4 rounded-xl bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/50 p-3 mt-1"
 				>
 					<p class="text-sm text-gray-600 dark:text-gray-400">
-						{#if useBeforeDateOverride && beforeDateOverride}
-							Sync <span class="font-medium text-indigo-600 dark:text-indigo-400"
-								>{syncUnreadOnly ? "unread" : "all"}</span
-							>
-							notifications from
-							<span class="font-medium text-gray-700 dark:text-gray-200"
-								>{formatShortDate(
-									calculateStartDate(toRFC3339(beforeDateOverride), effectiveDays)
-								)}</span
-							>
-							to
-							<span class="font-medium text-gray-700 dark:text-gray-200"
-								>{formatShortDate(toRFC3339(beforeDateOverride))}</span
-							>{#if maxNotifications}
-								<span class="text-gray-500 dark:text-gray-400">
-									&nbsp;(up to {maxNotifications.toLocaleString()})</span
-								>
-							{/if}
-						{:else if syncState?.oldestNotificationSyncedAt}
-							Sync <span class="font-medium text-gray-700 dark:text-gray-200"
-								>{syncUnreadOnly ? "unread" : "all"}</span
-							>
-							notifications from
-							<span class="font-medium text-gray-700 dark:text-gray-200"
-								>{formatShortDate(
-									calculateStartDate(syncState.oldestNotificationSyncedAt, effectiveDays)
-								)}</span
-							>
-							to
-							<span class="font-medium text-gray-700 dark:text-gray-200"
-								>{formatShortDate(syncState.oldestNotificationSyncedAt)}</span
-							>{#if maxNotifications}
-								<span class="text-gray-500 dark:text-gray-400">
-									&nbsp;(up to {maxNotifications.toLocaleString()})</span
-								>
-							{/if}
-						{:else}
-							<span class="text-gray-500 dark:text-gray-400"
-								>Enable a custom starting date to sync</span
+						Fetch <span class="font-medium text-gray-700 dark:text-gray-200"
+							>{syncUnreadOnly ? "unread" : "all"}</span
+						>
+						notifications from
+						<span class="font-medium text-gray-700 dark:text-gray-200">{windowStartLabel}</span>
+						to
+						<span class="font-medium text-gray-700 dark:text-gray-200">{windowEndLabel}</span
+						>{#if maxNotifications}
+							<span class="text-gray-500 dark:text-gray-400">
+								&nbsp;(up to {maxNotifications.toLocaleString()})</span
 							>
 						{/if}
 					</p>
@@ -536,7 +505,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>. -->
 							</svg>
 							Syncing...
 						{:else}
-							Start sync
+							Start re-sync
 						{/if}
 					</button>
 				</div>
@@ -547,9 +516,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>. -->
 
 <ConfirmDialog
 	open={showConfirmDialog}
-	title="Sync older notifications?"
+	title="Re-sync notifications?"
 	body={confirmDialogBody}
-	confirmLabel="Start sync"
+	confirmLabel="Start re-sync"
 	cancelLabel="Cancel"
 	confirming={isSubmitting}
 	onConfirm={handleConfirmedSync}

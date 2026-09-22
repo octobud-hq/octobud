@@ -100,6 +100,22 @@ export function getNotificationTypeConfig(subjectType: string): NotificationType
 				timestampVerb: "reported",
 			};
 
+		case "repositoryadvisory":
+			return {
+				showCommentThread: false,
+				contentLabel: "Security Advisory",
+				emptyContentMessage: "No details available.",
+				timestampVerb: "published",
+			};
+
+		case "advisorycredit":
+			return {
+				showCommentThread: false,
+				contentLabel: "Advisory Credit",
+				emptyContentMessage: "No details available.",
+				timestampVerb: "requested",
+			};
+
 		default:
 			// Fallback for unknown types
 			return {

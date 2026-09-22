@@ -113,6 +113,8 @@ Combine all operators for sophisticated filtering:
 | `type:Commit` | Commit notifications |
 | `type:CheckSuite` | CI/CD check suite notifications |
 | `type:RepositoryVulnerabilityAlert` | Security alert notifications |
+| `type:RepositoryAdvisory` | Repository security advisory notifications |
+| `type:AdvisoryCredit` | Requests to accept credit on a security advisory |
 
 ### Reason Filters (`reason:`)
 
@@ -127,6 +129,7 @@ Combine all operators for sophisticated filtering:
 | `reason:subscribed` | You're subscribed |
 | `reason:state_change` | State changed |
 | `reason:ci_activity` | CI activity |
+| `reason:security_advisory_credit` | You were credited on a security advisory |
 
 ### Repository and Author Filters
 

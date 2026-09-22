@@ -242,6 +242,30 @@ func (s *Service) UpdateSyncStateAfterProcessingWithInitialSync(
 	return nil
 }
 
+// ThreadNeedsProcessing reports whether a thread from a sync window should be processed.
+// A re-sync (a window that overlaps already-synced history) re-delivers threads we hold;
+// when the stored row is at least as new as the thread and its subject was fetched, there
+// is nothing to update and the per-thread GitHub subject request can be skipped. Rows whose
+// subject fetch previously failed (e.g. before a token had the right permissions) still
+// need processing, which is the point of a re-sync.
+func (s *Service) ThreadNeedsProcessing(
+	ctx context.Context,
+	userID, githubID string,
+	updatedAt time.Time,
+) bool {
+	existing, err := s.notificationService.GetByGithubID(ctx, userID, githubID)
+	if err != nil {
+		return true // unknown or unreadable: process it
+	}
+	if !existing.SubjectFetchedAt.Valid || !existing.SubjectRaw.Valid {
+		return true
+	}
+	if !existing.GithubUpdatedAt.Valid || updatedAt.After(existing.GithubUpdatedAt.Time) {
+		return true
+	}
+	return false
+}
+
 // IsInitialSyncComplete checks if the initial sync has been completed
 func (s *Service) IsInitialSyncComplete(ctx context.Context, userID string) (bool, error) {
 	state, err := s.syncStateService.GetSyncState(ctx, userID)

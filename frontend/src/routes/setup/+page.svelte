@@ -16,6 +16,13 @@
 
 	import { onMount } from "svelte";
 	import { goto } from "$app/navigation";
+	import { VIEWS_DEPENDENCY } from "$lib/constants/loaderDependencies";
+
+	// The layout loader skips fetching views/tags while on /setup and does not re-run on
+	// navigation, so leaving setup must re-run it as part of the navigation itself.
+	async function leaveSetup() {
+		await goto(resolve("/views/inbox"), { invalidate: [VIEWS_DEPENDENCY] });
+	}
 	import { resolve } from "$app/paths";
 	import { hasSyncSettingsConfigured, fetchUserInfo } from "$lib/stores/authStore";
 	import {
@@ -89,7 +96,7 @@
 			const hasConfigured = hasSyncSettingsConfigured();
 			if (hasConfigured) {
 				// Already configured, redirect to main app
-				await goto(resolve("/views/inbox"));
+				await leaveSetup();
 			}
 		} catch (err) {
 			console.error("Failed to fetch initial data:", err);
@@ -234,7 +241,7 @@
 			}
 
 			// Redirect to main app
-			await goto(resolve("/views/inbox"));
+			await leaveSetup();
 		} catch (err) {
 			error = err instanceof Error ? err.message : "Failed to save sync settings";
 			isSubmitting = false;
@@ -913,7 +920,7 @@
 
 			<!-- Footer note -->
 			<p class="mt-8 text-center text-xs text-gray-400 dark:text-gray-500">
-				You can sync additional history and manage your GitHub connection in the settings.
+				You can re-sync notification data and manage your GitHub connection in the settings.
 			</p>
 		{/if}
 	</div>

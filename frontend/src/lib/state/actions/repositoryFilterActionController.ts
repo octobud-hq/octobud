@@ -46,7 +46,10 @@ export function createRepositoryFilterActionController(
 	options: ControllerOptions,
 	sharedHelpers: SharedHelpers
 ): RepositoryFilterActions {
-	async function navigateWithSelection(repositoryIds: number[]): Promise<void> {
+	async function navigateWithSelection(
+		repositoryIds: number[],
+		navigation: { invalidateViews?: boolean } = {}
+	): Promise<void> {
 		const previousIds = get(repositoryFilterStore.selectedRepositoryIds);
 		const previousPage = get(paginationStore.page);
 
@@ -82,7 +85,10 @@ export function createRepositoryFilterActionController(
 		url.searchParams.delete("page");
 
 		try {
-			await options.navigateToUrl(url.pathname + url.search, { replace: false });
+			await options.navigateToUrl(url.pathname + url.search, {
+				replace: false,
+				invalidateViews: navigation.invalidateViews === true,
+			});
 		} catch (error) {
 			// Navigation rejected or was cancelled. Only roll back if nothing newer has been
 			// requested since (a superseding selection navigation aborts this one and must
@@ -164,8 +170,9 @@ export function createRepositoryFilterActionController(
 		if (get(repositoryFilterStore.viewKey) !== viewKey) return;
 		repositoryFilterStore.setViewDefault(viewKey, stored);
 		// The selection now equals the default, so the URL no longer needs ?repos=. The
-		// navigation also reloads views so the stored default reaches the sidebar data.
-		await navigateWithSelection(stored);
+		// loaders own the view/tag data the default is read from and only re-run on explicit
+		// invalidation, so that rides along with this navigation as a single load.
+		await navigateWithSelection(stored, { invalidateViews: true });
 	}
 
 	async function resetToViewDefault(): Promise<void> {

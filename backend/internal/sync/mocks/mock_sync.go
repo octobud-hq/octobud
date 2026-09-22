@@ -162,6 +162,20 @@ func (mr *MockSyncOperationsMockRecorder) RefreshSubjectData(ctx, userID, github
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RefreshSubjectData", reflect.TypeOf((*MockSyncOperations)(nil).RefreshSubjectData), ctx, userID, githubID)
 }
 
+// ThreadNeedsProcessing mocks base method.
+func (m *MockSyncOperations) ThreadNeedsProcessing(ctx context.Context, userID, githubID string, updatedAt time.Time) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ThreadNeedsProcessing", ctx, userID, githubID, updatedAt)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// ThreadNeedsProcessing indicates an expected call of ThreadNeedsProcessing.
+func (mr *MockSyncOperationsMockRecorder) ThreadNeedsProcessing(ctx, userID, githubID, updatedAt any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ThreadNeedsProcessing", reflect.TypeOf((*MockSyncOperations)(nil).ThreadNeedsProcessing), ctx, userID, githubID, updatedAt)
+}
+
 // UpdateSyncStateAfterProcessing mocks base method.
 func (m *MockSyncOperations) UpdateSyncStateAfterProcessing(ctx context.Context, userID string, latestUpdate time.Time) error {
 	m.ctrl.T.Helper()

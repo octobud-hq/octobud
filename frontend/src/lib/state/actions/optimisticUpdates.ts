@@ -91,6 +91,23 @@ interface StoreCollection {
 /**
  * Create optimistic update helpers
  */
+/**
+ * Keyboard focus index after removing an item that is NOT the focused one. Items after
+ * the removed row shift up by one, so a focus index past the removed row must move with
+ * its notification; a focus index before it is unaffected. Returns null when the focus
+ * index does not need to change (including when the removed row is the focused one,
+ * which calculateNextItemAfterRemoval handles).
+ */
+export function shiftedFocusIndexAfterRemoval(
+	removedIndex: number,
+	focusIndex: number | null
+): number | null {
+	if (focusIndex === null || removedIndex < 0 || removedIndex >= focusIndex) {
+		return null;
+	}
+	return focusIndex - 1;
+}
+
 export function createOptimisticUpdateHelpers(
 	stores: StoreCollection,
 	options: ControllerOptions,
@@ -377,6 +394,16 @@ export function createOptimisticUpdateHelpers(
 						// focusAt will clamp the index to valid range, so we don't need to check < itemsAfterRemoval.length
 						keyboardStore.focusAt(nextItemInfo.targetIndex);
 						// Wait for focus to be applied before refresh
+						await tick();
+					}
+				} else {
+					// A row above the focused one was dismissed (e.g. via its hover actions).
+					// Keep the keyboard focus on the same notification, whose index just dropped
+					// by one; otherwise the index silently points at the row that slid into its
+					// place while the original row still holds DOM focus.
+					const shifted = shiftedFocusIndexAfterRemoval(currentIndex, focusIndex);
+					if (shifted !== null) {
+						keyboardStore.focusAt(shifted);
 						await tick();
 					}
 				}
