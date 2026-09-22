@@ -215,6 +215,10 @@ export function formatSubjectTypeLabel(type: string): string {
 		case "repositoryvulnerabilityalert":
 		case "securityalert":
 			return "Security Alert";
+		case "repositoryadvisory":
+			return "Security Advisory";
+		case "advisorycredit":
+			return "Advisory Credit";
 		case "checkrun":
 		case "checksuite":
 		case "workflowrun":

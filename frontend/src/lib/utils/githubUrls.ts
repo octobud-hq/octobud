@@ -72,6 +72,17 @@ export function constructGitHubHtmlUrl(
 	// both match).
 	const normalizedType = subjectType.toLowerCase().replace(/[-_\s]/g, "");
 
+	// Security advisories and advisory credits: GitHub gives no html_url for these threads.
+	// A RepositoryAdvisory subject URL carries the GHSA id, which maps to the advisory page;
+	// otherwise (and for AdvisoryCredit, whose subject URL is null) the repository's
+	// advisories page is where both are handled.
+	if (normalizedType === "repositoryadvisory" || normalizedType === "advisorycredit") {
+		const ghsa = subjectUrl?.match(/GHSA-[A-Za-z0-9]{4}-[A-Za-z0-9]{4}-[A-Za-z0-9]{4}/i)?.[0];
+		return ghsa
+			? `https://github.com/${repoFullName}/security/advisories/${ghsa.toLowerCase()}`
+			: `https://github.com/${repoFullName}/security/advisories`;
+	}
+
 	// Try to extract information from API URL if provided
 	if (subjectUrl) {
 		const extractedUrl = extractFromApiUrl(subjectUrl, repoFullName);

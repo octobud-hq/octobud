@@ -17,6 +17,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Per-view default repositories**: Views can remember a repository selection. Set one from the repository selector ("Set as default for this view"), or save the current selection along with the query via the search bar's Save menu. Opening the view applies the default; `?repos=` links still override it, and "Reset to default" brings it back. The selector shows how many unread notifications sit in repositories hidden by the current selection, and the "All repositories" row shows the view's total unread, so a narrowed view never hides that there is more out there. Sidebar badges keep counting the whole view.
 - API: `GET /api/notifications/repositories?query=` returns per-repository totals for a query; list, poll, and bulk endpoints accept repository IDs (`repos=` / `repositoryIds`) to scope results. `PUT /api/views/{key}/repository-defaults` stores a default selection for a custom view id, a system view slug, or `tag-<tag id>`; views and tags include `repositoryIds`; view create/update accept `repositoryIds`.
 
+### Changed
+
+- **Re-sync notification data** (`Settings → Data`): the "Sync additional history" section is now just a plain re-sync. It fetches notifications going back the selected number of days, looking back from today, which fixes a common case of a first sync that runs before the user's token had the right permissions or SSO authorization. Read, archived, starred, snoozed, and muted state is preserved, and notifications that have not changed since they were last synced are skipped rather than re-fetched. The advanced options can end the window at an earlier date to pull in older history only.
+- Notifications that skipped the inbox now show a compact inbox-with-slash icon badge in the list instead of the "Skipped Inbox" text pill, so the title gets the space back. Hover the badge for the label.
+- **Faster view switching**: Switching views no longer waits for the sidebar's per-view and per-tag unread counts before loading the notification list. The counts are refreshed in the background after the list appears, so on large databases a view switch drops from several hundred milliseconds to the cost of the list request alone.
+
+### Fixed
+
+- Security advisory notifications (`RepositoryAdvisory`, `AdvisoryCredit`) now get a shield icon, a proper type label, an "Open security advisories" link that resolves to the advisory (or the repository's advisories page when GitHub provides no thread URL), and an explanatory reading pane instead of a generic empty thread.
+- Notification titles containing long unbroken strings (UUIDs, URLs) now wrap instead of pushing the row wider than the list, and titles are clamped to three lines with the full title available on hover. The reading pane title wraps the same way.
+- Dismissing a notification above the keyboard-focused row (for example via its hover actions) now keeps keyboard focus on the same notification. Previously the focus index stayed put while the rows shifted up, leaving two rows highlighted with keyboard focus on the wrong one.
+
 ## [0.3.3]
 
 ### Added

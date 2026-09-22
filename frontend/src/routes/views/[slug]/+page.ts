@@ -129,17 +129,11 @@ export const load: PageLoad = async ({ fetch, params, url, parent }) => {
 		// Extract tag slug from "tag-{slug}" format
 		tagSlug = slug.substring(4); // Remove "tag-" prefix
 
-		// Fetch tags to find the tag by slug
-		try {
-			const tags = await fetchTags(fetch);
-			tag = tags.find((t) => t.slug === tagSlug);
-
-			if (!tag) {
-				// Tag not found, redirect to inbox
-				throw redirect(302, "/views/inbox");
-			}
-		} catch (error) {
-			console.error("Failed to fetch tags:", error);
+		// Resolve the tag from the layout's tags (kept fresh by VIEWS_DEPENDENCY invalidation
+		// on every tag mutation) rather than re-fetching tags with counts on every navigation.
+		tag = tags.find((t) => t.slug === tagSlug);
+		if (!tag) {
+			// Tag not found, redirect to inbox
 			throw redirect(302, "/views/inbox");
 		}
 	}

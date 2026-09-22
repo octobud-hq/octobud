@@ -91,6 +91,11 @@ type SyncOperations interface {
 
 	// UpdateSyncStateAfterProcessing updates sync state after notifications are processed.
 	UpdateSyncStateAfterProcessing(ctx context.Context, userID string, latestUpdate time.Time) error
+	// ThreadNeedsProcessing reports whether a notification thread delivered by a sync
+	// window should be (re)processed: false when the stored copy is at least as new as
+	// the thread and already has its subject fetched, so re-syncs skip GitHub requests
+	// for notifications that have not changed.
+	ThreadNeedsProcessing(ctx context.Context, userID, githubID string, updatedAt time.Time) bool
 
 	// UpdateSyncStateAfterProcessingWithInitialSync updates sync state including initial sync markers.
 	UpdateSyncStateAfterProcessingWithInitialSync(

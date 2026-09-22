@@ -14,6 +14,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { describe, it, expect } from "vitest";
+import { shiftedFocusIndexAfterRemoval } from "./optimisticUpdates";
 import type { Notification } from "$lib/api/types";
 
 // Extract the pure calculation functions for testing
@@ -337,6 +338,23 @@ describe("Optimistic Update Helpers", () => {
 				expect(result.shouldNavigateToPreviousPage).toBe(true);
 				expect(result.targetPage).toBe(99);
 			});
+		});
+	});
+
+	describe("shiftedFocusIndexAfterRemoval", () => {
+		it("moves the focus index down when a row above it is removed", () => {
+			expect(shiftedFocusIndexAfterRemoval(0, 2)).toBe(1);
+			expect(shiftedFocusIndexAfterRemoval(1, 2)).toBe(1);
+		});
+
+		it("leaves the focus index alone when the removed row is at or after it", () => {
+			expect(shiftedFocusIndexAfterRemoval(2, 2)).toBeNull();
+			expect(shiftedFocusIndexAfterRemoval(3, 2)).toBeNull();
+		});
+
+		it("does nothing without focus or when the removed row is not on the page", () => {
+			expect(shiftedFocusIndexAfterRemoval(0, null)).toBeNull();
+			expect(shiftedFocusIndexAfterRemoval(-1, 2)).toBeNull();
 		});
 	});
 });

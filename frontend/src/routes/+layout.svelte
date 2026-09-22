@@ -28,7 +28,8 @@
 	import { goto, afterNavigate, pushState, replaceState } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import { page as pageStore } from "$app/stores";
-	import { invalidateAll } from "$app/navigation";
+	import { invalidate, invalidateAll } from "$app/navigation";
+	import { VIEWS_DEPENDENCY } from "$lib/constants/loaderDependencies";
 	import type { NavigationState } from "$lib/state/interfaces/common";
 	import type { LayoutData } from "./$types";
 	import {
@@ -69,6 +70,7 @@
 	// API & Types
 	import { fetchViews } from "$lib/api/views";
 	import type { Tag } from "$lib/api/tags";
+	import type { NotificationView } from "$lib/api/types";
 
 	// Stores
 	import { currentTime } from "$lib/stores/timeStore";
@@ -218,6 +220,8 @@
 			onRefreshViewCounts: async () => {
 				await invalidateAll();
 			},
+			// The layout loader that owns views/tags only re-runs on this invalidation.
+			invalidateViews,
 			navigateToUrl: async (
 				url: string,
 				navOptions?: import("$lib/state/interfaces/common").NavigateOptions
@@ -261,6 +265,9 @@
 					noScroll: true,
 					keepFocus: true,
 					state: navOptions?.state,
+					// Re-run the view/tag loaders inside this navigation when asked, so a new or
+					// renamed view is resolvable by the page loader in a single load.
+					invalidate: navOptions?.invalidateViews ? [VIEWS_DEPENDENCY] : undefined,
 				});
 			},
 			requestBulkConfirmation: async (action: string, count: number, isQueryBased?: boolean) => {
@@ -354,17 +361,15 @@
 	// VIEW DIALOG CONTROLLER
 	// ============================================================================
 
+	// Targeted sidebar badge refresh (fetch + store write, no loader re-run).
 	async function refreshViewCounts() {
-		if (typeof window === "undefined") {
-			return;
-		}
+		await pageController.actions.refreshViewCounts();
+	}
 
-		try {
-			const updatedViews = await fetchViews();
-			pageController.actions.setViews(updatedViews);
-		} catch (error) {
-			console.error("Failed to refresh view counts:", error);
-		}
+	// Re-run the loaders that own view/tag data. Only needed after a view or tag mutation
+	// (or a default-repository change); the root layout loader does not re-run on navigation.
+	async function invalidateViews() {
+		await invalidate(VIEWS_DEPENDENCY);
 	}
 
 	async function selectViewBySlug(slug: string, shouldInvalidate: boolean = false) {
@@ -400,7 +405,7 @@
 		views,
 		setViews: pageController.actions.setViews,
 		selectedViewId,
-		invalidateViews: refreshViewCounts,
+		invalidateViews,
 		navigateToSlug: selectViewBySlug,
 		refreshNotifications: pageController.actions.refresh,
 		quickQuery,
@@ -577,8 +582,9 @@
 							return;
 						}
 					} else if (isSetupPage && hasConfigured) {
-						// Already configured, redirect to main app
-						void goto(resolve("/views/inbox" as any));
+						// Already configured, redirect to main app. The layout loader skipped
+						// fetching on /setup, so re-run it as part of this navigation.
+						void goto(resolve("/views/inbox" as any), { invalidate: [VIEWS_DEPENDENCY] });
 						return;
 					}
 				} catch (err) {
@@ -752,10 +758,25 @@
 	});
 
 	// Restore UI state from browser history when navigating back/forward
+	// The views snapshot seen by the previous navigation, to tell whether this navigation
+	// re-ran the layout loader (in which case badges are already fresh).
+	let viewsAtLastNavigation: NotificationView[] | null = null;
+
 	afterNavigate(({ from, to, type }) => {
 		// Sync settings stores from localStorage after navigation
 		// Ensures writable stores reflect any changes made on other pages (e.g. /settings)
 		getNotificationSettingsStore().syncFromStorage();
+
+		// Sidebar badges: the layout loader (whose counts are expensive) no longer re-runs
+		// on navigation, so refresh views/tags in the background after a page change,
+		// unless this navigation already re-ran the loader via VIEWS_DEPENDENCY.
+		const loaderRefreshed = data.views !== viewsAtLastNavigation;
+		viewsAtLastNavigation = data.views;
+		const pathChanged = from?.url && to?.url && from.url.pathname !== to.url.pathname;
+		if (pathChanged && !loaderRefreshed && to?.url.pathname !== "/setup") {
+			void pageController.actions.refreshViewCounts();
+			void pageController.actions.refreshTagCounts();
+		}
 
 		// Re-read sync start time on every navigation
 		// This handles the case where setup page sets localStorage then navigates
@@ -804,8 +825,19 @@
 	// REACTIVE: Update views when data changes
 	// ============================================================================
 
-	$: if (!isLoginRoute) {
+	// Copy loader-owned view/tag data into the stores only when the loader actually
+	// produced new data. The root layout loader no longer re-runs on navigation, so
+	// `data` is often the same snapshot; re-copying it would clobber the fresher counts
+	// and ordering that targeted refreshes (mark read, reorder, tag delete) wrote to the
+	// stores in the meantime.
+	let syncedViews: NotificationView[] | null = null;
+	let syncedTags: Tag[] | null = null;
+	$: if (!isLoginRoute && data.views !== syncedViews) {
+		syncedViews = data.views;
 		pageController.actions.setViews(data.views);
+	}
+	$: if (!isLoginRoute && (data.tags ?? null) !== syncedTags) {
+		syncedTags = data.tags ?? null;
 		pageController.actions.setTags(data.tags ?? []);
 	}
 

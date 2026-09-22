@@ -57,6 +57,10 @@ func TestSyncOlderHandler_Success(t *testing.T) {
 
 	mockSync := syncmocks.NewMockSyncOperations(ctrl)
 	mockSync.EXPECT().
+		ThreadNeedsProcessing(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(true).
+		AnyTimes()
+	mockSync.EXPECT().
 		FetchOlderNotificationsToSync(gomock.Any(), sinceTime, untilTime, (*int)(nil), false).
 		Return(notifications, nil)
 	// The handler will pass:
@@ -117,6 +121,10 @@ func TestSyncOlderHandler_EmptyResults(t *testing.T) {
 
 	mockSync := syncmocks.NewMockSyncOperations(ctrl)
 	mockSync.EXPECT().
+		ThreadNeedsProcessing(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(true).
+		AnyTimes()
+	mockSync.EXPECT().
 		FetchOlderNotificationsToSync(gomock.Any(), sinceTime, untilTime, (*int)(nil), false).
 		Return([]types.NotificationThread{}, nil)
 
@@ -148,6 +156,10 @@ func TestSyncOlderHandler_WithMaxCount(t *testing.T) {
 	}
 
 	mockSync := syncmocks.NewMockSyncOperations(ctrl)
+	mockSync.EXPECT().
+		ThreadNeedsProcessing(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(true).
+		AnyTimes()
 	mockSync.EXPECT().
 		FetchOlderNotificationsToSync(gomock.Any(), sinceTime, untilTime, &maxCount, false).
 		Return(notifications, nil)
@@ -189,6 +201,10 @@ func TestSyncOlderHandler_WithUnreadOnly(t *testing.T) {
 
 	mockSync := syncmocks.NewMockSyncOperations(ctrl)
 	mockSync.EXPECT().
+		ThreadNeedsProcessing(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(true).
+		AnyTimes()
+	mockSync.EXPECT().
 		FetchOlderNotificationsToSync(gomock.Any(), sinceTime, untilTime, (*int)(nil), true).
 		Return(notifications, nil)
 
@@ -224,6 +240,10 @@ func TestSyncOlderHandler_FetchError(t *testing.T) {
 
 	mockSync := syncmocks.NewMockSyncOperations(ctrl)
 	mockSync.EXPECT().
+		ThreadNeedsProcessing(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(true).
+		AnyTimes()
+	mockSync.EXPECT().
 		FetchOlderNotificationsToSync(gomock.Any(), sinceTime, untilTime, (*int)(nil), false).
 		Return(nil, errors.New("API error"))
 
@@ -258,6 +278,10 @@ func TestSyncOlderHandler_TracksOldestNotification(t *testing.T) {
 	}
 
 	mockSync := syncmocks.NewMockSyncOperations(ctrl)
+	mockSync.EXPECT().
+		ThreadNeedsProcessing(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(true).
+		AnyTimes()
 	mockSync.EXPECT().
 		FetchOlderNotificationsToSync(gomock.Any(), sinceTime, untilTime, (*int)(nil), false).
 		Return(notifications, nil)
