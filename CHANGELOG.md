@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Security advisory notifications (`RepositoryAdvisory`, `AdvisoryCredit`) now get a shield icon, a proper type label, an "Open security advisories" link that resolves to the advisory (or the repository's advisories page when GitHub provides no thread URL), and an explanatory reading pane instead of a generic empty thread.
 - Notification titles containing long unbroken strings (UUIDs, URLs) now wrap instead of pushing the row wider than the list, and titles are clamped to three lines with the full title available on hover. The reading pane title wraps the same way.
+- Sidebar view and tag badges now refresh when a new notification skips the inbox (for example a rule routed it straight into a view), or when activity lands on a muted or archived thread. The service worker previously only watched the inbox, so those arrivals never triggered a refresh until the next inbox notification or a user action. Tag badges were also missing from the refresh that did run.
 - Dismissing a notification above the keyboard-focused row (for example via its hover actions) now keeps keyboard focus on the same notification. Previously the focus index stayed put while the rows shifted up, leaving two rows highlighted with keyboard focus on the wrong one.
 
 ## [0.3.3]

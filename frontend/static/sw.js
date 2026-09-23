@@ -48,6 +48,19 @@ function notificationKey(n) {
 
 // State
 let lastMaxEffectiveSortDate = null; // Track the latest effectiveSortDate from first page
+// Newest effectiveSortDate seen across all notifications except snoozed ones. This
+// drives UI refreshes (sidebar counts, list, open detail) independently of desktop
+// notifications, so activity that skips the inbox (rules, mutes, archives) still
+// refreshes the app. Snoozed rows are excluded because snoozing sets effectiveSortDate
+// to the wake-up time (in the future); one of those at the top of the page would mask
+// real activity for the whole snooze. Once a snooze elapses the row passes this filter
+// again with its wake-up date, so a wake-up seen before the unsnooze job resets the date
+// triggers one refresh, the same as before.
+let lastChangeMaxEffectiveSortDate = null;
+const CHANGE_DETECTION_QUERY = 'in:anywhere snoozed:false';
+// Belt and braces for clock skew or any other future-dated row: ignore dates more than
+// this far ahead of the worker's clock when looking for the newest activity.
+const CHANGE_DETECTION_MAX_FUTURE_MS = 5 * 60 * 1000;
 let notificationQuery = 'in:inbox'; // Configurable query (default: inbox)
 let pollTimer = null;
 let isPolling = false;
@@ -157,6 +170,15 @@ async function loadState() {
                     debugLog('[SW] No previous poll state found in IndexedDB');
                 }
 
+                const changesRequest = store.get('changes');
+                changesRequest.onsuccess = () => {
+                    const changes = changesRequest.result;
+                    if (changes && changes.maxEffectiveSortDate) {
+                        lastChangeMaxEffectiveSortDate = changes.maxEffectiveSortDate;
+                        debugLog('[SW] Loaded change-detection max effectiveSortDate from IndexedDB:', lastChangeMaxEffectiveSortDate);
+                    }
+                };
+
                 // Load notification query config
                 const queryTx = db.transaction('queryConfig', 'readonly');
                 const queryStore = queryTx.objectStore('queryConfig');
@@ -210,7 +232,9 @@ async function loadState() {
     }
 }
 
-async function savePollState(maxEffectiveSortDate) {
+// Persist a poll-state record. id 'latest' tracks the desktop-notification poll,
+// id 'changes' tracks the change-detection poll (see CHANGE_DETECTION_QUERY).
+async function savePollState(maxEffectiveSortDate, id = 'latest') {
     try {
         const db = await openDB();
 
@@ -224,14 +248,18 @@ async function savePollState(maxEffectiveSortDate) {
             const tx = db.transaction('pollState', 'readwrite');
             const store = tx.objectStore('pollState');
             const request = store.put({
-                id: 'latest',
+                id,
                 maxEffectiveSortDate: maxEffectiveSortDate,
                 timestamp: Date.now()
             });
 
             request.onsuccess = () => {
-                lastMaxEffectiveSortDate = maxEffectiveSortDate;
-                debugLog('[SW] Saved poll state to IndexedDB - max effectiveSortDate:', maxEffectiveSortDate);
+                if (id === 'changes') {
+                    lastChangeMaxEffectiveSortDate = maxEffectiveSortDate;
+                } else {
+                    lastMaxEffectiveSortDate = maxEffectiveSortDate;
+                }
+                debugLog('[SW] Saved poll state to IndexedDB -', id, 'max effectiveSortDate:', maxEffectiveSortDate);
                 resolve();
             };
 
@@ -276,10 +304,10 @@ async function saveNotificationQuery(query) {
 
 
 // Fetch notifications using the configured query
-async function fetchNotifications() {
+async function fetchNotifications(query = notificationQuery) {
     try {
         // Use poll endpoint for much smaller payload
-        const url = `${POLL_NOTIFICATIONS_URL}?page=1&pageSize=10&query=${encodeURIComponent(notificationQuery)}`;
+        const url = `${POLL_NOTIFICATIONS_URL}?page=1&pageSize=10&query=${encodeURIComponent(query)}`;
         debugLog('[SW] Fetching poll notifications from:', url);
         const response = await fetch(url, {
             credentials: 'include',
@@ -607,8 +635,21 @@ async function showDesktopNotification(notification) {
     }
 }
 
-// Notify all clients about new notifications
-async function notifyClients(newNotifications) {
+// Newest effectiveSortDate in a poll response, or null if none carry one
+function maxEffectiveSortDate(notifications) {
+    let max = null;
+    for (const notification of notifications) {
+        const effectiveSortDate = notification.effectiveSortDate;
+        if (effectiveSortDate && (!max || new Date(effectiveSortDate) > new Date(max))) {
+            max = effectiveSortDate;
+        }
+    }
+    return max;
+}
+
+// Tell all clients that notification data changed so they refresh counts, list and detail.
+// This is the app's only sync-driven refresh signal; desktop notifications are separate.
+async function notifyClients(changedNotifications) {
     try {
         const clients = await self.clients.matchAll({
             includeUncontrolled: true,
@@ -618,9 +659,9 @@ async function notifyClients(newNotifications) {
         if (clients.length > 0) {
             clients.forEach(client => {
                 client.postMessage({
-                    type: 'NEW_NOTIFICATIONS',
-                    count: newNotifications.length,
-                    githubIds: newNotifications.map(notificationKey),
+                    type: 'NOTIFICATIONS_CHANGED',
+                    count: changedNotifications.length,
+                    githubIds: changedNotifications.map(notificationKey),
                     timestamp: Date.now()
                 });
             });
@@ -628,6 +669,37 @@ async function notifyClients(newNotifications) {
     } catch (error) {
         console.error('[SW] Failed to notify clients:', error);
     }
+}
+
+// Change-detection poll: look at the newest activity across ALL notifications and tell
+// clients to refresh when it advances. Unlike the desktop-notification poll below, this
+// is not filtered to the inbox, so notifications that a rule routed straight into a view
+// (skipped inbox), or activity on muted/archived threads, still refresh sidebar counts.
+async function pollForChanges() {
+    const fetched = await fetchNotifications(CHANGE_DETECTION_QUERY);
+    const horizon = Date.now() + CHANGE_DETECTION_MAX_FUTURE_MS;
+    const notifications = fetched.filter(n => !n.effectiveSortDate || new Date(n.effectiveSortDate).getTime() <= horizon);
+    const currentMax = maxEffectiveSortDate(notifications);
+    if (!currentMax) {
+        return;
+    }
+
+    if (!lastChangeMaxEffectiveSortDate) {
+        // First poll after install/reset: record the baseline without refreshing
+        debugLog('[SW] Recording change-detection baseline:', currentMax);
+        await savePollState(currentMax, 'changes');
+        return;
+    }
+
+    const lastMax = new Date(lastChangeMaxEffectiveSortDate);
+    const changed = notifications.filter(n => n.effectiveSortDate && new Date(n.effectiveSortDate) > lastMax);
+    if (changed.length === 0) {
+        return;
+    }
+
+    debugLog('[SW] Detected', changed.length, 'changed notifications, notifying clients');
+    await notifyClients(changed);
+    await savePollState(currentMax, 'changes');
 }
 
 // Main polling function
@@ -645,7 +717,10 @@ async function pollForUpdates() {
         debugLog('[SW] Query:', notificationQuery);
         debugLog('[SW] Last max effectiveSortDate:', lastMaxEffectiveSortDate);
 
-        // Always fetch notifications on each poll
+        // Refresh the app on any new activity, inbox or not
+        await pollForChanges();
+
+        // Desktop notifications: only the configured (inbox) query
         const notifications = await fetchNotifications();
         debugLog('[SW] Fetched', notifications.length, 'notifications from inbox');
 
@@ -721,10 +796,7 @@ async function pollForUpdates() {
                     debugLog('[SW] Not showing notifications - disabled or user viewing inbox.');
                 }
 
-                // Notify clients regardless of notification setting or window visibility
-                // This allows the app to refresh its UI when new notifications appear
-                debugLog('[SW] Notifying clients about', newNotifications.length, 'new notifications');
-                await notifyClients(newNotifications);
+                // UI refresh is driven by pollForChanges() above, not by this poll
 
                 // Update last max effectiveSortDate ONLY when we found new notifications
                 // This ensures we don't advance the timestamp prematurely when polling while window is visible
@@ -915,7 +987,7 @@ self.addEventListener('notificationclick', (event) => {
                     } else {
                         // Summary notification or no ID - just refresh the app
                         appClient.postMessage({
-                            type: 'NEW_NOTIFICATIONS',
+                            type: 'NOTIFICATIONS_CHANGED',
                             count: 0,
                             timestamp: Date.now()
                         });
@@ -1019,6 +1091,7 @@ self.addEventListener('message', async (event) => {
         // This clears the lastMaxEffectiveSortDate so all notifications are treated as new
         debugLog('[SW] Resetting poll state');
         lastMaxEffectiveSortDate = null;
+        lastChangeMaxEffectiveSortDate = null;
         // Also clear from IndexedDB
         try {
             const db = await openDB();
@@ -1026,6 +1099,7 @@ self.addEventListener('message', async (event) => {
                 const transaction = db.transaction('pollState', 'readwrite');
                 const store = transaction.objectStore('pollState');
                 store.delete('latest');
+                store.delete('changes');
                 debugLog('[SW] Cleared poll state from IndexedDB');
             }
         } catch (error) {

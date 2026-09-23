@@ -30,7 +30,7 @@ interface ServiceWorkerHandlerParams {
  * to ensure messages aren't missed.
  *
  * Handles:
- * - Service worker messages (NEW_NOTIFICATIONS, OPEN_NOTIFICATION, TOKEN_EXPIRED)
+ * - Service worker messages (NOTIFICATIONS_CHANGED, OPEN_NOTIFICATION, TOKEN_EXPIRED)
  * - Page visibility changes (sync notifications when page becomes visible)
  *
  * @param params - Function to get pageController when available
@@ -54,9 +54,13 @@ export function setupServiceWorkerHandlers(params: ServiceWorkerHandlerParams): 
 			// Service worker is alive and polling - record the heartbeat
 			const timestamp = event.data.timestamp || Date.now();
 			swHealthStore.recordHeartbeat(timestamp);
-		} else if (event.data?.type === "NEW_NOTIFICATIONS") {
-			// Service worker detected new notifications
-			// Trigger the existing sync handler to refresh the UI
+		} else if (
+			event.data?.type === "NOTIFICATIONS_CHANGED" ||
+			// Legacy name from service workers that predate change detection
+			event.data?.type === "NEW_NOTIFICATIONS"
+		) {
+			// Service worker detected new activity anywhere (not just the inbox).
+			// Refresh sidebar counts, the list, and the open detail.
 			const pageController = getPageController();
 			if (pageController) {
 				void pageController.actions.handleSyncNewNotifications(event.data?.githubIds);

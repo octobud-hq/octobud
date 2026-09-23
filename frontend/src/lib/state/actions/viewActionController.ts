@@ -291,7 +291,7 @@ export function createViewActionController(
 		const shouldRefreshNotifications =
 			hasEmptyPageData || (currentPage === 1 && ((!isSplitMode && !isDetailOpen) || isSplitMode));
 
-		// Always refresh views/tags for up-to-date unread counts. The repository selector's
+		// Always refresh view AND tag badges (both carry unread counts). The repository selector's
 		// counts (and the bar's hidden-unread badge) refresh when the list itself refreshes
 		// or the dropdown is open; on other pages the badge may lag until the next list
 		// refresh, which is cheaper than a grouped count on every sync for every defaulted view.
@@ -300,6 +300,7 @@ export function createViewActionController(
 			: false;
 		await Promise.all([
 			refreshViewCounts(),
+			refreshTagCounts(),
 			shouldRefreshNotifications || repositoryDropdownOpen
 				? sharedHelpers.refreshRepositoryCounts()
 				: Promise.resolve(),

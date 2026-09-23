@@ -37,6 +37,10 @@ const (
 	restMaxPerPage = 30
 	// restMaxPages is the safety limit on total pages fetched.
 	restMaxPages = 10
+
+	// Normalized subject types (lowercased, underscores removed) that support a timeline.
+	subjectTypeIssue      = "issue"
+	subjectTypeDiscussion = "discussion"
 )
 
 // FilteredEventTypes contains event types that should be filtered out from timeline.
@@ -102,9 +106,9 @@ func SupportsTimeline(subjectType string) bool {
 	switch normalizedType {
 	case "pullrequest", "pr":
 		return true
-	case "issue":
+	case subjectTypeIssue:
 		return true
-	case "discussion":
+	case subjectTypeDiscussion:
 		return true
 	default:
 		return false
@@ -138,7 +142,7 @@ func (s *Service) FetchFilteredTimeline(
 	var hasMorePages bool
 	var err error
 
-	if normalizedType == "discussion" {
+	if normalizedType == subjectTypeDiscussion {
 		// Discussions: fetch all via GraphQL, sort, paginate client-side
 		allItems, hasMorePages, err = fetchDiscussionTimelineEvents(
 			ctx,
